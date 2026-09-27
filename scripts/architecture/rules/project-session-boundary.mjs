@@ -1,5 +1,5 @@
 import { classifyFrontendPath } from '../../shared/classify.mjs';
-import { frontendFile } from '../../shared/files.mjs';
+import { frontendFile, specFile } from '../../shared/files.mjs';
 
 const manifestMutationNames = ['registerProjectManifest', 'replaceProjectManifest', 'removeProjectManifest'];
 const forbiddenManifestPatchNames = ['updateManifest', 'updateEntitySummary'];
@@ -12,6 +12,9 @@ export const projectSessionBoundaryRule = {
     const failures = [];
     for (const file of files) {
       if (!frontendFile(file.rel)) continue;
+      // Specs assemble the real project store as test fixtures; manifest
+      // ownership governs production call sites only.
+      if (specFile(file.rel)) continue;
       const current = classifyFrontendPath(file.rel);
       const isProjectStore = current.layer === 'stores' && current.domain === 'project';
       const isDirectoryOpening = current.layer === 'orchestrators' && current.domain === 'directory-opening';

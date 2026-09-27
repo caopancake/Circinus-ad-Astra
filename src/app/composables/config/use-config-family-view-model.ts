@@ -162,9 +162,6 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       }
       if (project.activeManifest?.modRoot !== deleteModRoot || project.activeManifest.sessionId !== deleteSessionId) return true;
       await loadFiles();
-      if (selectedId.value === id) {
-        selectedId.value = files.value[0] ? idOf(files.value[0]) : null;
-      }
       feedback.success(`${family.displayName} "${id}" 已删除`);
       return true;
     } catch (error) {

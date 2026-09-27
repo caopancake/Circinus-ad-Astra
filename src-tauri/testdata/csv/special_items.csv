@@ -1,0 +1,6 @@
+name,id,tags,tech/manufacturer,rarity,base price,stack size,cargo space,baseRaidDanger,icon,sound id,sound id drop,plugin,plugin params,desc,order
+温房设计蓝图包,Viridia_package_bp,"package_bp, codex_unlockable",温房设计,0.5,25000,1000,1,,graphics/icons/cargo/blueprint_viridia_bp.png,ui_chip_pickup,ui_bp_package_drop,com.fs.starfarer.api.campaign.impl.items.MultiBlueprintItemPlugin,Viridia_bp,使重工业设施能够生产 温房设计 的常规舰体、武器与战机 LPC。,200.1
+#棘蔓蓝图包,Viridia_package_bramble,"package_bp, no_drop, codex_unlockable",棘蔓,0,30000,1000,1,,graphics/icons/cargo/blueprint_viridia_bramble.png,ui_chip_pickup,ui_bp_package_drop,com.fs.starfarer.api.campaign.impl.items.MultiBlueprintItemPlugin,Viridia_bramble,使重工业设施能够生产 棘蔓 的舰体、武器与战机 LPC。,200.3
+#返青工程蓝图包,Viridia_package_verdancy,"package_bp, no_drop, codex_unlockable",返青,0,60000,1000,1,,graphics/icons/cargo/blueprint_viridia_verdancy.png,ui_chip_pickup,ui_bp_package_drop,com.fs.starfarer.api.campaign.impl.items.MultiBlueprintItemPlugin,Viridia_verdancy,使重工业设施能够生产 返青工程 的舰体、武器与战机 LPC。,200.3
+
+鸢尾棱晶,Viridia_irisprism,"colony_item, codex_unlockable",温房设计,0.5,200000,1000,1,EXTREME,graphics/icons/cargo/Viridia_irisprism.png,ui_chip_pickup,ui_bp_package_drop,data.scripts.campaign.items.Viridia_IrisPrism,Viridia_star_fortress,三枚被锁进引力容器内的武器核心，外壳被涂成刺眼的警示色。三者原理各异，但大体都能在按装机手册接入空间站级供能网后，射出某种毁天灭地的光线。,300.1

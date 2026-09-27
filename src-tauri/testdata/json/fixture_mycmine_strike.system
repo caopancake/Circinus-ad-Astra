@@ -1,0 +1,32 @@
+{
+	"id":"Viridia_mycmine_strike",
+	"type":"STAT_MOD",
+	"aiType":"CUSTOM",
+	
+	"aiScript":"data.shipsystems.scripts.ai.Viridia_SporeMineAI",
+	"statsScript":"data.shipsystems.scripts.Viridia_SporeMineStats",
+	
+	"jitterColor":[0,100,255,75],
+	"jitterCopies":4,
+	"jitterMinRange":0,
+	"jitterRange":3,
+	"jitterRangeRadiusFraction":0.1,
+	
+	"jitterUnderColor":[115,180,255,155],
+	"jitterUnderCopies":14,
+	"jitterUnderMinRange":2,
+	"jitterUnderRange":20,
+	"jitterUnderRangeRadiusFraction":0.1,
+
+	"fadeActivationSoundOnChargedown":true,
+	"useSound":"system_interdictor",
+	"outOfUsesSound":"gun_out_of_ammo",
+	
+	"aiHints":{
+		"threatRange":1500,
+		"threatAmount":10,
+		"threatAngle":0,
+		"threatArc":360,
+	}
+}
+

@@ -26,8 +26,11 @@ export function formatModVersion(value: JsonValue | undefined): string {
     const major = value.major;
     const minor = value.minor;
     const patch = value.patch;
-    if (typeof major === 'number' && typeof minor === 'number' && typeof patch === 'number') {
-      return `${major}.${minor}.${patch}`;
+    if (typeof major === 'number' && typeof minor === 'number') {
+      if (typeof patch === 'number') {
+        return `${major}.${minor}.${patch}`;
+      }
+      return `${major}.${minor}`;
     }
   }
   return cell(value);

@@ -1,0 +1,16 @@
+{
+	"id":"Viridia_mainvein",
+	"type":"STAT_MOD",
+	"aiType":"CUSTOM",
+
+	"statsScript":"data.shipsystems.scripts.Viridia_MainveinStats",
+	"aiScript":"data.shipsystems.scripts.ai.Viridia_MainveinAI",
+	
+	"jitterColor":[80,40,40,30],
+	"jitterCopies":5,
+	"jitterRange":10,
+	"jitterRangeRadiusFraction":0.1,
+
+	"useSound":"Viridia_mainvein_active", # Viridia_mainvein_alt_active
+	"outOfUsesSound":"gun_out_of_ammo",	
+}

@@ -588,3 +588,53 @@ fn mod_hull_resource_ref(session: &ProjectSession, hull_id: &str) -> Option<Reso
             .and_then(|skin| skin_resource_ref(ResourceSource::Mod, &session.ship_files, skin))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::CsvTableKey;
+
+    #[test]
+    fn definition_lookup_resolves_every_table_key() {
+        for key in [
+            CsvTableKey::Ships,
+            CsvTableKey::Weapons,
+            CsvTableKey::Wings,
+            CsvTableKey::Hullmods,
+            CsvTableKey::ShipSystems,
+            CsvTableKey::Industries,
+            CsvTableKey::Skills,
+            CsvTableKey::Abilities,
+            CsvTableKey::Commodities,
+            CsvTableKey::SpecialItems,
+            CsvTableKey::Submarkets,
+            CsvTableKey::MarketConditions,
+            CsvTableKey::SimOpponents,
+            CsvTableKey::Descriptions,
+        ] {
+            let definition = csv_table_definition(key);
+            assert_eq!(definition.spec.key, key);
+            assert!(csv_table_definition_by_key(definition.spec.key.as_str()).is_some());
+        }
+    }
+
+    #[test]
+    fn unknown_table_keys_do_not_resolve() {
+        assert!(csv_table_definition_by_key("not-a-table").is_none());
+    }
+
+    #[test]
+    fn entity_id_fields_follow_the_table_convention() {
+        assert_eq!(csv_table_entity_id_field(CsvTableKey::Ships), "id");
+        assert_eq!(csv_table_entity_id_field(CsvTableKey::Weapons), "id");
+    }
+
+    #[test]
+    fn faction_filter_support_is_limited_to_registered_tables() {
+        assert!(csv_table_supports_faction_filter(CsvTableKey::Ships));
+        assert!(!csv_table_supports_faction_filter(CsvTableKey::Wings));
+        assert!(!csv_table_supports_faction_filter(
+            CsvTableKey::Descriptions
+        ));
+    }
+}

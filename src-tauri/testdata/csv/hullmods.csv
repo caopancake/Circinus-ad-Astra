@@ -1,0 +1,28 @@
+name,id,tier,rarity,tech/manufacturer,tags,uiTags,base value,unlocked,hidden,hiddenEverywhere,cost_frigate,cost_dest,cost_cruiser,cost_capital,script,desc,short,sModDesc,sprite
+,,,,,,,,,,,,,,,,,,,
+蜡质加力燃烧室,Viridia_cuticle,,,温房设计,,,,,TRUE,,0,0,0,0,data.hullmods.Viridia_Cuticle,温房设计 的舰船普遍装备调校激进的加力燃烧室，奉行速战速决的原则。,青苗制式舰船模块,,graphics/hullmods/Viridia_cuticle.png
+返青,Viridia_verdancy,,,返青,,,,,TRUE,,0,0,0,0,data.hullmods.Viridia_Verdancy,"种子仍在冻土之下。
+要再等一季吗？",青苗精英舰船模块,,graphics/hullmods/Viridia_verdancy.png
+韧皮壳层,Viridia_bast,,,温房设计,hide_in_codex,,,,TRUE,,0,0,0,0,data.hullmods.Viridia_Bast,"采用源自 温房设计局 上古专利的特种壳层，为舰体内部的子系统提供更强的物理抗扰能力。峰值状态收场后，{CR} 的衰减速率放缓 {%s}。
+
+""加固用于加固加固件的加固件。""",降低 CR 衰减,,graphics/hullmods/Viridia_bast.png
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+蜜腺幅能核心,Viridia_nectary,2,,温房设计,"Viridia_p, offensive, defensive, merc","特殊, 防御",8000,,,,4,8,14,20,data.hullmods.Viridia_Nectary,附着在幅能核心外缘的次级调压器，罕见地把续航置于首位。,强化幅能耗散,,graphics/hullmods/Viridia_nectary.png
+棘皮反应涂层,Viridia_thornskin,0,,温房设计,"Viridia_p, defensive",防御,4000,,,,3,6,9,15,data.hullmods.Viridia_ThornSkin,以一层非爆破的反应镀膜强化引擎与炮塔的外壳。,加固炮塔与引擎,,graphics/hullmods/Viridia_thornskin.png
+备用花粉篮,Viridia_pollbasket,1,,温房设计,"Viridia_p, offensive, merc",武器,8000,,,,3,5,7,10,data.hullmods.Viridia_PollBasket,为所有限量供弹的武器挂点追加一份备用粮仓。,增加备弹容量,,graphics/hullmods/Viridia_pollbasket.png
+向性调频引擎,Viridia_tropism,1,,温房设计,"Viridia_p, offensive, engines, merc",引擎,5000,,,,4,8,12,18,data.hullmods.Viridia_Tropism,加装一台专司引擎出力重分配的调节器，推进效率随之改善。,改良引擎推进,,graphics/hullmods/Viridia_tropism.png
+壳斗过充,Viridia_cupule,3,,温房设计,"Viridia_p, defensive, shields, merc",护盾,10000,,,,6,12,18,30,data.hullmods.Viridia_Cupule,加装护盾过充组件，过充后的护盾缓存将不再占用幅能容量。,强化护盾效能,,graphics/hullmods/Viridia_cupule.png
+休眠协议,Viridia_dormancy,0,,温房设计,"Viridia_p, special, merc",特殊,6000,,,,2,4,5,10,data.hullmods.Viridia_Dormancy,重写底层固件规程，使舰船在峰值状态结束后不至于立即瘫痪。,稳固峰值表现,,graphics/hullmods/Viridia_dormancy.png
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,
+棘芒泵,Viridia_thornpump,,,温房设计,,,,,TRUE,,0,0,0,0,data.hullmods.Viridia_ThornPump,射弹武器（导弹除外）的弹体飞行速度提高 {%s}。对导弹与战机这类轻质量目标，伤害额外提高 {%s}。,提升弹体速度,,graphics/hullmods/Viridia_thornpump.png
+一体化育苗棚架,Viridia_seedlingframe,,,温房设计,,,,,TRUE,,0,0,0,0,data.hullmods.Viridia_SeedlingFrame,巨型一体化货舱内置有可供护卫舰停靠检修的育苗棚架与整套辅助设备。舰队中维护开销最高的 {%s}/{%s}/{%s}/{%s} 艘护卫舰月度维护补给消耗降低 {%s}，但本舰月度维护补给消耗提高 {%s}。,协助护卫舰维护,,graphics/hullmods/Viridia_seedlingframe.png
+嫁接作业台,Viridia_graftarm,,,温房设计,,,,,TRUE,,0,0,0,0,data.hullmods.Viridia_GraftArm,这种高强度嫁接作业台可在无重力环境下随队作业，在不拖累舰队航速的前提下辅修受损舰船。每座作业台为每艘舰船提升 {%s} 修复速率。,加快舰船修复,,graphics/hullmods/Viridia_graftarm.png
+设计切换器,Viridia_design_switcher_dovetree,,,,hide_in_codex,,,,TRUE,TRUE,0,0,0,0,data.hullmods.Viridia_DesignSwitcherDovetree,设计切换器。,设计切换器,,graphics/hullmods/axial_rotation.png
+爆蕾机构,Viridia_design_dovetree,,,温房设计,"req_spaceport, no_build_in, hide_in_codex",,,,TRUE,,0,0,0,0,data.hullmods.Viridia_DesignDovetree,只有在港口泊位中才能切换舱段并变更设计。,大幅强化进攻,,graphics/hullmods/Viridia_design_dovetree.png
+拢瓣机构,Viridia_design_dovetree_alt,,,温房设计,"req_spaceport, no_build_in, hide_in_codex",,,,TRUE,,0,0,0,0,data.hullmods.Viridia_DesignDovetreeAlt,只有在港口泊位中才能切换舱段并变更设计。,大幅强化防御,,graphics/hullmods/Viridia_design_dovetree_alt.png
+自由旋转,Viridia_free_rotation,,,,hide_in_codex,,,,TRUE,,0,0,0,0,data.hullmods.Viridia_FreeRotation,这座构型异于常规的战斗堡垒，可凭借自由旋转始终保持对敌姿态。,旋转,,graphics/hullmods/axial_rotation.png
+,,,,,,,,,,,,,,,,,,,

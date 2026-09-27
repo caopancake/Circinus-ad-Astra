@@ -1,0 +1,34 @@
+{
+	"id":"Viridia_magnetspore_mrm",
+	"specClass":"missile",
+	"missileType":"MISSILE",
+	"sprite":"graphics/missiles/Viridia_magnetspore_mrm.png",
+	"size":[10,22],	
+	"center":[5,11],
+	"collisionRadius":18,
+	"collisionClass":"MISSILE_NO_FF",
+	"explosionColor":[147,194,223,255],  # purely visual, will get a white additively blended core on top of this color
+	"explosionRadius":150, # purely visual
+	"engineSpec":{"turnAcc":270,
+				  "turnRate":90,
+				  "acc":1000,
+				  "dec":500},
+	"engineSlots":[{"id":"ES1",
+					"loc":[-9, 0],
+					"style":"CUSTOM",
+					"styleSpec":{
+						"mode":"QUAD_STRIP", # PARTICLES or QUAD_STRIP, determines which params are used
+						"engineColor":[147,194,223,255],
+						"contrailDuration":1,
+						"contrailWidthMult":1,
+						"contrailWidthAddedFractionAtEnd":2.5,  # can be negative. makes trail spread out/narrow at the end
+						"contrailMinSeg":5, # min segment length, in pixels
+						"contrailMaxSpeedMult":0.5f,
+						"contrailAngularVelocityMult":0.5f,
+						"contrailColor":[147,194,223,130],
+						"type":"SMOKE" # GLOW or SMOKE; additive or regular blend mode
+					},
+					"width":6.0,
+					"length":30.0,
+					"angle":180.0}]
+}

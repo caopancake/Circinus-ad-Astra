@@ -1,0 +1,59 @@
+{
+	"id":"Viridia_burdock_lrm",
+	"specClass":"missile",
+	"missileType":"MISSILE",
+	"sprite":"graphics/missiles/Viridia_burdock_lrm.png",
+	"size":[8,24],	
+	"center":[4,12],
+	"collisionRadius":14,
+	"collisionClass":"MISSILE_NO_FF",
+	"explosionColor":[125,180,200,255],  # purely visual, will get a white additively blended core on top of this color
+	"explosionRadius":150, # purely visual
+	"armingTime":2,
+	"engineSpec":{
+				  "turnAcc":180,
+				  "turnRate":180,
+				  "acc":400,
+				  "dec":200},
+	"behaviorSpec":{"behavior":"PROXIMITY_FUSE",
+					"range":40,
+					"explosionSpec":{"duration":0.12f,
+									 "radius":150,
+									 "coreRadius":75, # full damage within core radius
+									 "collisionClass":PROJECTILE_FF,
+									 "collisionClassByFighter":PROJECTILE_FIGHTER,
+									 "particleSizeMin":3.0,
+									 "particleSizeRange":3.0,
+									 "particleDuration":1,
+									 "particleCount":50,
+									 "particleColor":[70,148,211,255],
+									 "explosionColor":[125,155,255,255],
+									 "useDetailedExplosion":true,
+									 "useDetailedExplosionColorAlpha":true,
+									 "detailedExplosionRadius":100,
+									 "detailedExplosionFlashRadius":250,
+									 "detailedExplosionFlashDuration":0.5,
+									 "detailedExplosionFlashColorFringe":[125,200,255,255],
+									 "detailedExplosionFlashColorCore":[155,155,155,255],
+									 "sound":"prox_charge_explosion"},
+					},
+	"engineSlots":[{"id":"ES1",
+					"loc":[-8, 0],
+					"style":"CUSTOM",
+					"styleSpec":{
+						"mode":"QUAD_STRIP", # PARTICLES or QUAD_STRIP, determines which params are used
+						"engineColor":[100,155,255,255],
+						"contrailDuration":2,
+						"contrailWidthMult":2,
+						"contrailWidthAddedFractionAtEnd":2,  # can be negative. makes trail spread out/narrow at the end
+						"contrailMinSeg":15, # min segment length, in pixels
+						"contrailMaxSpeedMult":.0f,
+						"contrailAngularVelocityMult":0.5f,
+						"contrailSpawnDistMult":.75, # how far away from engine it starts
+						"contrailColor":[100,100,100,150],
+						"type":"SMOKE" # GLOW or SMOKE; additive or regular blend mode
+					},
+					"width":8.0,
+					"length":34.0,
+					"angle":180.0}]
+}

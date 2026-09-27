@@ -1,5 +1,5 @@
 import { classifyFrontendPath } from '../../shared/classify.mjs';
-import { frontendFile } from '../../shared/files.mjs';
+import { frontendFile, specFile } from '../../shared/files.mjs';
 
 export const fileHistoryBoundaryRule = {
   name: 'file-history-boundary',
@@ -8,6 +8,9 @@ export const fileHistoryBoundaryRule = {
     const failures = [];
     for (const file of files) {
       if (!frontendFile(file.rel)) continue;
+      // Spec fixtures seed the real file-history store directly; the ownership
+      // boundary governs production call sites only.
+      if (specFile(file.rel)) continue;
       const current = classifyFrontendPath(file.rel);
       const isFileHistoryWrite = current.layer === 'orchestrators' && current.domain === 'file-history-write';
       const isFileHistoryReplay = current.layer === 'orchestrators' && current.domain === 'file-history-replay';

@@ -169,3 +169,89 @@ pub fn associated_spec_tables() -> Vec<CsvTableKey> {
         .filter_map(|definition| definition.csv_table)
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn path_matches_accepts_files_inside_the_directory_with_the_extension() {
+        assert!(SHIP_SPEC_DEFINITION.path_matches("data/hulls/xy.ship"));
+        assert!(!SHIP_SPEC_DEFINITION.path_matches("data/weapons/xy.wpn"));
+        assert!(!SHIP_SPEC_DEFINITION.path_matches("data/hulls/xy.wpn"));
+    }
+
+    #[test]
+    fn path_matches_accepts_the_declared_directory_itself() {
+        assert!(SHIP_SPEC_DEFINITION.path_matches("data/hulls"));
+    }
+
+    #[test]
+    fn default_rel_path_follows_dir_id_and_extension() {
+        assert_eq!(
+            SHIP_SPEC_DEFINITION.default_rel_path("XY"),
+            "data/hulls/XY.ship"
+        );
+        assert_eq!(
+            SKIN_SPEC_DEFINITION.default_rel_path("sk"),
+            "data/hulls/skins/sk.skin"
+        );
+    }
+
+    #[test]
+    fn extension_without_dot_strips_the_leading_dot() {
+        assert_eq!(WEAPON_SPEC_DEFINITION.extension_without_dot(), "wpn");
+    }
+
+    #[test]
+    fn validate_rel_path_rejects_paths_outside_the_declared_dir() {
+        assert!(
+            SHIP_SPEC_DEFINITION
+                .validate_rel_path("data/hulls/a.ship", "msg")
+                .is_ok()
+        );
+        let error = SHIP_SPEC_DEFINITION
+            .validate_rel_path("data/other/a.ship", "越界")
+            .expect_err("rejected");
+        assert!(error.to_string().starts_with("越界"));
+    }
+
+    #[test]
+    fn entity_spec_lookup_covers_every_registered_kind() {
+        for definition in ENTITY_SPEC_DEFINITIONS.iter() {
+            assert_eq!(
+                entity_spec_definition(definition.entity_kind)
+                    .expect("registered")
+                    .entity_kind,
+                definition.entity_kind
+            );
+        }
+        for spec_kind in [
+            EditorSpecKind::Ship,
+            EditorSpecKind::Weapon,
+            EditorSpecKind::Projectile,
+            EditorSpecKind::System,
+        ] {
+            assert!(editor_spec_definition(spec_kind).is_ok());
+        }
+        assert!(editor_spec_definition(EditorSpecKind::Ship).is_ok());
+    }
+
+    #[test]
+    fn associated_spec_lookup_maps_tables_to_definitions() {
+        assert_eq!(
+            associated_spec_definition(CsvTableKey::Ships).map(|definition| definition.id_field),
+            Some("hullId")
+        );
+        assert!(associated_spec_definition(CsvTableKey::Wings).is_none());
+        assert_eq!(
+            associated_spec_tables(),
+            vec![
+                CsvTableKey::Ships,
+                CsvTableKey::Weapons,
+                CsvTableKey::ShipSystems,
+                CsvTableKey::Skills,
+            ]
+        );
+    }
+}

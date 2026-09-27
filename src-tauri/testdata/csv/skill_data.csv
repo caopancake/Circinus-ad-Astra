@@ -1,0 +1,6 @@
+id,name,order,tier,reqPoints,reqPointsPerExtraSkill,description,author,combat officer,admiral,admin,tags,icon,
+Viridia_old_sod,宿草感,10500,0,,,"怪只怪命太硬？战损复盘归档的时候我们从来不做样本筛查。凡是正面承受过一轮均匀脉冲轰击的船体，都算品相完好，其余的大多干脆找不出一块保留原样的装甲。","堆肥署督办 袁持垣，于 Nerium 中转站",TRUE,,,"npc_only, player_only, restricted, codex_unlockable",graphics/icons/skills/Viridia_old_sod.png,
+Viridia_new_sod,新茬感,10501,0,,,"第一次是生疏，第二次是熟练，第三次便足以晋升。晋级比许多人预想的更快 —— 毕竟不合格者撑不过头几次行动。","勘探队老手 Rowan Alder，于星历 206 年 Lupine 行动开始前的感言",TRUE,,,"npc_only, player_only, restricted, codex_unlockable",graphics/icons/skills/Viridia_new_sod.png,
+Viridia_vernal_urge,返青感,10502,0,,,"快！还要更快！快到磁轨弹仿佛凝在半空，快到能拖曳恒星疾驰！","一叶指挥官 Greta Halvard，于 Fuchsia 跳跃点 之战 打响前的动员",TRUE,,,"npc_only, player_only, restricted, codex_unlockable",graphics/icons/skills/Viridia_vernal_urge.png,
+Viridia_thinning,间苗令,10503,0,,,"既然既定日程已是今日，那么一切言语都是多余。","录于 Fuchsia 危机 谈判崩盘之际的舱内通话",TRUE,,,"npc_only, player_only, restricted, codex_unlockable",graphics/icons/skills/Viridia_thinning.png,
+Viridia_forcing,催花令,10504,0,,,"棱镜集团的塔楼里没有盟友，只有尚未轮到的目标。等它们的名单翻到下一页...不，到此为止。","棱镜集团 EOA 特工 Mirela Voss (已故)，留有一段被士气保障部偷录下来的私下抱怨",,TRUE,,"npc_only, player_only, restricted, codex_unlockable",graphics/icons/skills/Viridia_forcing.png,

@@ -1,0 +1,4 @@
+name,id,tags,planetary,decivRemove,script,desc,icon,order
+园土改良,Viridia_ameliorated,"show_in_codex, codex_unlockable",,,data.scripts.campaign.conditions.Viridia_Ameliorated,"$market 经历过一连串由 青苗生物科技 主持的园土改良工程，部分效果需要专业人员对相关设备进行持续维护才能维持运转。",graphics/icons/markets/Viridia_ameliorated.png,30.2333
+圃情中心,Viridia_soil_survey,"show_in_codex, codex_unlockable",,,data.scripts.campaign.conditions.Viridia_SoilSurvey,"$market 设有一座由 青苗生物科技 直营的圃情勘测中心，对外提供专业的土壤与种源勘测服务。",graphics/icons/markets/Viridia_soil_survey.png,30.2334
+烂根,Viridia_rootrot,"show_in_codex, codex_unlockable",,,data.scripts.campaign.conditions.Viridia_RootRot,"虽然地表看上去尚且完整，但 $market 的深层根网与基岩均已朽烂成碎块，永不停歇的震颤和喷涌而出的毒化碎屑风暴，把这里变成一颗仍在喘息的炼狱。",graphics/icons/markets/Viridia_rootrot.png,30.2335

@@ -1,0 +1,69 @@
+{
+  "hullName": "Viridia_fighter_hornet",
+  "hullId": "Viridia_fighter_hornet",
+  "hullSize": "FIGHTER",
+  "spriteName": "graphics/ships/fighters/Viridia_fighter_hornet.png",
+  "style": "Viridia_TECH_MID",
+  "height": 52,
+  "width": 38,
+  "center": [19, 26],
+  "collisionRadius": 29,
+  "shieldCenter": [0, -0],
+  "shieldRadius": 25.5,
+  "viewOffset": 0,
+  "weaponSlots": [
+    {
+      "id": "WS0001",
+      "size": "SMALL",
+      "type": "MISSILE",
+      "mount": "TURRET",
+      "arc": 5,
+      "angle": 0,
+      "locations": [5, 3]
+    },
+    {
+      "id": "WS0002",
+      "size": "SMALL",
+      "type": "MISSILE",
+      "mount": "HIDDEN",
+      "arc": 5,
+      "angle": -30,
+      "locations": [-4, -8.5]
+    }
+  ],
+  "engineSlots": [
+    {
+      "location": [-22, 1],
+      "length": 28,
+      "width": 8,
+      "angle": 180,
+      "contrailSize": 8,
+      "style": "MIDLINE"
+    },
+    {
+      "location": [-19, 6],
+      "length": 22,
+      "width": 6,
+      "angle": 180,
+      "contrailSize": 6,
+      "style": "MIDLINE"
+    },
+    {
+      "location": [-21, -4],
+      "length": 22,
+      "width": 6,
+      "angle": 180,
+      "contrailSize": 6,
+      "style": "MIDLINE"
+    }
+  ],
+  "bounds": [
+    -11, -14,
+    -18, -8,
+    -18, 7,
+    -13, 13,
+    8, 8,
+    8, -3,
+    19, -3
+  ]
+}

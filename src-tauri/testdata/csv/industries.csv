@@ -1,0 +1,38 @@
+id,name,cost mult,build time,income,upkeep,downgrade,upgrade,tags,data,image,plugin,desc,order,disruptDanger
+Viridia_garden_node,圃情中枢,100,180,,10,,,"structure, unraidable, codex_unlockable",,graphics/icons/industry/Viridia_garden_node.png,data.scripts.campaign.Viridia_GardenNode,庞大的本地生态响应中枢，靠巨型气候推演数据库与全天候起降的无人机群保证精度与效率。这一中枢节点连接着铺满全球的传感阵列与次级工作站，以异常高昂的资源开销，维持一颗行星或一座空间站在园圃改良领域的示范级领先地位。,2700.1,HIGH
+
+
+
+
+
+Viridia_orbital_station,轨道站 - 温房设计,50,90,,3,,Viridia_battle_station,"station, sub_item, unraidable, structure","{
+radius:55,
+variant:Viridia_banyan_standard,
+fleetName:Orbital Station,
+}",graphics/icons/industry/orbital_station.png,data.scripts.campaign.Viridia_Station,"出自 温房设计局 之手的改装轨道站，正面火力惊人，能够依靠扭力自由旋转。
+
+它的存在本身便足以阻止一切轰炸行动的发生.",2010,
+
+
+
+
+
+Viridia_battle_station,作战基地 - 温房设计,100,120,,4,Viridia_orbital_station,Viridia_star_fortress,"station, battlestation, unraidable, structure","{
+radius:65,
+variant:Viridia_cypress_standard,
+fleetName:Battlestation,
+}",graphics/icons/industry/battlestation.png,data.scripts.campaign.Viridia_Station,"升级版轨道站，追加了更多机库舱段与重火力平台，打击能力更上一层。
+
+它的存在本身便足以阻止一切轰炸行动的发生。",2020,
+
+
+
+
+
+Viridia_star_fortress,星际要塞 - 温房设计,200,180,,5,Viridia_battle_station,,"station, starfortress, unraidable, structure","{
+radius:70,
+variant:Viridia_chestnut_standard,
+fleetName:Star Fortress
+}",graphics/icons/industry/battlestation.png,data.scripts.campaign.Viridia_Station,"全面武装的作战基地，在原有基础上加装了成片的外挂装甲，既配备了 朱砂根-级 无人机，又布设了感应雷区。
+
+它的存在本身便足以阻止一切轰炸行动的发生。",2030,

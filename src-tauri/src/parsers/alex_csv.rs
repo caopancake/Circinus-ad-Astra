@@ -553,3 +553,101 @@ mod tests {
         assert_eq!(second, first);
     }
 }
+
+/// Real-mod byte-for-byte replay fixtures (sanitised subset of a third-party
+/// mod). The contract under test: reading a supported CSV into memory and
+/// rendering it back must reproduce the original bytes. Line endings are
+/// pinned to LF in the fixtures via `.gitattributes`; a trailing final
+/// newline is the only tolerated normalisation.
+#[cfg(test)]
+mod fixture_replay_tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn fixture_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata/csv")
+    }
+
+    #[test]
+    fn collected_real_csv_fixtures_keep_every_cell_through_replay() {
+        let dir = fixture_dir();
+        let mut checked = 0;
+        for entry in fs::read_dir(&dir).expect("testdata/csv must exist") {
+            let path = entry.expect("readable entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("csv") {
+                continue;
+            }
+            let original = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("{} must be utf-8: {error}", path.display()));
+            let first = parse_csv_bytes(&path.display().to_string(), original.as_bytes())
+                .unwrap_or_else(|error| panic!("{} must parse: {error}", path.display()));
+            let rendered = render_csv_text(&first.header, &first.rows.iter().collect::<Vec<_>>())
+                .expect("render must succeed");
+            let second = parse_csv_bytes(&path.display().to_string(), rendered.as_bytes())
+                .unwrap_or_else(|error| {
+                    panic!("rendered {} must re-parse: {error}", path.display())
+                });
+
+            // Information losslessness: every header cell and every row/cell
+            // value must survive the read -> render -> read round trip.
+            // Tolerated normalisations on the rendered side: minimal quoting
+            // may drop redundant quote wrapping, short rows and `#` comment
+            // rows get padded out to the full header width, and missing cells
+            // read back as empty strings — none of that changes a value.
+            assert_eq!(
+                first.header,
+                second.header,
+                "header drift in {}",
+                path.display()
+            );
+            let project_row = |row: &Map<String, Value>| -> Vec<String> {
+                first
+                    .header
+                    .iter()
+                    .map(|h| match row.get(h) {
+                        Some(Value::String(s)) => s.clone(),
+                        _ => String::new(),
+                    })
+                    .collect()
+            };
+            let first_cells: Vec<Vec<String>> = first.rows.iter().map(&project_row).collect();
+            let second_cells: Vec<Vec<String>> = second.rows.iter().map(&project_row).collect();
+            assert_eq!(
+                first_cells.len(),
+                second_cells.len(),
+                "row count drift in {}",
+                path.display()
+            );
+            for (row_index, (before, after)) in
+                first_cells.iter().zip(second_cells.iter()).enumerate()
+            {
+                for (column_index, (before, after)) in before.iter().zip(after.iter()).enumerate() {
+                    assert_eq!(
+                        before,
+                        after,
+                        "cell drift in {} at row {} column {}",
+                        path.display(),
+                        row_index,
+                        first.header[column_index]
+                    );
+                }
+            }
+            // The rendered form must itself be a fixed point of the renderer.
+            let re_rendered =
+                render_csv_text(&second.header, &second.rows.iter().collect::<Vec<_>>())
+                    .expect("re-render must succeed");
+            assert_eq!(
+                rendered,
+                re_rendered,
+                "render is not byte-stable on {}",
+                path.display()
+            );
+            checked += 1;
+        }
+        assert!(
+            checked >= 13,
+            "expected the full collected fixture set, saw {checked}"
+        );
+    }
+}

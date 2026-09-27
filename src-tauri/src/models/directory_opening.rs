@@ -56,3 +56,48 @@ pub struct GameWarningEditTarget {
     pub mod_root: String,
     pub path: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn open_directory_result_roundtrips_kebab_kind_and_camel_fields() {
+        let result = OpenDirectoryResult {
+            kind: OpenDirectoryKind::ModInGame,
+            selected_path: "D:/game/mods/x".to_string(),
+            starsector_root: Some("D:/game".to_string()),
+            mod_root: Some("D:/game/mods/x".to_string()),
+            overview: None,
+            warnings: vec![GameScanWarning {
+                path: "D:/game/mods/x/mod_info.json".to_string(),
+                message: "broken".to_string(),
+                edit_target: Some(GameWarningEditTarget {
+                    mod_root: "D:/game/mods/x".to_string(),
+                    path: "D:/game/mods/x/mod_info.json".to_string(),
+                }),
+            }],
+        };
+        let json = serde_json::to_value(&result).expect("serializable");
+        assert_eq!(json["kind"], "mod-in-game");
+        assert_eq!(json["selectedPath"], "D:/game/mods/x");
+        assert_eq!(
+            json["warnings"][0]["editTarget"]["modRoot"],
+            "D:/game/mods/x"
+        );
+
+        let back: OpenDirectoryResult = serde_json::from_value(json).expect("deserializable");
+        assert!(matches!(back.kind, OpenDirectoryKind::ModInGame));
+    }
+
+    #[test]
+    fn game_mod_summary_defaults_has_mod_info_through_warning_shape() {
+        let warning = GameScanWarning {
+            path: "p".to_string(),
+            message: "m".to_string(),
+            edit_target: None,
+        };
+        let json = serde_json::to_value(&warning).expect("serializable");
+        assert!(json["editTarget"].is_null());
+    }
+}

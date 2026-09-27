@@ -1,0 +1,43 @@
+{
+    "displayName": "Assault",
+    "fluxCapacitors": 10,
+    "fluxVents": 1,
+    "goalVariant": true,
+    "hullId": "Viridia_spike",
+    "hullMods": [
+        "Viridia_pollbasket",
+        "Viridia_tropism",
+        "Viridia_cupule",
+        "hardenedshieldemitter",
+        "missleracks"
+    ],
+    "permaMods": [],
+    "sMods": [],
+    "variantId": "Viridia_spike_assault",
+    "weaponGroups": [
+        {
+            "autofire": false,
+            "mode": "ALTERNATING",
+            "weapons": {
+                "WS0005": "Viridia_caltrop",
+                "WS0006": "Viridia_caltrop"
+            }
+        },
+        {
+            "autofire": false,
+            "mode": "ALTERNATING",
+            "weapons": {
+                "WS0003": "Viridia_tungoil_s",
+                "WS0004": "Viridia_tungoil_s"
+            }
+        },
+        {
+            "autofire": true,
+            "mode": "LINKED",
+            "weapons": {
+                "WS0001": "Viridia_xylem_s",
+                "WS0002": "Viridia_xylem_s"
+            }
+        }
+    ]
+}

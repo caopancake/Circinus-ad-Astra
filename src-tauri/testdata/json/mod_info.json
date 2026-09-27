@@ -1,0 +1,32 @@
+{
+	"id":"viridia_pack", # the Circum-Belt Nurseries
+	"name":"青苗生物科技 [Viridia]",
+	"version":{"major":0, "minor":5, "patch":0},
+	"gameVersion":"0.98a-RC8",
+	"author":"\nLoamfather\nFernhollow 质量保证团队\n\n完整贡献者与第三方材料声明见 THIRD_PARTY_NOTICES",
+	"description":"一个中体量扩充包，带来一个设定、文案与玩法俱全的边缘势力，主打 \"嫁接学派\" 旗下最激进的那一页 —— \"温房设计\"，并为游戏注入一整条崇尚先手重击的突击武备线。",
+	"dependencies": [
+		{
+			"id": "lw_lazylib",
+			"name": "LazyLib",
+			#"version": "xxx"
+		},
+		{
+			"id": "shaderLib",
+			"name": "GraphicLib",
+			#"version": "xxx"
+		},
+		{
+			"id": "MagicLib",
+			"name": "MagicLib",
+			#"version": "xxx"
+		},
+		{
+			"id": "BoxUtil",
+			"name": "BoxUtil",
+			#"version": "xxx"
+		},
+	],
+	"jars":["jars/viridia_pack.jar"],
+	"modPlugin":"data.scripts.ViridiaModPlugin"
+}

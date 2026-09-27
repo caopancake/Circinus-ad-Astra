@@ -98,3 +98,100 @@ fn csv_row_matches(
         .filter_map(serde_json::Value::as_str)
         .any(|value| value.to_lowercase().contains(search))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{Map, json};
+
+    fn session_row(key: &str, entries: &[(&str, &str)]) -> SessionCsvRow {
+        let mut row = Map::new();
+        for (field, value) in entries {
+            row.insert(field.to_string(), json!(value));
+        }
+        SessionCsvRow {
+            row_key: key.to_string(),
+            row,
+        }
+    }
+
+    #[test]
+    fn search_matches_any_cell_value_case_insensitively() {
+        let row = session_row("k", &[("id", "XY"), ("name", "Ruler of Mars")]);
+        assert!(csv_row_matches(
+            &row,
+            "ruler of",
+            &CsvFactionFilter::All,
+            CsvTableKey::Ships
+        ));
+        assert!(!csv_row_matches(
+            &row,
+            "venus",
+            &CsvFactionFilter::All,
+            CsvTableKey::Ships
+        ));
+    }
+
+    #[test]
+    fn empty_search_matches_everything() {
+        let row = session_row("k", &[("id", "XY")]);
+        assert!(csv_row_matches(
+            &row,
+            "",
+            &CsvFactionFilter::All,
+            CsvTableKey::Ships
+        ));
+        assert!(!csv_row_matches(
+            &row,
+            "xy",
+            &CsvFactionFilter::Faction {
+                faction_id: "hegemony".to_string()
+            },
+            CsvTableKey::Ships
+        ));
+    }
+
+    #[test]
+    fn faction_filter_scopes_rows_for_tables_that_support_it() {
+        let mut row = Map::new();
+        row.insert("id".to_string(), json!("XY"));
+        row.insert(CSV_FACTION_FIELD.to_string(), json!("tritachyon"));
+        let entry = SessionCsvRow {
+            row_key: "k".to_string(),
+            row,
+        };
+
+        let filter = CsvFactionFilter::Faction {
+            faction_id: "tritachyon".to_string(),
+        };
+        assert!(csv_row_matches(&entry, "", &filter, CsvTableKey::Ships));
+
+        let other = CsvFactionFilter::Faction {
+            faction_id: "hegemony".to_string(),
+        };
+        assert!(!csv_row_matches(&entry, "", &other, CsvTableKey::Ships));
+    }
+
+    #[test]
+    fn faction_filter_is_ignored_for_tables_without_faction_support() {
+        let row = session_row("k", &[("id", "XY")]);
+        let filter = CsvFactionFilter::Faction {
+            faction_id: "hegemony".to_string(),
+        };
+        assert!(csv_row_matches(
+            &row,
+            "",
+            &filter,
+            CsvTableKey::Descriptions
+        ));
+    }
+
+    #[test]
+    fn faction_filter_ignores_rows_without_a_faction_field() {
+        let row = session_row("k", &[("id", "XY")]);
+        let filter = CsvFactionFilter::Faction {
+            faction_id: "hegemony".to_string(),
+        };
+        assert!(!csv_row_matches(&row, "", &filter, CsvTableKey::Ships));
+    }
+}

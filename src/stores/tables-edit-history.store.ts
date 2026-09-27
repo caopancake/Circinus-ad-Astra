@@ -20,8 +20,8 @@ import type { CsvDraftOperation, CsvEditHistoryEntry } from '@/shared/types';
 
 type CsvEditHistoryStack = UndoStackState<CsvEditHistoryEntry>;
 
-function createCsvEditHistoryStack(): CsvEditHistoryStack {
-  return createUndoStackState<CsvEditHistoryEntry>();
+function createCsvEditHistoryStack(limit: number): CsvEditHistoryStack {
+  return createUndoStackState<CsvEditHistoryEntry>(limit);
 }
 
 export const useTablesEditHistoryStore = defineStore('tables-edit-history', () => {
@@ -36,7 +36,7 @@ export const useTablesEditHistoryStore = defineStore('tables-edit-history', () =
     }
     let stack = tableStates.get(table);
     if (!stack) {
-      stack = createCsvEditHistoryStack();
+      stack = createCsvEditHistoryStack(historyLimit.value);
       tableStates.set(table, stack);
     }
     return stack;

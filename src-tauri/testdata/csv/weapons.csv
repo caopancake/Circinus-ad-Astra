@@ -1,0 +1,155 @@
+name,id,tier,rarity,base value,range,damage/second,damage/shot,emp,impact,turn rate,OPs,ammo,ammo/sec,reload size,type,energy/shot,energy/second,chargeup,chargedown,burst size,burst delay,min spread,max spread,spread/shot,spread decay/sec,beam speed,proj speed,launch speed,flight time,proj hitpoints,autofireAccBonus,extraArcForAI,hints,tags,groupTag,tech/manufacturer,for weapon tooltip>>,primaryRoleStr,speedStr,trackingStr,turnRateStr,accuracyStr,customPrimary,customPrimaryHL,customAncillary,customAncillaryHL,noDPSInTooltip,number
+芒刺 AC,Viridia_awn,0,,350,300,,20,5,2,70,4,,,,FRAGMENTATION,3,,0,0.05,1,,0,10,1,10,,1000,,,10,,,PD,"pd10, SR, ind, Viridia_p, Viridia_bp",,温房设计,,点防御,,,,,,,,,,1.51
+筛管突击炮,Viridia_phloem_m,1,,800,700,,80,,5,14,14,18,2.5,6,KINETIC,60,,0,0.1,6,0.08,0,8,1,2,,800,,,10,,,,"kinetic10, merc, ind, Viridia_p, Viridia_bp, one_fire_all",,温房设计,,反护盾,,,,,开火将持续进行，直至备弹耗尽。备弹上限获得的增益越多，两次爆发之间的间隔就越短。,,,,,5.754
+筛管加速器,Viridia_phloem_l,1,,5000,900,,225,225,15,9,23,9,1,3,HIGH_EXPLOSIVE,300,,0,0.19,3,0.13,0,8,3,2,,1600,,,50,,,"USE_LESS_VS_SHIELDS, STRIKE, USE_VS_FRIGATES","he18, rare_bp, merc, ind, Viridia_p, Viridia_rp, Viridia_slow_autofire, one_fire_all",Viridia_phloem_l,温房设计,,反装甲,,,,,开火将持续进行，直至备弹耗尽。,,,,,7.55
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+导管霰炮,Viridia_xylem_s,0,,150,500,,40,,5,28,3,,,,KINETIC,24,,0,3.5,2,0.25,,,,,,700,,,10,,,,"kinetic6, SR, merc, ind, Viridia_p, Viridia_bp",,温房设计,,反护盾,,,,一般,,,,,,1.753
+导管脉冲霰炮,Viridia_xylem_m,1,,1000,800,,65,,10,18,9,,,,HIGH_EXPLOSIVE,65,,0.5,2.5,3,0.3,0,,,,,800,,,50,,,,"he9, merc, ind, Viridia_p, Viridia_bp",,温房设计,,反装甲,,,,一般,,,,,,4.7
+导管突击霰炮,Viridia_xylem_l,3,0.5,8000,700,,140,,10,8,30,,,,FRAGMENTATION,42,,0,0.28,,,0,,,,,1000,,,20,,,"ANTI_FTR, FIRE_WHEN_INEFFICIENT, PD, PD_ALSO","kinetic16, saga1t, rare_bp, ind, Viridia_p, Viridia_rp",,温房设计,,反结构,,,,一般,射程里没有像样的敌舰时，它会自作主张转火来袭导弹。,,,,,8.523
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+蜜距聚能枪,Viridia_spur_s,0,,200,700,350,,175,0,60,3,4,1.5,,ENERGY,,350,0,0,0.15,0.05,,,,,100000,,,,,,,,"beam9, merc, ind, Viridia_p, Viridia_bp, one_fire_all",,温房设计,,通用,,,,,"命中护盾时，将额外施加相当于 {%s} 光束伤害的硬幅能。
+
+开火将持续进行，直至备弹耗尽。",15%,,,,26.266
+蜜距聚能束,Viridia_spur_m,0,,1200,700,750,,350,0,25,11,10,2,5,ENERGY,,750,0,0,0.1,0,,,,,100000,,,,,,,,"beam11, merc, ind, Viridia_p, Viridia_bp, one_fire_all",,温房设计,,通用,,,,,"命中护盾时，将额外施加相当于 {%s} 光束伤害的硬幅能。
+
+开火将持续进行，直至备弹耗尽。",20%,,,,26.112
+蜜距聚能炮,Viridia_spur_l,1,,4500,700,2400,,1200,0,14,22,10,1.2,5,ENERGY,,2200,0,0,0.1,0,,,,,100000,,,,,,,"STRIKE, USE_VS_FRIGATES","beam15, merc, ind, Viridia_p, Viridia_bp, one_fire_all",,温房设计,,通用,,,,,"命中护盾时，将额外施加相当于 {%s} 光束伤害的硬幅能。
+
+开火将持续进行，直至备弹耗尽。
+
+其光束分为 {%s} 股，穿甲力度因此稍有不及。",15% | 4,,,,26.1121
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+飞絮 火箭 发射器,Viridia_catkin,0,,300,1500,,200,200,10,25,5,60,,,ENERGY,0,,0,7,6,0.1,,,,,,550,300,3.5,100,,,CONSERVE_1,"strike0, rocket10, merc, ind, Viridia_p, Viridia_bp",,温房设计,,压制,较快,无,,,,,,,,11.5
+蒺藜 SRM 发射器,Viridia_caltrop,1,,350,1200,,500,1000,30,30,3,2,,,HIGH_EXPLOSIVE,0,,0,1,,,,,,,,400,250,4,300,,,DO_NOT_AIM,"missile2, strike6, merc, ind, Viridia_p, Viridia_bp",,温房设计,,反装甲,较快,优秀,,,命中船体或装甲时，将释放 {%s} 条以武器与引擎为目标的电弧，每条电弧均附带相当于本次命中 EMP 值的效果。,4,,,TRUE,11.512
+苍耳 制导空雷 发射器,Viridia_burdock,0,,1200,1500,,400,,40,10,8,30,,,HIGH_EXPLOSIVE,0,,0,5,,,,,,,,300,100,7,300,,,"DO_NOT_AIM, ANTI_FTR, FIRE_WHEN_INEFFICIENT","missile8, utility10, ind, Viridia_p, Viridia_bp",,温房设计,,反战机,较快,无,,,首次接近目标时，将释放 {%s} 枚 {%s} 弹体。,4 | 萤火 SRM,,,TRUE,12.5
+蒴果 SRM 发射舱,Viridia_capsule,2,,1800,1500,,200,200,50,12,11,60,,,ENERGY,0,,0,9.3,20,0.3,,,,,,500,100,4,150,,,"GUIDED_POOR, STRIKE, MISSILE_SPREAD","missile12, strike8, rare_bp, merc, ind, Viridia_p, Viridia_rp",,温房设计,,压制,较快,优秀,,,命中船体或装甲时，有 {%s} 的概率释放以武器与引擎为目标的电弧，并造成与本次命中等值的额外 EMP 损害。,25%,,,TRUE,12.1
+蒲绒 MRM 发射舱,Viridia_cattail,1,,2000,2500,,200,,15,8,10,40,,,HIGH_EXPLOSIVE,0,,0,1.4,2,0.2,,,,,,450,250,10,150,,,"DO_NOT_AIM, CONSERVE_3","missile13, strike7, merc, ind, Viridia_p, Viridia_bp",,温房设计,,反装甲,非常快,较差,,,导弹没法一边加速一边转向。,,,,,12.233
+荆棘 火箭 发射器,Viridia_bramble,2,,5000,1500,,1200,1200,100,10,15,48,,,ENERGY,600,,0,5,8,0.15,,,,,,500,250,4,500,,,"STRIKE, CONSERVE_1","SR, strike15, rocket15, rare_bp, merc, ind, Viridia_p, Viridia_rp",,温房设计,,压制 (范围),较快,无,,,命中船体或装甲时，有 {%s} 的概率释放以武器与引擎为目标的电弧，并造成与本次命中等值的额外 EMP 损害。,75%,,,TRUE,16.111
+巨杉 MIRV 发射器,Viridia_sequoia,3,0.2,10000,1400,,1000,2000,50,7,30,15,,,ENERGY,0,,0,10,,,,,,,,600,200,6,800,,,"GUIDED_POOR, STRIKE, USE_VS_FRIGATES","missile20, strike15, rare_bp, saga1t, merc, Viridia_p, Viridia_rp",,温房设计,,压制,非常快,良好,,,,,,,TRUE,16.14
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+桐油 鱼雷 发射管,Viridia_tungoil_s,2,,400,1200,,5000,,100,14,3,2,,,FRAGMENTATION,0,,0,5,,,,,,,,450,150,3.5,350,,,STRIKE,"strike8, rocket3, merc, Viridia_p, Viridia_bp",,温房设计,,鱼雷,较快,无,,,,,,,TRUE,9.76
+桐油 鱼雷 发射器,Viridia_tungoil_m,2,,1500,1200,,5000,,100,20,12,12,,,FRAGMENTATION,0,,0,15,2,0.25,,,,,,450,150,3.5,350,,,STRIKE,"strike12, rocket5, merc, Viridia_p, Viridia_bp",,温房设计,,鱼雷,较快,无,,,,,,,TRUE,14.45
+桐油 鱼雷 投射舱,Viridia_tungoil_l,3,0.5,6000,1200,,5000,,100,20,27,28,,,FRAGMENTATION,0,,0,15,4,0.25,0,0,0,0,,450,450,3.5,350,,,STRIKE,"strike18, rocket14, rare_bp, merc, saga1t, Viridia_p, Viridia_rp",,温房设计,,鱼雷,较快,无,,,"该武器自带助推段，出膛即以极速飞行。",,,,TRUE,15.55
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+毒液射线,Viridia_venomray,2,,600,600,25,,150,0,35,4,,,,ENERGY,,100,0.1,0.1,,,,,,,2400,,,,,,,FIRE_WHEN_INEFFICIENT,"beam10, rare_bp, merc, ind, Viridia_p, Viridia_rp",,温房设计,,瘫痪,,,,,"命中船体或装甲时，将持续向目标的武器与引擎施放电弧，造成额外的 EMP 与能量伤害；命中护盾时，将依据目标硬幅能的水平随机释放贯穿护盾的电弧。",,,,,22.856
+毒液阵列,Viridia_venomvolley,3,0.5,8500,700,,120,800,5,15,28,20,3,4,ENERGY,160,,0,0.1,4,0.05,3,15,1,4,,1000,,,,,,"FIRE_WHEN_INEFFICIENT, USE_LESS_VS_SHIELDS, STRIKE, USE_VS_FRIGATES","energy20, rare_bp, merc, saga1t, Viridia_p, Viridia_rp, one_fire_all",,温房设计,,瘫痪,,,,,"命中船体或装甲时，有 {%s} 的概率释放以武器与引擎为目标的电弧，并造成与本次命中等值的额外伤害。
+
+开火将持续进行，直至备弹耗尽。",35%,,,,19.863
+毒液卷须,Viridia_venomtendril,2,,6500,1000,400,,2000,0,12,27,,,,ENERGY,,800,1,1,0.5,3,,,,,100000,,,,,,,FIRE_WHEN_INEFFICIENT,"LR, beam15, rare_bp, merc, Viridia_p, Viridia_rp",,温房设计,,瘫痪,,,,,"命中船体或装甲时，将持续向目标的武器与引擎施放电弧，造成额外的 EMP 与能量伤害；命中护盾时，将依据目标硬幅能的水平随机释放贯穿护盾的电弧。
+
+电弧还可能波及 {%s} 单位距离内的其他敌方单位，该单位的硬幅能越高，被波及的概率越大。",600,,,,24.21
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+离瓣 PD,Viridia_petal_pd,1,,650,300,350,,,0,120,5,,,,ENERGY,,200,0.1,0,0.2,0.1,,,,,100000,,,,,,,"PD, ANTI_FTR","pd9, SR, beam6, merc, ind, Viridia_p, Viridia_bp",,温房设计,,点防御,,,,,,,,,,15.62
+离瓣 AD,Viridia_petal_ad,1,,1800,500,300,,,0,60,8,,,,ENERGY,,120,0.1,0.3,,,,,,,100000,,,,,,,"PD, ANTI_FTR","pd15, beam11, rare_bp, merc, ind, Viridia_p, Viridia_rp",,温房设计,,点防御 (范围),,,,,咬中目标后，每隔 {%s} 秒便向 {%s} 单位距离内至多 {%s} 个敌方单位甩出一道光束余波，威力等于 {%s} 光束 {DPS}，专挑小型目标下手。,0.75 | 200 | 4 | 50%,,,,18.12
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+#绒刺(trichome)
+棘芒脉冲,Viridia_thorn_s,2,,500,400,,30,,10,35,6,20,2,5,KINETIC,36,,0,0.08,,,0,25,3,5,,1000,,,,,,,"SR, kinetic3, rare_bp, merc, ind, Viridia_p, Viridia_rp, one_fire_all",,温房设计,,反护盾,,,,,"命中护盾时，弹体将使目标在短时间内额外承受 {%s} 的护盾伤害。该效果与{%s}共享同一计数，同样受 {%s} 总增伤上限的制约。
+
+开火将持续进行，直至备弹耗尽。备弹上限获得的增益越多，两次爆发之间的间隔就越短。",1% | 棘芒 | 10%,,,,22.351
+棘芒炮,Viridia_thorn_m,2,,3000,500,,80,,20,15,7,10,1.5,5,KINETIC,96,,0,0.15,,,0,10,2,5,,1000,,,,,,,"SR, kinetic11, rare_bp, merc, ind, Viridia_p, Viridia_rp, one_fire_all",,温房设计,,反护盾,,,,,"命中护盾时，每发弹体都将使目标在短时间内承受更高的 {%s} 护盾伤害。该效果与{%s}共享同一计数，亦受 {%s} 总增伤上限的制约。
+
+开火将持续进行，直至备弹耗尽。备弹上限获得的增益越多，两次爆发之间的间隔就越短。",1% | 棘芒 | 10%,,,,22.351
+棘芒切割机,Viridia_thorn_l,2,,8000,800,,400,,50,8,18,4,0.5,1,KINETIC,600,,0,0.35,,,0,8,3,5,,1200,,,,,,"STRIKE, USE_VS_FRIGATES","kinetic16, rare_bp, merc, ind, Viridia_p, Viridia_rp, one_fire_all",,温房设计,,反护盾,,,,,"命中护盾时，每发弹体都将使目标在短时间内承受更高的 {%s} 护盾伤害。该效果与{%s}共享同一计数，但本武器可将总增伤上限提升至 {%s}。
+
+开火将持续进行，直至备弹耗尽。",5% | 棘芒 | 15%,,,,22.351
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+沤腐分解器,Viridia_decomp_s,2,0.5,1200,450,650,,,0,9,8,,,,HIGH_EXPLOSIVE,,650,0,0.5,1,3,,,,,2000,,,,,,,"STRIKE, USE_VS_FRIGATES","SR, he9, strike4, beam4, saga1t, rare_bp, merc, Viridia_p, Viridia_rp",,温房设计,,反装甲,,,,,命中船体时，将按 {%s} 光束伤害的数值对目标额外施加硬幅能。,100%,,,,19.752
+酶蚀分解器,Viridia_decomp_m,2,,2500,500,1500,,,0,20,13,1,0.25,,ENERGY,,1050,0,0.3,0.5,0.5,,,,,3000,,,,,,,,"SR, energy15, beam10, rare_bp, merc, Viridia_p, Viridia_rp",,温房设计,,通用,,,,,命中船体时，将按 {%s} 光束伤害的数值对目标额外施加硬幅能。,75%,,,,20.427
+淋溶分解器,Viridia_decomp_l,3,0.5,12500,700,2000,,,0,7,26,,,,KINETIC,,2000,0,0.5,1,4,,,,,3000,,,,,,,FIRE_WHEN_INEFFICIENT,"kinetic20, beam15, rare_bp, merc, Viridia_p, Viridia_rp",,温房设计,,反护盾,,,,,命中船体时，将按 {%s} 光束伤害的数值对目标额外施加硬幅能。,50%,,,,20.427
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+#战机武器,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+飞絮 火箭 (机载),Viridia_catkin_f,,,,800,,100,200,5,10,,,,,ENERGY,0,,0,2,,,,,,,,400,300,2.5,100,,,SYSTEM,,,温房设计,,压制 (机载),,,,,,,,,,12.3
+飞絮 火箭 (连射，机载),Viridia_catkin_u,,,,1000,,150,200,5,10,,,,,ENERGY,0,,0,4.3,3,0.1,,,,,,400,300,3,100,,,SYSTEM,,,温房设计,,压制 (机载),,,,,,,,,,12.3
+飞絮 发射器 (机载),Viridia_catkin_b,,,,1000,,150,200,5,10,,12,,,ENERGY,0,,0,1,4,0.1,0,20,5,10,,400,300,3,100,,,SYSTEM,,,温房设计,,压制 (机载),,,,,,,,,TRUE,16.1441
+蜜距聚能枪 (机载),Viridia_spur_f,,,,700,350,,175,0,60,,4,1.5,,ENERGY,,350,0,0,0.1,0,,,,,100000,,,SYSTEM,,,,SYSTEM,"one_fire_all",,温房设计,,通用 (机载),,,,,"咬住护盾的瞬间，把 {%s} 光束伤害折成硬幅能灌进目标。
+
+开火将持续进行，直至备弹耗尽。",15%,,,,26.266
+桐油 鱼雷 (机载),Viridia_tungoil_f,,,,800,,5000,,60,14,,1,,,FRAGMENTATION,0,,0,1,,,,,,,,400,100,3,300,,,"STRIKE, SYSTEM, SHOW_IN_CODEX",,,温房设计,,鱼雷 (机载),,,,,小型化的战斗部仅对毫无防备的舰体结构有效；若命中护盾或非空装甲格，造成的伤害还将额外降低 {%s}。,15%,,,TRUE,14.451
+桐油 鱼雷 填装器,Viridia_tungoil_r,,,,1200,,5000,,100,14,,1,0.02,1,FRAGMENTATION,0,,0,5,,,,,,,,450,150,3.5,350,,,"STRIKE, SYSTEM, SHOW_IN_CODEX",,,温房设计,,鱼雷,较快,无,,,,,,,TRUE,9.76
+磁孢 SRM,Viridia_magnetspore,,,,1200,,500,1000,30,30,,1,,,HIGH_EXPLOSIVE,0,,0,1,,,,,,,,500,250,5,200,,,"GUIDED_POOR, SYSTEM",,,温房设计,,压制 (机载),较快,优秀,,,,,,,TRUE,11.5121
+导管霰炮 (机载),Viridia_xylem_f,,,,500,,40,,5,27,,,,,KINETIC,15,,0,3.5,2,0.5,,,,,,800,,,10,,,SYSTEM,SR,,温房设计,,反护盾 (机载),,,,,,,,,,1.753
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+#内置武器,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+棘芒洪流发射极,Viridia_thorn_x,,,,1000,500,,,300,10,,,,,KINETIC,,375,0.2,0.1,,,,,,,2400,,,,,,,"FIRE_WHEN_INEFFICIENT, SYSTEM, SHOW_IN_CODEX","LR",,温房设计,,反护盾,,,,,"持续干扰目标护盾，使其受到的所有伤害提高。该效果与{%s}共享同一计数，且可直接提高 {%s} 的所受伤害。",棘芒 | 10%,棘芒的残余力场会拖拽目标，使其偏航并减速。这股拖拽对轻吨位目标格外明显，护卫舰与驱逐舰首当其冲。,,,21
+荆棘 火箭 填装器,Viridia_bramble_r,,,,1500,,1200,1200,100,10,,4,0.1,,ENERGY,600,,0,5,,,,,,,,500,250,4,500,,,"SYSTEM, STRIKE, CONSERVE_1","SR",,温房设计,,压制 (范围),较快,无,,,命中船体或装甲时，有 {%s} 的概率释放以武器与引擎为目标的电弧，并造成与本次命中等值的额外 EMP 损害。,75%,,,TRUE,16.111
+烛蕾束,Viridia_budbeam,,,,500,1000,,,0,0,,,,,HIGH_EXPLOSIVE,,500,0.5,1,1,6,,,,,100000,,,,,,,"SYSTEM, STRIKE, USE_VS_FRIGATES, FIRE_WHEN_INEFFICIENT",,,温房设计,,反装甲,,,,,开火期间光色一路泛蓝，蓝得越深，额外附上的光束伤害与等量 EMP 就越接近 {%s} 的上限。,25%,战术系统激活时，抛洒 {%s} 枚 {%s} 高爆伤害的弹荚。,5 | 300,,21.56
+烛蕾霰炮,Viridia_budburst,,,,500,,300,,30,,,,,,ENERGY,0,,0,1,,,,,,,,1500,,,1000,,,"STRIKE, USE_VS_FRIGATES, SYSTEM",,,温房设计,,反装甲,,,,,,,,,,38.478
+蜂螫霰炮,Viridia_stingshot,,,,700,,200,400,30,,,,,,ENERGY,160,,0.5,3.5,,,,,,,,1500,,,1000,,,"STRIKE, USE_VS_FRIGATES, SYSTEM",,Viridia_stingshot,温房设计,,瘫痪,,,,一般,命中船体时，将依据目标 {%s} 的幅能水平追加 {%s} 的额外伤害。,2% | 1%,,,,38.478
+蜂螫长矛,Viridia_stinglance,,,,1000,,2000,4000,100,0,,,,,ENERGY,4000,,1.5,6,,,,,,,,2500,,,20,,,"STRIKE, USE_VS_FRIGATES, SYSTEM, SHOW_IN_CODEX",LR,Viridia_stinglance,温房设计,,反装甲,,,,,命中船体时，将依据目标 {%s} 的幅能水平追加 {%s} 的额外伤害。,2% | 1%,,,,8.52
+蜂螫聚合器,Viridia_stingpod,,,,900,,1000,2000,100,6,,,,,ENERGY,2000,,2,12.7,3,0.15,0,5,3,5,,1500,,,200,,,"SYSTEM, STRIKE, USE_VS_FRIGATES",,Viridia_stingpod,返青,,瘫痪,,,,,"命中船体时，将依据目标 {%s} 的幅能水平追加 {%s} 的额外伤害。
+
+命中护盾时，若目标因该次伤害过载，弹体将继续飞行并命中船体。",2% | 1%,,,,8.25
+蜂螫聚合器 (扩散),Viridia_stingpod_sub,,,,900,,2000,5000,100,6,,,,,ENERGY,2000,,,1,,,8,25,,,,1200,,,200,,,"SYSTEM, STRIKE, USE_VS_FRIGATES",,,返青,,瘫痪,,,,,射出一枚不与任何东西碰撞的脉冲聚合团，飞完射程后炸开一圈 EMP 电弧，把一整片区域送入瘫痪。,,,,,8.26
+蜂螫独头弹,Viridia_stingslug,,,,700,,1200,1200,50,,,,,,ENERGY,0,,0,10,,,,,,,,1500,,,1000,,,SYSTEM,,Viridia_stingslug,温房设计,,反装甲,,,,,"命中船体时，将依据目标 {%s} 的幅能水平追加 {%s} 的额外伤害。
+
+命中护盾时，若目标因该次伤害过载，弹体将继续飞行并命中船体。",2% | 1%,,,TRUE,38.478
+蜂螫自动炮,Viridia_stingac,,,,450,,80,80,10,80,,,,,ENERGY,50,,0,0.4,,,,,,,,1500,,,1000,,,"SYSTEM, PD, ANTI_FTR",,Viridia_stingac,温房设计,,通用,,,,,命中船体时，将按目标 {%s} 的幅能水平追加 {%s} 的额外伤害。,2% | 1%,,,,38.478
+蜂螫自动炮 (合并),Viridia_stingac_sub,,,,600,,300,300,50,10,,,,,ENERGY,100,,0,0.75,,,,,,,,1500,,,1000,,,"SYSTEM",,Viridia_stingac_sub,温房设计,,通用,,,,,命中船体时，将按目标 {%s} 的幅能水平追加 {%s} 的额外伤害。,2% | 1%,,,,38.478
+日灼脉冲阵列,Viridia_sunscald,4,,,1000,,250,,0,5,,40,1,,ENERGY,150,,0,0.1,1,,0,10,2,5,,1000,,,,,,"SYSTEM, SHOW_IN_CODEX","no_drop, no_sell, no_dealer, no_drop_salvage, codex_unlockable",Viridia_sunscald,温房设计,,突击,,,,,,,,,,40.123
+日灼传感阵列,Viridia_sunscald_alt,4,,,0,1,,,0,5,,,,,ENERGY,,0,0,1,,,0,10,2,5,,1000,,,,,,"SYSTEM, PD","damage_special, no_drop, no_sell, no_dealer, no_drop_salvage",Viridia_sunscald_alt,温房设计,,防护,,,,,该设备处于运转状态时，将提高 {%s} 舰船非点防御武器的射程。,50%,进入战斗后，该设备不会出现在武器组中。,,,40.1234
+导管机炮,Viridia_xylem_c,4,,,900,,40,,10,50,,,,,KINETIC,40,,0,5.05,30,0.05,0,,,,,1200,,,20,,,"SYSTEM, FIRE_WHEN_INEFFICIENT","no_drop, no_sell, no_dealer, no_drop_salvage",Viridia_xylem_c,812 工程,,反护盾,,,,,开火期间无法转向。,,,,,8.98
+导管独头霰炮,Viridia_xylem_b,4,,,1200,,5000,,100,0,,,,,FRAGMENTATION,1000,,0,5,,,0,,,,,500,,,20,,,"SYSTEM, STRIKE","no_drop, no_sell, no_dealer, no_drop_salvage",Viridia_xylem_b,812 工程,,反结构,,,,,,,,,,8.99
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+鸢尾目,Viridia_iris,,,,2000,16000,,,0,8,,,,,ENERGY,,0,2,1,1,2,,,,,100000,,,,,,,"SYSTEM, FIRE_WHEN_INEFFICIENT, STRIKE, USE_VS_FRIGATES",damage_special,,温房设计,,通用,,,,,"将在三种截然不同的光束间循环切换。
+
+{%s}:
+直接造成约 {%s} 的能量伤害。
+
+{%s}:
+打出一记约 {%s} 的动能重击。命中护盾时，将在 {%s} 秒内使目标受到的护盾伤害提高 {%s}、护盾维持负担提高 {%s}。该效果能与 {%s} 彼此叠加。
+
+{%s}:
+倾泻约 {%s} 的能量灼流。命中船体或装甲时，将持续向目标的武器与引擎施放电弧，造成额外的 EMP 与能量伤害；命中护盾时，将依据目标硬幅能的水平随机释放贯穿护盾的电弧，并有概率波及 {%s} 单位距离内的其他敌方单位，其当前幅能越高，被波及的概率越大。","赤瓣灼芒 | 20000 | 黛藤垂络 | 3000 | 10 | 50% | 700% | 棘芒武器 | 翠脉蚀流 | 3000 | 800",,,TRUE,184.3
+鸢尾目部件,Viridia_iris_armor_left,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+鸢尾目部件,Viridia_iris_armor_right,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+鸢尾目部件,Viridia_iris_claw_left,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+鸢尾目部件,Viridia_iris_claw_right,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+鸢尾目部件,Viridia_iris_under,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+巨杉 MIRV 二段,Viridia_sequoia_sub,,,,800,,250,250,50,,,,,,ENERGY,0,,,,,,,,,,,800,,,10,,,SYSTEM,,,温房设计,,,,,,,,,,,,16.144
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+菌丝机雷,Viridia_mycmine,,,,1000,,2000,2000,25,,,,,,ENERGY,0,,0,3,1,,0,0,0,0,,20,20,30,1200,,,SYSTEM,,,,,,,,,,,,,,,38.72
+孢球 (未使用),Viridia_sporeorb,,,,1000,,500,500,100,,,,,,ENERGY,0,,0,1,1,,0,0,0,0,,600,1200,4.5,300,,,SYSTEM,,,,,,,,,,,,,,,38.73
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+14 灯彩,Viridia_verdancy_light_14,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+萤火蕈 光效,Viridia_foxfire_light,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草 光效,Viridia_telegraph_light,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+巨柱 光效,Viridia_cereus_light,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+麦仙翁 光效,Viridia_corncockle_light,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+捕虫堇舰体,Viridia_butterwort_hull_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+捕虫堇舰体,Viridia_butterwort_hull_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+红杉舰体,Viridia_redwood_hull,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+板根舰体,Viridia_buttress_hull,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+龙舌兰舰体,Viridia_agave_hull,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+龙舌兰舰体,Viridia_agave_front_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+龙舌兰舰体,Viridia_agave_front_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+龙舌兰舰体,Viridia_agave_top,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+龙舌兰舰体,Viridia_agave_stinger,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+层台雷达,Viridia_terrace_radar,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.222
+舞草舰体,Viridia_telegraph_armor_front_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_armor_front_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_armor_side_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_armor_side_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_cover_front_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_cover_front_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_cover_side_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_cover_side_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_engine_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_engine_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_stinger,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_tail_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_tail_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_top_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+舞草舰体,Viridia_telegraph_top_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+酢浆草舰体,Viridia_oxalis_armor_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+酢浆草舰体,Viridia_oxalis_armor_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+酢浆草舰体,Viridia_oxalis_engine_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+酢浆草舰体,Viridia_oxalis_engine_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+酢浆草舰体,Viridia_oxalis_front_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+酢浆草舰体,Viridia_oxalis_front_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+酢浆草舰体,Viridia_oxalis_tail_l,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+酢浆草舰体,Viridia_oxalis_tail_r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+巨柱舰体,Viridia_cereus_hull,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,返青,,,,,,,,,,,,43.223
+巨魔芋 光效,Viridia_titanarum_lights,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,SYSTEM,,,温房设计,,,,,,,,,,,,43.223

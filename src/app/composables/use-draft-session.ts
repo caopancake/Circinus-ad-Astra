@@ -28,10 +28,15 @@ export function useDraftSession<T>(initialValue: T, options: DraftSessionOptions
   const { externalNotice, ...sessionOptions } = options;
   const session = createEditSessionValue(initialValue, sessionOptions);
 
+  // The session is a plain (non-reactive) state machine; the refs below are the reactive
+  // projection kept in sync at the single dispatch boundary. Computeds must not read the
+  // session getters directly: plain getters never invalidate, so the value would be cached.
   const baseValue = ref<T>(session.baseline) as Ref<T>;
   const draftValue = ref<T>(session.draft) as Ref<T>;
   const pendingExternalValue = ref<T | null>(session.pendingExternal) as Ref<T | null>;
   const revision = ref(session.revision);
+  const dirty = ref(session.dirty);
+  const hasPendingExternalValue = ref(session.hasPendingExternal);
 
   function dispatch(action: () => void): void {
     action();
@@ -39,11 +44,11 @@ export function useDraftSession<T>(initialValue: T, options: DraftSessionOptions
     draftValue.value = session.draft;
     pendingExternalValue.value = session.pendingExternal;
     revision.value = session.revision;
+    dirty.value = session.dirty;
+    hasPendingExternalValue.value = session.hasPendingExternal;
   }
 
-  const dirty = computed(() => session.dirty);
-  const hasPendingExternalValue = computed(() => session.hasPendingExternal);
-  const externalUpdateNotice = computed(() => (session.hasPendingExternal ? (externalNotice ?? DEFAULT_EXTERNAL_NOTICE) : ''));
+  const externalUpdateNotice = computed(() => (hasPendingExternalValue.value ? (externalNotice ?? DEFAULT_EXTERNAL_NOTICE) : ''));
 
   return {
     baseValue,

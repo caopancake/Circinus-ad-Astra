@@ -62,3 +62,48 @@ impl Serialize for AppError {
         state.end()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io;
+
+    #[test]
+    fn message_error_keeps_its_stable_code() {
+        let error = AppError::message("config.id_invalid", "bad id");
+        assert_eq!(error.code(), "config.id_invalid");
+        assert_eq!(error.to_string(), "bad id");
+    }
+
+    #[test]
+    fn context_errors_surface_the_source_code_through_layers() {
+        let source = AppError::message("parse.csv", "row broken");
+        let outer = AppError::context("保存失败", AppError::context("写盘失败", source));
+        assert_eq!(outer.code(), "parse.csv");
+        assert_eq!(outer.to_string(), "保存失败: 写盘失败: row broken");
+    }
+
+    #[test]
+    fn foreign_errors_map_to_fixed_fallback_codes() {
+        let io_error = AppError::from(io::Error::new(io::ErrorKind::NotFound, "gone"));
+        assert_eq!(io_error.code(), "io.unexpected");
+
+        let csv_error = AppError::from(csv::Error::from(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "bad",
+        )));
+        assert_eq!(csv_error.code(), "parse.csv");
+
+        let json_error =
+            AppError::from(serde_json::from_slice::<serde_json::Value>(b"{").unwrap_err());
+        assert_eq!(json_error.code(), "parse.json");
+    }
+
+    #[test]
+    fn serializes_into_the_wire_code_message_shape() {
+        let error = AppError::context("outer", AppError::message("spec.missing", "inner detail"));
+        let value = serde_json::to_value(&error).expect("serializable");
+        assert_eq!(value["code"], "spec.missing");
+        assert_eq!(value["message"], "outer: inner detail");
+    }
+}

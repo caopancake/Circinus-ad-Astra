@@ -1,0 +1,357 @@
+{
+	id:"viridia",
+	"color":[255,230,155,255],
+	"baseUIColor":[250,230,160,200],
+	"darkUIColor":[50,70,90,175],
+	"gridUIColor":[60,80,100,75],
+	"displayName":"青苗生物科技", # use Viridia as English short name
+	"displayNameWithArticle":"青苗生物科技(Viridia)",
+	"displayNameLong":"环带青苗生物科技",
+	"displayNameLongWithArticle":"环带青苗生物科技(Viridia-Biotech)",
+	"personNamePrefixAOrAn":"a",
+	"displayNameIsOrAre":"is",
+	"logo":"graphics/factions/viridia.png",
+	"crest":"graphics/factions/crest_viridia.png",
+	"shipNamePrefix":"VNS",
+	"shipNameSources":{
+		"JAPANESE":150,
+		"BRITISH_NAVY":300,
+		"Viridia_HALLOTROP":1,
+		"BEASTS":150,
+		"CELTIC":100,
+		"PERSIAN":150,
+	},
+	"names":{
+		"old english":1,
+		"modern":4,
+		"world":4,
+		"future":1,
+	},
+	# variantOverrides restricts hulls to listed variants and adjusts their probability
+	"variantOverrides":{
+	},
+	# multiplier for how often hulls show up in the faction's fleets
+	"hullFrequency":{
+		"tags":{
+			"Viridia_bp":1,
+			"Viridia_rp":0.5,
+			"Viridia_bramble":0.2
+		},
+		"hulls":{
+			"tarsus":0.1, # can be bought, but not often appears in fleet
+			"buffalo":0.1,
+			"atlas":0.1,
+			"phaeton":0.1,
+			"hermes":0.1,
+		},
+	},
+	# ships the faction gets access to when importing S&W out-of-faction
+	"shipsWhenImporting":{
+		"tags":[],
+		"hulls":[
+		],
+	},
+	"knownShips":{
+		"tags":["Viridia_bp", "Viridia_rp", "Viridia_bramble"],
+		"hulls":[
+			"ox",
+			"stock",
+
+			"dram",
+			"phaeton",
+			"prometheus",
+
+			"tarsus",
+			"buffalo",
+			"colossus",
+			"atlas",
+
+			#"phantom",
+			#"revenant",
+
+			"hermes",
+			"nebula",
+			"valkyrie",
+			"starliner"
+		],
+	},
+	# listing ships here will make the faction mostly use them even if other hulls become available
+	"priorityShips":{
+		"tags":[],
+		"hulls":[
+		],
+	},
+	"knownFighters":{
+		"tags":["midline_bp", "hightech_bp", "Viridia_bp", "Viridia_rp"],
+		"fighters":[
+			"broadsword_wing",
+			"thunder_wing",
+			"longbow_wing",
+			"sarissa_wing",
+		],
+	},
+	"priorityFighters":{
+		"tags":["Viridia_bp", "Viridia_rp"],
+		"fighters":[
+		],
+	},
+	"knownWeapons":{
+		"tags":["lowtech_bp", "midline_bp", "missile_bp", "hightech_bp", "Viridia_bp", "Viridia_rp"],
+		"weapons":[
+			"heavymortar",
+			"mark9",
+			#"railgun",
+			#"dualflak",
+			"heavymauler",
+			"hveldriver",
+			"gauss",
+			#"mjolnir",
+			"sabotpod",
+			"phasecl",
+			"cyclone",
+			#"hurricane",
+			"squall",
+			"locust",
+			#"pdburst",
+			#"amblaster",
+			"phasebeam",
+			#"heavyblaster",
+			#"heavyburst",
+			"ionpulser",
+			"ionbeam",
+			"plasma",
+			#"guardian",
+			"lightneedler",
+			"heavyneedler",
+			"multineedler",
+			"tachyonlance",
+			#"breach",
+			#"breachpod",
+		],
+	},
+	"priorityWeapons":{
+		"tags":["Viridia_bp", "Viridia_rp"],
+		"weapons":[
+			"sabotpod",
+			"sabot",
+			"ionpulser",
+			#"phasebeam",
+			"lightneedler",
+			#"heavyneedler",
+			#"hellbore",
+		],
+	},
+	"knownHullMods":{
+		"tags":["standard", "Viridia_bp"],
+		"hullMods":[
+			"Viridia_nectary",
+			"Viridia_thornskin",
+			"Viridia_pollbasket",
+			"Viridia_tropism",
+			"Viridia_cupule",
+			"Viridia_dormancy",
+		],
+	},
+	"weaponSellFrequency":{
+		"Viridia_awn":5,
+		"Viridia_phloem_m":5,
+		"Viridia_phloem_l":5,
+
+		"Viridia_xylem_s":5,
+		"Viridia_xylem_m":5,
+		"Viridia_xylem_l":5,
+
+		"Viridia_spur_s":5,
+		"Viridia_spur_m":5,
+		"Viridia_spur_l":5,
+
+		"Viridia_catkin":5,
+		"Viridia_caltrop":5,
+		"Viridia_burdock":5,
+		"Viridia_capsule":5,
+		"Viridia_cattail":5,
+		"Viridia_bramble":5,
+		"Viridia_sequoia":5,
+
+		"Viridia_tungoil_s":5,
+		"Viridia_tungoil_m":5,
+		"Viridia_tungoil_l":5,
+
+		"Viridia_venomray":5,
+		"Viridia_venomvolley":5,
+		"Viridia_venomtendril":5,
+
+		"Viridia_petal_pd":5,
+		"Viridia_petal_ad":5,
+
+		"Viridia_thorn_s":5,
+		"Viridia_thorn_m":5,
+		"Viridia_thorn_l":5,
+
+		"Viridia_decomp_s":5,
+		"Viridia_decomp_m":5,
+		"Viridia_decomp_l":5,
+	},
+	"fighterSellFrequency":{
+		"Viridia_fighter_hoverfly_wing":1.5,
+		"Viridia_fighter_hornet_wing":1.5,
+		"Viridia_fighter_damselfly_wing":1.5,
+		"Viridia_fighter_carpenter_wing":1.5,
+		"Viridia_fighter_mantis_wing":1.5,
+	},
+	"hullmodSellFrequency":{
+		"Viridia_nectary":2,
+		"Viridia_thornskin":2,
+		"Viridia_pollbasket":2,
+		"Viridia_tropism":2,
+		"Viridia_cupule":2,
+		"Viridia_dormancy":2,
+	},	
+	"factionDoctrine":{
+		"warships":3,
+		"carriers":3,
+		"phaseShips":1,
+		
+		"officerQuality":2,
+		"shipQuality":3,
+		"numShips":2,
+		
+		"shipSize":4,
+		
+		"aggression":5,
+		
+		"combatFreighterProbability":0.2,     				# instead of some portion of the freighters in a fleet
+		"combatFreighterCombatUseFraction":0,  				# as part of the normal combat lineup
+		"combatFreighterCombatUseFractionWhenPriority":0.33,# as part of normal combat lineup, when marked as priority ship
+		"autofitRandomizeProbability":0.1,
+
+		"commanderSkillsShuffleProbability":1,
+		"commanderSkills":[
+			"officer_management",
+			"coordinated_maneuvers",
+			"carrier_group",
+			"crew_training",
+		],
+	},
+	"fleetTypeNames":{
+		#"trade":"贸易舰队",
+		#"tradeLiner":"客运舰队",
+		#"smallTrader":"贸易船队",
+
+		"patrolSmall":"园卫巡察小组",
+		"patrolMedium":"园卫管制分队",
+		"patrolLarge":"园卫主力舰队",
+
+		"scavengerSmall":"苗情调查小组",
+		"scavengerMedium":"苗情勘探分队",
+		"scavengerLarge":"苗情勘探舰队",
+
+		"taskForce":"特别园艺行动",
+	},
+	"illegalCommodities":[
+		"drugs",
+		"organs",
+		"hand_weapons",
+	],
+	"music":{
+		"theme":"Viridia_market_interaction_neutral",
+		"market_neutral":"Viridia_market_interaction_neutral",
+		"market_hostile":"Viridia_market_interaction_hostile",
+		"market_friendly":"Viridia_market_interaction_friendly",
+		"encounter_neutral":"Viridia_encounter_interaction_neutral",
+		"encounter_hostile":"Viridia_encounter_interaction_hostile",
+		"encounter_friendly":"Viridia_encounter_interaction_friendly",
+	},
+	"portraits":{
+		"standard_male":[
+			"graphics/portraits/Viridia_m_1.png",
+			"graphics/portraits/Viridia_m_2.png",
+			"graphics/portraits/Viridia_m_3.png",
+			"graphics/portraits/Viridia_m_4.png",
+			"graphics/portraits/Viridia_m_5.png",
+			"graphics/portraits/Viridia_m_6.png",
+			"graphics/portraits/Viridia_m_7.png",
+			"graphics/portraits/Viridia_m_8.png",
+		],
+		"standard_female":[
+			"graphics/portraits/Viridia_f_1.png",
+			"graphics/portraits/Viridia_f_2.png",
+			"graphics/portraits/Viridia_f_3.png",
+			"graphics/portraits/Viridia_f_4.png",
+			"graphics/portraits/Viridia_f_5.png",
+			"graphics/portraits/Viridia_f_6.png",
+			"graphics/portraits/Viridia_f_7.png",
+		],
+	},
+	"ranks":{
+		"ranks":{
+			"spaceSailor":{"name":"见习圃工"},
+			"spaceChief":{"name":"预备舵手"},
+			"spaceEnsign":{"name":"代理舵手"},
+			"spaceLieutenant":{"name":"认证舵手"},
+			"spaceCommander":{"name":"一叶指挥官"},
+			"spaceCaptain":{"name":"双叶指挥官"},
+			"spaceAdmiral":{"name":"三叶指挥官"},
+
+			"groundPrivate":{"name":"见习圃工"},
+			"groundSergeant":{"name":"垄-预备队长"},
+			"groundLieutenant":{"name":"垄-代理队长"},
+			"groundCaptain":{"name":"垄-认证队长"},
+			"groundMajor":{"name":"垄-一叶指挥官"},
+			"groundColonel":{"name":"垄-双叶指挥官"},
+			"groundGeneral":{"name":"垄-三叶指挥官"},
+
+			"factionLeader":{"name":"协理"},
+		},
+		"posts":{
+            "patrolCommander":{"name":"园卫局科员"},
+            "fleetCommander":{"name":"园卫部委"},
+
+            "baseCommander":{"name":"园卫主任"},
+            "stationCommander":{"name":"温室主任"},
+            "portmaster":{"name":"窑艺铸炉主任"},
+            "administrator":{"name":"圃区总理事"},
+            "supplyOfficer":{"name":"园需主任"},
+
+            "outpostCommander":{"name":"畦边理事"},
+            "supplyManager":{"name":"园需部委"},
+
+			"factionLeader":{"name":"协理"},
+		},
+	},
+	"voices":{
+		"LOW":{
+			"soldier":5,
+			"spacer":10,
+		},
+		"MEDIUM":{
+			"business":10,
+			"official":5,
+		},
+		"HIGH":{
+			"business":5,
+			"official":10,
+			"scientist":1,
+		},
+	},
+	"custom":{
+		"postsNoBounties":true,
+		"offersCommissions":false,
+		"engagesInHostilities":true,
+		"buysAICores":true,
+		"AICoreValueMult":3.0,
+		"AICoreRepMult":0.2,
+		"buysSurveyData":true,
+		"hostilityImpactOnGrowth":true,
+		"caresAboutAtrocities":true,
+		"punitiveExpeditionData":{
+			"vsCompetitors":false,
+			"vsFreePort":false,
+			"canBombard":false,
+			"territorial":false,
+		},
+		"simulatorData":{
+			"showInSimulator":true,
+		},
+	},
+},

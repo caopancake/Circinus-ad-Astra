@@ -1,0 +1,57 @@
+{
+  "hullName": "Viridia_Drone Weevil",
+  "hullId": "Viridia_drone_weevil",
+  "hullSize": "FIGHTER",
+  "spriteName": "graphics/ships/drones/Viridia_drone_weevil.png",
+  "style": "Viridia_TECH_MID",
+  "height": 24,
+  "width": 20,
+  "center": [10, 11],
+  "collisionRadius": 18,
+  "shieldCenter": [0, 0],
+  "shieldRadius": 16,
+  "viewOffset": 0,
+  "weaponSlots": [
+    {
+      "id": "WS 001",
+      "size": "SMALL",
+      "type": "ENERGY",
+      "mount": "HIDDEN",
+      "arc": 30,
+      "angle": 0,
+      "locations": [7, -0]
+    }
+  ],
+  "engineSlots": [
+    {
+      "location": [-7, -0],
+      "length": 13.5,
+      "width": 3,
+      "angle": 180,
+      "contrailSize": 3,
+      "style": "MIDLINE"
+    },
+    {
+      "location": [-9, 3.5],
+      "length": 7,
+      "width": 2,
+      "angle": 180,
+      "contrailSize": 2,
+      "style": "MIDLINE"
+    },
+    {
+      "location": [-9, -3.5],
+      "length": 7,
+      "width": 2,
+      "angle": -180,
+      "contrailSize": 2,
+      "style": "MIDLINE"
+    }
+  ],
+  "bounds": [
+    9, -6,
+    -7, -5.5,
+    -7, 5.5,
+    9, 6
+  ]
+}

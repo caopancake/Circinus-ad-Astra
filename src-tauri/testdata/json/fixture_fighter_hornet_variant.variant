@@ -1,0 +1,24 @@
+{
+	"displayName": "轰炸机",
+	"fluxCapacitors": 0,
+	"fluxVents": 0,
+	"hullId": "Viridia_fighter_hornet",
+	"hullMods": [],
+	"variantId": "Viridia_fighter_hornet_variant",
+	"weaponGroups": [
+	{
+		"autofire": false,
+		"mode": "LINKED",
+		"weapons": {
+		"WS0001": "Viridia_tungoil_f"
+		}
+	},
+	{
+		"autofire": false,
+		"mode": "LINKED",
+		"weapons": {
+				"WS0002": "Viridia_magnetspore"
+		}
+	}
+	]
+}

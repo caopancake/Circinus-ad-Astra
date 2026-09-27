@@ -37,7 +37,7 @@ export const namingBoundaryRule = {
       if (file.rel.startsWith('src/domain/') && /\.(service|store|orchestrator)\.ts$/.test(file.rel)) {
         failures.push(`${file.rel}: domain files must not use responsibility suffixes`);
       }
-      if (/\bimport\s+(?:type\s+)?\{[\s\S]*?\bas\b[\s\S]*?\}\s+from\b/.test(file.text)) {
+      if (/\bimport\s+(?:type\s+)?\{[^{}]*\bas\b[^{}]*\}\s+from\b/.test(file.text)) {
         failures.push(`${file.rel}: import aliasing is forbidden`);
       }
       if (file.rel.endsWith('.vue')) {

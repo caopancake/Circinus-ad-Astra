@@ -92,3 +92,44 @@ mod tests {
         assert!(clean["nested"].get("_temp").is_none());
     }
 }
+
+/// Real-mod semantic replay fixtures (sanitised subset of a third-party mod).
+/// The contract under test: read a supported JSON spec into memory, write it
+/// back through the production serialisation (internal-field strip plus
+/// pretty print), and read it again — the initial and final in-memory values
+/// must be equal. Byte identity of the rewritten file is explicitly not
+/// required: pretty printing and key ordering are product normalisations.
+#[cfg(test)]
+mod fixture_replay_tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn fixture_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata/json")
+    }
+
+    #[test]
+    fn collected_real_json_fixtures_round_trip_in_memory() {
+        let dir = fixture_dir();
+        let mut checked = 0;
+        for entry in fs::read_dir(&dir).expect("testdata/json must exist") {
+            let path = entry.expect("readable entry").path();
+            if path.is_dir() {
+                continue;
+            }
+            let first = read_json_file(&path)
+                .unwrap_or_else(|error| panic!("{} must parse: {error}", path.display()));
+            let clean = strip_internal_fields(&first);
+            let text = serde_json::to_string_pretty(&clean).expect("serialisation must succeed");
+            let second = parse_starsector_json(&text)
+                .unwrap_or_else(|error| panic!("rewritten {} must parse: {error}", path.display()));
+            assert_eq!(first, second, "semantic replay drift in {}", path.display());
+            checked += 1;
+        }
+        assert!(
+            checked >= 21,
+            "expected the full collected fixture set, saw {checked}"
+        );
+    }
+}

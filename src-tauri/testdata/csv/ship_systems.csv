@@ -1,0 +1,29 @@
+name,id,flux/second,f/s (base rate),f/s (base cap),flux/use,f/u (base rate),f/u (base cap),cr/u,max uses,regen,charge up,active,down,cooldown,toggle,noDissipation,noHardDissipation,hardFlux,noFiring,noTurning,noStrafing,noAccel,noShield,noVent,isPhaseCloak,tags,icon
+气根推进器,Viridia_airroot,,,,,,,,,,0.5,2,1,12,,,,,,,,,,,,movement,graphics/icons/hullsys/Viridia_airroot.png
+气囊驱动器,Viridia_bladder,1,,,,,,,,,0.1,0.2,0.2,8,,,,,TRUE,,TRUE,TRUE,,,,movement,graphics/icons/hullsys/Viridia_bladder.png
+主脉超频,Viridia_mainvein,1,,,,,,,,,1,5,1,18,,,TRUE,,,,,,,,,"defensive, offensive",graphics/icons/hullsys/Viridia_mainvein.png
+卷须钩爪,Viridia_tendrilhook,1,,,,,,,,,0.75,,0.5,1.5,TRUE,,,,,,,,,,,movement,graphics/icons/hullsys/Viridia_tendrilhook.png
+潜芽驱动器,Viridia_latentbud,,,,,,0.2,,,,0.3,1,0.3,15,,,,,TRUE,TRUE,TRUE,,,TRUE,,movement,graphics/icons/hullsys/Viridia_latentbud.png
+穿荚突进,Viridia_podrush,,,,1,,,,,,0.5,1.5,0.5,12,,,,,,,,,TRUE,TRUE,,"movement, offensive",graphics/icons/hullsys/Viridia_podrush.png
+蜂锥突进,Viridia_beecone,,,,1,,,,,,0.75,1.5,0.75,12,,,,,,,,,TRUE,TRUE,,"movement, offensive",graphics/icons/hullsys/Viridia_beecone.png
+缠蔓 CQC,Viridia_vinecqc,1,,,,,,,,,0.5,,0.5,1,TRUE,,,,,,,,,,,offensive,graphics/icons/hullsys/Viridia_vinecqc.png
+孢潮干扰,Viridia_sporesurge,,,,,,0.1,,,,0.1,,0.1,10,,,,,,,,,,,,,graphics/icons/hullsys/Viridia_sporesurge.png
+气孔耗散,Viridia_stomata,1,,,,,,,,,1,2,0.5,15,,,,,TRUE,,,,,TRUE,,defensive,graphics/icons/hullsys/Viridia_stomata.png
+苞片导流,Viridia_bract,,,,,,0.1,,3,0.04,3,10,0,2,,,TRUE,,,,,,,TRUE,,"uses_damper_ai, defensive",graphics/icons/hullsys/Viridia_bract.png
+树液涡轮,Viridia_sapturbine,1,,,,,,,,,1,7,1,10,,,,,,,,,,,,defensive,graphics/icons/hullsys/Viridia_stomata.png
+催蕾装填器,Viridia_budboost,,,,,,,,,,1,8,1,10,,,,,,,,,,,,offensive,graphics/icons/hullsys/Viridia_budboost.png
+须根雷达,Viridia_rootsweep,1,,,,,0.1,,,,2.5,6.5,1,8,,,,,,,,,,,,"defensive, offensive",graphics/icons/hullsys/Viridia_rootsweep.png
+授粉投送,Viridia_pollendrop,,,,,,0.3,,,,0.5,,0.5,24,,,,,,,,,,,,offensive,graphics/icons/hullsys/Viridia_pollendrop.png
+蜜露畸变器,Viridia_honeyskew,,,,,,0.2,,,,0.5,,0.5,12,,,,,,,,,,,,offensive,graphics/icons/hullsys/Viridia_honeyskew.png
+#,,,,,,,,,,,,,,,,,,,,,,,,,,,
+分合切换,Viridia_oxalis_strike,,,,,,,,,,0.5,,0.5,1,TRUE,,,,,,,,,,,restricted,graphics/icons/hullsys/Viridia_oxalis_strike.png
+苔面跃迁,Viridia_mossblink,,,,,,,,5,0.1,0.1,,0.1,,,,,TRUE,,,,,,,,"restricted, movement",graphics/icons/hullsys/Viridia_mossblink.png
+游根机动,Viridia_wanderroot,,,,1,,,,2,0.1,0.3,0.4,0.2,0.5,,,,,,,,,,TRUE,,"restricted, defensive, offensive, movement",graphics/icons/hullsys/Viridia_wanderroot.png
+菌丝机雷投送,Viridia_mycmine_strike,,,,,,0.1,,5,0.2,0.25,,0.25,0,,,,,,,,,,,,"restricted, offensive",graphics/icons/hullsys/Viridia_mycmine_strike.png
+雷苔扩散,Viridia_thundermoss,1,,,,,0.1,,,,5,,1,14,TRUE,,TRUE,,,,,,,,,"restricted, offensive",graphics/icons/hullsys/Viridia_thundermoss.png
+迫暮驱动器,Viridia_duskdrive,1,,,,,,,,,1.5,2,0.5,10,,,,,TRUE,,,,,TRUE,,"restricted, movement",graphics/icons/hullsys/maneuvering_jets.png
+#,,,,,,,,,,,,,,,,,,,,,,,,,,,
+#,,,,,,,,,,,,,,,,,,,,,,,,,,,
+#,,,,,,,,,,,,,,,,,,,,,,,,,,,
+朱砂根无人机,Viridia_gardener,,,,,,,,4,,0,,0,0,,,,,,,,,,,,,graphics/icons/hullsys/station_defense_drones_mid.png
+相位系统,Viridia_phase_cloak,,,,,,,,,,0.5,,0.5,2,TRUE,,TRUE,TRUE,TRUE,,,,TRUE,,TRUE,"restricted, defensive, hide_in_codex",graphics/icons/hullsys/phase_cloak.png

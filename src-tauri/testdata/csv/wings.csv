@@ -1,0 +1,10 @@
+id,variant,tags,tier,rarity,fleet pts,op cost,formation,range,attackRunRange,attackPositionOffset,num,role,role desc,refit,base value,,,,,,,,,,,,,number
+Viridia_fighter_hoverfly_wing,Viridia_fighter_hoverfly_variant,"fighter4, interceptor, mid, merc, Viridia_bp, Viridia_p",1,,6,13,V,4000,300,500,3,INTERCEPTOR,拦截机,10,8000,,,,,,,,,,,,,5.0004589
+Viridia_fighter_hornet_wing,Viridia_fighter_hornet_variant,"bomber4, bomber, high, rare_bp, merc, ind, Viridia_rp, Viridia_p",3,,8,16,V,4000,2000,200,2,BOMBER,轰炸机,15,12000,,,,,,,,,,,,,1.24
+Viridia_fighter_damselfly_wing,Viridia_fighter_damselfly_variant,"support2, interceptor, high, merc, ind, Viridia_bp, Viridia_p",0,,6,4,V,0,500,,2,SUPPORT,支援机,10,6000,,,,,,,,,,,,,1.242
+Viridia_fighter_carpenter_wing,Viridia_fighter_carpenter_variant,"bomber6, bomber, high, rare_bp, merc, Viridia_rp, Viridia_p",3,,10,24,CLAW,6000,1600,600,1,BOMBER,轰炸机,25,15000,,,,,,,,,,,,,1.241
+Viridia_fighter_mantis_wing,Viridia_fighter_mantis_variant,"fighter4, fighter, high, merc, ind, Viridia_bp, Viridia_p",1,,7,7,V,4000,500,-300,2,FIGHTER,战机,8,9000,,,,,,,,,,,,,2
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+Viridia_drone_swarm_wing,Viridia_drone_swarm_variant,"no_drop, no_sell, no_dealer, no_drop_salvage, high, stay_in_front_of_ship",3,,0,0,CLAW,0,500,,5,SUPPORT,无人机,8,6000,,,,,,,,,,,,,19.14222
+Viridia_drone_weevil_wing,Viridia_drone_weevil_variant,"no_drop, no_sell, no_dealer, no_drop_salvage, high",3,,0,0,CLAW,500,500,,1,FIGHTER,无人机,15,6000,,,,,,,,,,,,,19.142222
+Viridia_drone_oxalis_wing,Viridia_drone_oxalis_variant,"no_drop, no_sell, no_dealer, no_drop_salvage, high, restricted, codex_unlockable",3,,0,0,V,1000,200,,1,INTERCEPTOR,无人机,15,6000,,,,,,,,,,,,,19.142222

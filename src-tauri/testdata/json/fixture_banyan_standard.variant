@@ -1,0 +1,34 @@
+{
+    "displayName": "",
+    "fluxCapacitors": 0,
+    "fluxVents": 0,
+    "hullId": "Viridia_banyan",
+    "hullMods": [],
+    "permaMods": [],
+    "variantId": "Viridia_banyan_standard",
+    "weaponGroups": [],
+	"modules": [
+		
+		# armour/blockers
+
+        # rear
+		{"REAR_L": "Viridia_banyan_rear_l_standard"},
+		{"REAR_R": "Viridia_banyan_rear_r_standard"},
+
+        # support
+		{"SUPPORT_L": "Viridia_banyan_support_l_standard"},
+		{"SUPPORT_R": "Viridia_banyan_support_r_standard"},
+		
+		# bay 
+		{"BAY_L": "Viridia_banyan_bay_l_standard"},
+		{"BAY_R": "Viridia_banyan_bay_r_standard"},
+	
+		# firepower modules
+		{"HEAVY_L": "Viridia_banyan_heavy_l_standard"},
+		{"HEAVY_R": "Viridia_banyan_heavy_r_standard"},
+		
+		# other modules
+		{"FRONT_L": "Viridia_banyan_front_l_standard"},
+		{"FRONT_R": "Viridia_banyan_front_r_standard"},
+	],
+}

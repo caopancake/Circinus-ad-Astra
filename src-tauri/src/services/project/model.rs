@@ -365,3 +365,66 @@ pub(super) fn is_comment_row(row: &Map<String, Value>) -> bool {
         .find(|value| !value.trim().is_empty())
         .is_some_and(|value| value.trim_start().starts_with('#'))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn row(entries: &[(&str, &str)]) -> Map<String, Value> {
+        entries
+            .iter()
+            .map(|(key, value)| (key.to_string(), Value::String(value.to_string())))
+            .collect()
+    }
+
+    #[test]
+    fn is_comment_row_flags_rows_whose_first_value_starts_with_hash() {
+        assert!(is_comment_row(&row(&[("id", " #disabled")])));
+        assert!(is_comment_row(&row(&[("name", ""), ("id", "#x")])));
+        assert!(!is_comment_row(&row(&[("id", "active")])));
+        assert!(!is_comment_row(&row(&[("id", "C#not-a-comment")])));
+    }
+
+    #[test]
+    fn string_from_row_reads_string_values_only() {
+        let mut data = row(&[("id", "xy")]);
+        data.insert("hp".to_string(), json!(12));
+        assert_eq!(string_from_row(&data, "id").as_deref(), Some("xy"));
+        assert_eq!(string_from_row(&data, "hp"), None);
+        assert_eq!(string_from_row(&data, "missing"), None);
+    }
+
+    #[test]
+    fn string_field_reads_top_level_object_keys() {
+        let value = json!({ "spec": { "id": "inner" } });
+        assert_eq!(string_field(&value, "spec"), None);
+        assert_eq!(
+            string_field(&json!({ "id": "inner" }), "id").as_deref(),
+            Some("inner")
+        );
+        assert_eq!(string_field(&value, "missing"), None);
+    }
+
+    #[test]
+    fn weapon_sprite_path_picks_the_first_declared_sprite_field() {
+        let weapon = json!({ "turretGunSprite": "graphics/gun.png" });
+        assert_eq!(
+            weapon_sprite_path(&weapon).as_deref(),
+            Some("graphics/gun.png")
+        );
+        assert_eq!(weapon_sprite_path(&json!({})), None);
+    }
+
+    #[test]
+    fn csv_table_spec_covers_every_table_key() {
+        for spec in csv_table_specs() {
+            assert_eq!(csv_table_spec(spec.key).key, spec.key);
+        }
+    }
+
+    #[test]
+    fn mission_list_default_header_is_the_mission_column() {
+        assert_eq!(mission_list_default_header(), vec!["mission".to_string()]);
+    }
+}

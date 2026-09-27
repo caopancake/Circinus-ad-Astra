@@ -1,0 +1,59 @@
+{
+    "hullFrequency":{
+		"tags":{
+			"Viridia_bp":0.5,
+			"Viridia_rp":0.2,
+			"Viridia_bramble":0.1
+		},
+		"hulls":{
+
+		},
+	},
+	"weaponSellFrequency":{
+		"Viridia_awn":0.3,
+		"Viridia_phloem_m":0.3,
+		"Viridia_phloem_l":0.3,
+
+		"Viridia_xylem_s":0.3,
+		"Viridia_xylem_m":0.3,
+		"Viridia_xylem_l":0.3,
+
+		"Viridia_spur_s":0.3,
+		"Viridia_spur_m":0.3,
+		"Viridia_spur_l":0.3,
+
+		"Viridia_catkin":0.3,
+		"Viridia_caltrop":0.3,
+		"Viridia_burdock":0.3,
+		"Viridia_capsule":0.3,
+		"Viridia_cattail":0.3,
+		"Viridia_bramble":0.3,
+		"Viridia_sequoia":0.3,
+
+		"Viridia_tungoil_s":0.3,
+		"Viridia_tungoil_m":0.3,
+		"Viridia_tungoil_l":0.3,
+
+		"Viridia_venomray":0.3,
+		"Viridia_venomvolley":0.3,
+		"Viridia_venomtendril":0.3,
+
+		"Viridia_petal_pd":0.3,
+		"Viridia_petal_ad":0.3,
+
+		"Viridia_thorn_s":0.3,
+		"Viridia_thorn_m":0.3,
+		"Viridia_thorn_l":0.3,
+
+		"Viridia_decomp_s":0.3,
+		"Viridia_decomp_m":0.3,
+		"Viridia_decomp_l":0.3,
+	},
+	"fighterSellFrequency":{
+		"Viridia_fighter_hoverfly_wing":0.3,
+		"Viridia_fighter_hornet_wing":0.3,
+		"Viridia_fighter_damselfly_wing":0.3,
+		"Viridia_fighter_carpenter_wing":0.3,
+		"Viridia_fighter_mantis_wing":0.3,
+	},
+}

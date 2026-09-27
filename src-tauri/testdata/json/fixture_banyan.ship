@@ -1,0 +1,152 @@
+{
+  "hullName": "Viridia_banyan",
+  "hullId": "Viridia_banyan",
+  "hullSize": "CAPITAL_SHIP",
+  "spriteName": "graphics/ships/stations/Viridia_banyan.png",
+  "style": "Viridia_TECH_MID",
+  "height": 794,
+  "width": 336,
+  "center": [168, 397],
+  "collisionRadius": 510,
+  "shieldCenter": [0, 0],
+  "shieldRadius": 452.5,
+  "viewOffset": 0,
+  "builtInMods": [
+    "Viridia_free_rotation",
+    "no_weapon_flux",
+    "supercomputer",
+    "vastbulk",
+    "shared_flux_sink"
+  ],
+  "builtInWeapons": {
+    "WS0001": "Viridia_thorn_x"
+  },
+  "weaponSlots": [
+    {
+      "id": "WS0001",
+      "size": "LARGE",
+      "type": "BUILT_IN",
+      "mount": "HARDPOINT",
+      "arc": 10,
+      "angle": 0,
+      "locations": [283, -0]
+    },
+    {
+      "id": "SUPPORT_L",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": 180,
+      "locations": [-118, 101]
+    },
+    {
+      "id": "SUPPORT_R",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": -180,
+      "locations": [-118, -101]
+    },
+    {
+      "id": "HEAVY_L",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": 90,
+      "locations": [132, 86]
+    },
+    {
+      "id": "HEAVY_R",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": -90,
+      "locations": [132, -86]
+    },
+    {
+      "id": "BAY_L",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": 90,
+      "locations": [-9, 118]
+    },
+    {
+      "id": "BAY_R",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": -90,
+      "locations": [-9, -118]
+    },
+    {
+      "id": "FRONT_L",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": 0,
+      "locations": [306, 66]
+    },
+    {
+      "id": "FRONT_R",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": -0,
+      "locations": [306, -66]
+    },
+    {
+      "id": "REAR_L",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": 180,
+      "locations": [-259, 40]
+    },
+    {
+      "id": "REAR_R",
+      "size": "LARGE",
+      "type": "STATION_MODULE",
+      "mount": "TURRET",
+      "arc": 0,
+      "angle": -180,
+      "locations": [-259, -40]
+    }
+  ],
+  "engineSlots": [],
+  "bounds": [
+    371, -28,
+    312, -67,
+    70, -69,
+    18, -95,
+    -35, -86,
+    -80, -43,
+    -170, -43,
+    -211, -23,
+    -289, -24,
+    -323, -12,
+    -380, -9,
+    -391, -3,
+    -391, 3,
+    -380, 9,
+    -323, 12,
+    -289, 24,
+    -211, 23,
+    -170, 43,
+    -80, 43,
+    -35, 86,
+    18, 95,
+    70, 69,
+    312, 67,
+    371, 28
+  ]
+}

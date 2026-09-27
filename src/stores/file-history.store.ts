@@ -18,8 +18,8 @@ import type { FileSaveHistoryEntry } from '@/shared/types';
 
 type FileHistoryStack = UndoStackState<FileSaveHistoryEntry>;
 
-function createFileHistoryStack(): FileHistoryStack {
-  return createUndoStackState<FileSaveHistoryEntry>();
+function createFileHistoryStack(limit: number): FileHistoryStack {
+  return createUndoStackState<FileSaveHistoryEntry>(limit);
 }
 
 export const useFileHistoryStore = defineStore('file-history', () => {
@@ -27,7 +27,7 @@ export const useFileHistoryStore = defineStore('file-history', () => {
   const historyLimit = ref(100);
 
   function activateFor(modRoot: string | null) {
-    if (modRoot && !stateMap.has(modRoot)) stateMap.set(modRoot, createFileHistoryStack());
+    if (modRoot && !stateMap.has(modRoot)) stateMap.set(modRoot, createFileHistoryStack(historyLimit.value));
   }
 
   function removeModState(modRoot: string) {
@@ -41,7 +41,7 @@ export const useFileHistoryStore = defineStore('file-history', () => {
   // Caller contract (validated by file-history-write.orchestrator): modRoot
   // is non-empty and changes is non-empty.
   function pushSavedWriteEntry(modRoot: string, changes: FileChangeRecord[], label: string) {
-    const stack = getStack(modRoot) ?? stateMap.set(modRoot, createFileHistoryStack()).get(modRoot)!;
+    const stack = getStack(modRoot) ?? stateMap.set(modRoot, createFileHistoryStack(historyLimit.value)).get(modRoot)!;
     pushUndoEntry(stack, { id: nextUndoStackId(stack, 'file_hist'), timestamp: Date.now(), kind: 'file-save', changes, label });
   }
 
