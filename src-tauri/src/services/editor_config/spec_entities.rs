@@ -2,8 +2,8 @@ use crate::{
     domain::config::validate_config_id,
     domain::editor_config_definitions::{EntitySpecDefinition, entity_spec_definition},
     errors::{AppError, AppResult},
-    io::{FileChangeSetBuilder, read_json_file, strip_internal_fields},
-    models::{EntityKind, WriteResult},
+    io::{FileChangeSetBuilder, JsonWriteBatch, read_json_file, strip_internal_fields},
+    models::{EntityKind, JsonWriteOptions, WriteResult},
 };
 use serde_json::Value;
 use std::path::Path;
@@ -14,6 +14,26 @@ pub fn save_spec_entity(
     previous_id: Option<&str>,
     next_id: &str,
     data: Value,
+) -> AppResult<WriteResult<Value>> {
+    save_spec_entity_with_json_options(
+        mod_root,
+        kind,
+        previous_id,
+        next_id,
+        data,
+        JsonWriteOptions::default(),
+        None,
+    )
+}
+
+pub fn save_spec_entity_with_json_options(
+    mod_root: &str,
+    kind: EntityKind,
+    previous_id: Option<&str>,
+    next_id: &str,
+    data: Value,
+    options: JsonWriteOptions,
+    ordered_json: Option<&str>,
 ) -> AppResult<WriteResult<Value>> {
     let definition = spec_entity_definition(kind)?;
     let next_id = validate_config_id(next_id, definition.invalid_id_message)?.to_string();
@@ -44,6 +64,23 @@ pub fn save_spec_entity(
         ));
     }
 
+    let source_rel_path = previous_id
+        .as_deref()
+        .filter(|previous| *previous != next_id)
+        .map(|previous| definition.default_rel_path(previous))
+        .unwrap_or_else(|| next_rel_path.clone());
+    let source_path = mod_root.join(&source_rel_path);
+    let preserve_original_json = options.preserve_original_json;
+    let mut json = JsonWriteBatch::new(options);
+    let rendered = json.render(&source_path, &clean, ordered_json)?;
+    json.finish()?;
+    if preserve_original_json
+        && source_rel_path == next_rel_path
+        && source_path.exists()
+        && crate::io::read_utf8_no_bom(&source_path)? == rendered
+    {
+        return Ok(WriteResult::from_refreshed_entity(Vec::new(), refreshed));
+    }
     let mut builder = FileChangeSetBuilder::new(mod_root)?;
     if let Some(previous_id) = previous_id
         .as_deref()
@@ -53,7 +90,7 @@ pub fn save_spec_entity(
         require_spec_file_target(mod_root, definition, kind, previous_id, &previous)?;
         builder.text_file(previous, None)?;
     }
-    builder.text_file(&next_rel_path, Some(serde_json::to_string_pretty(&clean)?))?;
+    builder.text_file(&next_rel_path, Some(rendered))?;
     let changes = builder.apply()?;
 
     Ok(WriteResult::from_refreshed_entity(changes, refreshed))
@@ -155,6 +192,37 @@ mod tests {
     };
     use serde_json::json;
     use std::fs;
+
+    #[test]
+    fn variant_rename_preserves_old_file_comments_and_key_order() {
+        let root = temp_dir("variant_rename_preserves_json");
+        fs::create_dir_all(root.join("data/variants")).unwrap();
+        let old = root.join("data/variants/old.variant");
+        write_utf8_no_bom(
+            &old,
+            "{\n  # author note\n  hullId: 'demo',\n  variantId: 'old'\n}\n",
+        )
+        .unwrap();
+        let result = save_spec_entity_with_json_options(
+            &root.to_string_lossy(),
+            EntityKind::Variant,
+            Some("old"),
+            "new",
+            json!({"hullId":"demo","variantId":"new"}),
+            JsonWriteOptions {
+                preserve_original_json: true,
+                confirmed_sources: Vec::new(),
+            },
+            Some(r#"{"hullId":"demo","variantId":"new"}"#),
+        )
+        .unwrap();
+        let text = read_utf8_no_bom(&root.join("data/variants/new.variant")).unwrap();
+        assert_eq!(result.changes.len(), 2);
+        assert!(!old.exists());
+        assert!(text.contains("# author note"));
+        assert!(text.find("hullId").unwrap() < text.find("variantId").unwrap());
+        let _ = fs::remove_dir_all(root);
+    }
 
     struct SpecCase {
         kind: EntityKind,

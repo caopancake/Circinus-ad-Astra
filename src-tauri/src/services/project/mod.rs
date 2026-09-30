@@ -21,4 +21,4 @@ pub use session::{
     close_project_session, ensure_project_session_mod_root, invalidate_core_cache,
     invalidate_project_session,
 };
-pub use write::save_csv_patch;
+pub use write::save_csv_patch_with_json_options;

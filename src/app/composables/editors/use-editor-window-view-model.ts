@@ -13,6 +13,7 @@ import { formatError } from '@/shared/lib/errors';
 import { emitEditorSpecSaved, listenEditorSpecSaved } from '@/orchestrators/editor-window.orchestrator';
 import { applyProjectSessionCacheInvalid, listenProjectSessionInvalidated } from '@/orchestrators/project-session-refresh.orchestrator';
 import { saveEditorSpecByKind } from '@/services/editor.service';
+import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { hasEntityInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/services/resource-cache.service';
 import { defaultEditorSpec, editorMissingTargetText } from '@/domain/editors/editor-definitions';
@@ -43,6 +44,7 @@ export function useEditorWindowViewModel(params: {
   draftSnapshot?: RowData | null;
 }) {
   const editorData = ref<EditorEntityBundle | null>(null);
+  const feedback = useAppFeedback();
   const draftSession = useEditTargetDraftSession<RowData, EditorWindowTarget, EditorEntityBundle>({
     emptyValue: {},
     load: async (target) => {
@@ -55,7 +57,10 @@ export function useEditorWindowViewModel(params: {
     save: async (target, draft) => {
       if (!isEditableWindowKind(target.kind)) return;
       const kind = target.kind as EditorSpecKind;
-      const result = await saveEditorSpecByKind(target.sessionId, target.modRoot, kind, target.id, draft);
+      const result = await runConfirmedJsonWrite(feedback, (options) =>
+        saveEditorSpecByKind(target.sessionId, target.modRoot, kind, target.id, draft, options),
+      );
+      if (!result) return;
       await emitEditorSpecSaved({
         kind,
         sessionId: target.sessionId,
@@ -70,7 +75,6 @@ export function useEditorWindowViewModel(params: {
   });
   const loading = ref(true);
   const errorText = ref('');
-  const feedback = useAppFeedback();
   let unlistenEditorSpecSaved: UnlistenFn | null = null;
   let stopSessionInvalidated: UnlistenFn | null = null;
   let stopQueryInvalidation: (() => void) | null = null;

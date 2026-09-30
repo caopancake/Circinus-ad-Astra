@@ -14,6 +14,16 @@ export interface WriteResult {
   refreshedEntity: RowData | null;
 }
 
+export interface JsonSourceConfirmation {
+  path: string;
+  sourceFingerprint: string;
+}
+
+export interface JsonWriteOptions {
+  preserveOriginalJson: boolean;
+  confirmedSources: JsonSourceConfirmation[];
+}
+
 export interface AssociatedFileChange {
   relPath: string;
   afterText: string | null;

@@ -246,7 +246,14 @@ describe('useConfigFamilyViewModel saving', () => {
 
     const saved = await vm.saveFamilyEntity('sess-1', 'M:/mod', current, { variantId: 'v9', hullId: 'h1' });
     expect(saved).not.toBeNull();
-    expect(mocks.saveVariantAction).toHaveBeenCalledWith('sess-1', 'M:/mod', 'v9', expect.objectContaining({ variantId: 'v9' }), 'v1');
+    expect(mocks.saveVariantAction).toHaveBeenCalledWith(
+      'sess-1',
+      'M:/mod',
+      'v9',
+      expect.objectContaining({ variantId: 'v9' }),
+      'v1',
+      mocks.feedback,
+    );
     expect(vm.selectedId.value).toBe('v9');
     expect(mocks.feedback.success).toHaveBeenCalledWith(expect.stringContaining('已保存'));
   });

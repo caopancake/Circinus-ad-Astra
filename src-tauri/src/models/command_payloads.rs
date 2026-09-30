@@ -6,7 +6,7 @@ use crate::models::{
     workspace_persistence::PersistedWorkspace,
     write::{
         AssociatedFileChange, AssociatedSpecChange, CsvRowPatch, EditorSpecKind, FileChangeRecord,
-        FileChangeReplayDirection, IndexedConfigKind,
+        FileChangeReplayDirection, IndexedConfigKind, JsonWriteOptions,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,8 @@ pub struct SaveCsvPatchPayload {
     pub table: CsvTableKey,
     pub patches: Vec<CsvRowPatch>,
     pub associated_specs: Vec<AssociatedSpecChange>,
+    #[serde(default)]
+    pub json_write: JsonWriteOptions,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -163,6 +165,10 @@ pub struct IndexedConfigEntityPayload {
     pub index_row: Map<String, Value>,
     pub entity_data: Value,
     pub delete_previous_target: bool,
+    #[serde(default)]
+    pub json_write: JsonWriteOptions,
+    #[serde(default)]
+    pub ordered_json: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -184,6 +190,10 @@ pub struct ConfigFileEntityPayload {
     pub previous_id: Option<String>,
     pub next_id: String,
     pub data: Value,
+    #[serde(default)]
+    pub json_write: JsonWriteOptions,
+    #[serde(default)]
+    pub ordered_json: Option<String>,
 }
 
 pub type VariantEntityPayload = ConfigFileEntityPayload;
@@ -251,6 +261,7 @@ impl_session_mod_scope_required!(
     DeleteSkinEntityPayload,
     SaveCsvPatchPayload,
     SaveModFilesPayload,
+    SaveModInfoPayload,
     ApplyFileChangeSetPayload,
     ResolveModRelativePathPayload,
 );
@@ -307,12 +318,28 @@ pub struct SaveModFilesPayload {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SaveModInfoPayload {
+    pub session_id: ProjectSessionId,
+    pub mod_root: String,
+    pub data: Value,
+    #[serde(default)]
+    pub json_write: JsonWriteOptions,
+    #[serde(default)]
+    pub ordered_json: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SaveEditorSpecPayload {
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub kind: EditorSpecKind,
     pub id: String,
     pub data: Value,
+    #[serde(default)]
+    pub json_write: JsonWriteOptions,
+    #[serde(default)]
+    pub ordered_json: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

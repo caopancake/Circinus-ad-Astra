@@ -35,6 +35,22 @@ pub struct AssociatedFileChange {
     pub after_data_base64: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonWriteOptions {
+    #[serde(default)]
+    pub preserve_original_json: bool,
+    #[serde(default)]
+    pub confirmed_sources: Vec<JsonSourceConfirmation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonSourceConfirmation {
+    pub path: String,
+    pub source_fingerprint: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssociatedSpecChange {

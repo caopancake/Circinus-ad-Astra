@@ -87,6 +87,7 @@ describe('useConfigFactionViewModel saveFaction', () => {
 
     expect(mocks.saveIndexedEntityAction).toHaveBeenCalledWith(
       expect.objectContaining({ previousId: 'existing', nextId: 'existing', deletePreviousTarget: false }),
+      feedbackStub,
     );
   });
 
@@ -98,6 +99,7 @@ describe('useConfigFactionViewModel saveFaction', () => {
 
     expect(mocks.saveIndexedEntityAction).toHaveBeenCalledWith(
       expect.objectContaining({ previousId: 'existing', nextId: 'renamed', deletePreviousTarget: true }),
+      feedbackStub,
     );
   });
 });

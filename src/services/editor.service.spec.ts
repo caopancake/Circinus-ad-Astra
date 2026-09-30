@@ -160,7 +160,7 @@ describe('saveEditorSpecByKind and import', () => {
   it('wraps write failures with the spec save cause', async () => {
     mocks.writeEditorSpec.mockRejectedValue(new Error('disk on fire'));
     await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', 'ship', 'XY', { hullId: 'XY' })).rejects.toThrow('保存 XY spec 失败');
-    expect(mocks.writeEditorSpec).toHaveBeenCalledWith('s1', 'C:/mods/alpha', 'ship', 'XY', { hullId: 'XY' });
+    expect(mocks.writeEditorSpec).toHaveBeenCalledWith('s1', 'C:/mods/alpha', 'ship', 'XY', { hullId: 'XY' }, undefined);
   });
 
   it('passes successful writes through unchanged', async () => {

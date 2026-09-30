@@ -109,7 +109,7 @@ export function useConfigMissionViewModel() {
     previousId: string,
     localMission: RowData,
     schema: FileSchema,
-  ): Promise<string> {
+  ): Promise<string | null> {
     const activeModRoot = modRoot.value;
     if (!activeModRoot || activeModRoot !== saveModRoot || sessionId.value !== saveSessionId) return previousId;
     const draft = configMissionSaveDraft(localMission, schema);
@@ -121,26 +121,31 @@ export function useConfigMissionViewModel() {
       feedback.warning(configEntityIdInvalidMessage('战役 ID', draft.nextId), 'config.id_invalid');
       return previousId;
     }
-    await saveMissionDraft(saveSessionId, saveModRoot, previousId, draft);
+    if (!(await saveMissionDraft(saveSessionId, saveModRoot, previousId, draft))) return null;
     return draft.nextId;
   }
 
   async function saveMissionDraft(activeSessionId: string, activeModRoot: string, previousId: string, draft: ConfigMissionSaveDraft) {
     const idChanged = draft.nextId !== previousId;
-    await saveIndexedEntityAction({
-      sessionId: activeSessionId,
-      modRoot: activeModRoot,
-      kind: 'mission',
-      previousId,
-      nextId: draft.nextId,
-      indexRow: buildMissionIndexRow([draft.list], Object.keys(draft.list).length ? Object.keys(draft.list) : ['mission'], draft.nextId),
-      entityData: { descriptor: deepClone(draft.descriptor), text: draft.text },
-      deletePreviousTarget: idChanged,
-    });
+    const saved = await saveIndexedEntityAction(
+      {
+        sessionId: activeSessionId,
+        modRoot: activeModRoot,
+        kind: 'mission',
+        previousId,
+        nextId: draft.nextId,
+        indexRow: buildMissionIndexRow([draft.list], Object.keys(draft.list).length ? Object.keys(draft.list) : ['mission'], draft.nextId),
+        entityData: { descriptor: deepClone(draft.descriptor), text: draft.text },
+        deletePreviousTarget: idChanged,
+      },
+      feedback,
+    );
+    if (!saved) return false;
     feedback.success(`战役 "${draft.nextId}" 已保存`);
-    if (modRoot.value !== activeModRoot || sessionId.value !== activeSessionId) return;
+    if (modRoot.value !== activeModRoot || sessionId.value !== activeSessionId) return true;
     selectedMission.value = draft.nextId;
     await queryMissions();
+    return true;
   }
 
   async function deleteMission(deleteSessionId: string, deleteModRoot: string, id: string, deleteDirectory: boolean): Promise<boolean> {

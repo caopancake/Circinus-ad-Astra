@@ -38,7 +38,13 @@ const props = defineProps<{
   editorReloadToken: number;
   iconRefreshToken: number;
   queryMissionEditorData: (sessionId: string, id: string) => Promise<ConfigMissionEditorData | null>;
-  saveMission: (sessionId: string, modRoot: string, previousId: string, localMission: RowData, schema: FileSchema) => Promise<string>;
+  saveMission: (
+    sessionId: string,
+    modRoot: string,
+    previousId: string,
+    localMission: RowData,
+    schema: FileSchema,
+  ) => Promise<string | null>;
   deleteMission: (sessionId: string, modRoot: string, id: string, deleteDirectory: boolean) => Promise<boolean>;
 }>();
 const emit = defineEmits<{ saved: [missionId: string | null] }>();

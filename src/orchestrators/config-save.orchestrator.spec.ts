@@ -94,6 +94,12 @@ describe('config-save orchestrator', () => {
     );
   });
 
+  it('does not record file history when a preserved JSON save has no changes', async () => {
+    mocks.writeModFiles.mockResolvedValue({ ...writeResult(), changes: [] });
+    await saveModInfoAction(SESSION_ID, MOD_ROOT, { id: 'demo' });
+    expect(mocks.completeSavedWrite).not.toHaveBeenCalled();
+  });
+
   it('save indexed entity returns the refreshed entity id and records a save label', async () => {
     mocks.writeIndexedConfigEntity.mockResolvedValue(writeResult(indexedEntity('npc_dave')));
 
@@ -199,6 +205,7 @@ describe('config-save orchestrator', () => {
 
     expect(mocks.writeVariantEntity).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION_ID, modRoot: MOD_ROOT, previousId: 'variant_a', nextId: 'variant_b' }),
+      { preserveOriginalJson: false, confirmedSources: [] },
     );
   });
 
@@ -257,6 +264,7 @@ describe('config-save orchestrator', () => {
 
     expect(mocks.writeSkinEntity).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION_ID, modRoot: MOD_ROOT, previousId: 'skin_a', nextId: 'skin_b' }),
+      { preserveOriginalJson: false, confirmedSources: [] },
     );
   });
 

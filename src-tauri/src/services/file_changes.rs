@@ -1,11 +1,15 @@
 use crate::{
     errors::AppResult,
     io::{
-        ChangeDirection, FileChangeSetBuilder, FsRootBoundary, apply_changes,
+        ChangeDirection, FileChangeSetBuilder, FsRootBoundary, JsonWriteBatch, apply_changes,
         validate_safe_relative_path,
     },
-    models::{AssociatedFileChange, FileChangeRecord, FileChangeReplayDirection, WriteResult},
+    models::{
+        AssociatedFileChange, FileChangeRecord, FileChangeReplayDirection, JsonWriteOptions,
+        WriteResult,
+    },
 };
+use serde_json::Value;
 use std::path::Path;
 
 pub fn save_mod_files(mod_root: &str, files: Vec<AssociatedFileChange>) -> AppResult<WriteResult> {
@@ -13,6 +17,24 @@ pub fn save_mod_files(mod_root: &str, files: Vec<AssociatedFileChange>) -> AppRe
     for file in files {
         builder.file(&file.rel_path, file.after_text, file.after_data_base64)?;
     }
+    builder.apply().map(write_result)
+}
+
+pub fn save_mod_info(
+    mod_root: &str,
+    data: Value,
+    options: JsonWriteOptions,
+    ordered_json: Option<&str>,
+) -> AppResult<WriteResult> {
+    let mut builder = FileChangeSetBuilder::new(Path::new(mod_root))?;
+    let mut json = JsonWriteBatch::new(options);
+    let target = builder.root().join("mod_info.json");
+    let text = json.render(&target, &data, ordered_json)?;
+    json.finish()?;
+    if target.exists() && crate::io::read_utf8_no_bom(&target)? == text {
+        return Ok(WriteResult::from_changes(Vec::new()));
+    }
+    builder.text_file("mod_info.json", Some(text))?;
     builder.apply().map(write_result)
 }
 
@@ -55,6 +77,7 @@ fn validate_snapshot_relative_path(path: &str) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use crate::testutil::{temp_dir, temp_linked_dir};
     use crate::{
         io::{
@@ -64,6 +87,29 @@ mod tests {
     };
     use base64::{Engine as _, engine::general_purpose};
     use std::fs;
+
+    #[test]
+    fn mod_info_save_keeps_source_when_semantics_are_unchanged() {
+        let root = temp_dir("save_mod_info_preserve");
+        let path = root.join("mod_info.json");
+        write_utf8_no_bom(&path, "{\n  # note\n  id: 'demo'\n}\n").unwrap();
+        let result = save_mod_info(
+            &root.to_string_lossy(),
+            serde_json::json!({"id":"demo"}),
+            JsonWriteOptions {
+                preserve_original_json: true,
+                confirmed_sources: Vec::new(),
+            },
+            Some(r#"{"id":"demo"}"#),
+        )
+        .unwrap();
+        assert!(result.changes.is_empty());
+        assert_eq!(
+            read_utf8_no_bom(&path).unwrap(),
+            "{\n  # note\n  id: 'demo'\n}\n"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn save_mod_files_writes_multiple_files_in_one_changeset() {

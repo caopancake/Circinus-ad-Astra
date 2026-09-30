@@ -97,7 +97,7 @@ export function useConfigFactionViewModel() {
     previousId: string,
     local: RowData,
     schema: FileSchema,
-  ): Promise<string> {
+  ): Promise<string | null> {
     const draft = configFactionSaveDraft(local, schema);
     const nextId = draft.nextId;
     if (!isConfigEntityId(nextId)) {
@@ -105,16 +105,20 @@ export function useConfigFactionViewModel() {
       return previousId;
     }
     const idChanged = nextId !== previousId;
-    await saveIndexedEntityAction({
-      sessionId: saveSessionId,
-      modRoot: saveModRoot,
-      kind: 'faction',
-      previousId,
-      nextId,
-      indexRow: buildFactionIndexRow(nextId),
-      entityData: { file: draft.file },
-      deletePreviousTarget: idChanged,
-    });
+    const saved = await saveIndexedEntityAction(
+      {
+        sessionId: saveSessionId,
+        modRoot: saveModRoot,
+        kind: 'faction',
+        previousId,
+        nextId,
+        indexRow: buildFactionIndexRow(nextId),
+        entityData: { file: draft.file },
+        deletePreviousTarget: idChanged,
+      },
+      feedback,
+    );
+    if (!saved) return null;
     feedback.success(`势力 "${nextId}" 已保存`);
     if (project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId) return nextId;
     selectedFaction.value = nextId;

@@ -3,25 +3,43 @@ use crate::{
     domain::config::validate_config_id,
     errors::{AppError, AppResult},
     io::{
-        build_text_change, read_json_file, strip_internal_fields, validate_safe_absolute_path,
-        validate_walk_entry,
+        JsonWriteBatch, build_text_change, read_json_file, strip_internal_fields,
+        validate_safe_absolute_path, validate_walk_entry,
     },
-    models::{EditorSpecKind, FileChangeReplayDirection, WriteResult},
+    models::{EditorSpecKind, FileChangeReplayDirection, JsonWriteOptions, WriteResult},
     services::file_changes::apply_file_change_set,
 };
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+#[cfg(test)]
 pub fn save_editor_spec(
     mod_root: &str,
     kind: EditorSpecKind,
     id: &str,
     data: Value,
 ) -> AppResult<WriteResult> {
+    save_editor_spec_with_json_options(mod_root, kind, id, data, JsonWriteOptions::default(), None)
+}
+
+pub fn save_editor_spec_with_json_options(
+    mod_root: &str,
+    kind: EditorSpecKind,
+    id: &str,
+    data: Value,
+    options: JsonWriteOptions,
+    ordered_json: Option<&str>,
+) -> AppResult<WriteResult> {
     let id = validate_config_id(id, editor_spec_definition(kind)?.invalid_id_message)?;
     let target = find_editor_spec_target(Path::new(mod_root), kind, id)?;
     let clean = strip_internal_fields(&data);
-    let text = serde_json::to_string_pretty(&clean)?;
+    let preserve_original_json = options.preserve_original_json;
+    let mut json = JsonWriteBatch::new(options);
+    let text = json.render(&target, &clean, ordered_json)?;
+    json.finish()?;
+    if preserve_original_json && target.exists() && crate::io::read_utf8_no_bom(&target)? == text {
+        return Ok(WriteResult::from_changes(Vec::new()));
+    }
     let change = build_text_change(&target, Some(text))?;
     apply_file_change_set(
         mod_root,
@@ -125,6 +143,46 @@ mod tests {
         let _ = fs::remove_dir_all(root);
         assert_eq!(invalidation_paths(&result), [target]);
         assert!(text.contains("\"weaponType\": \"ENERGY\""));
+    }
+
+    #[test]
+    fn editor_spec_save_preserves_existing_comments_and_normalizing_mode_rewrites() {
+        let root = temp_dir("save_editor_spec_json_modes");
+        fs::create_dir_all(root.join("data/weapons")).unwrap();
+        let target = root.join("data/weapons/demo.wpn");
+        write_utf8_no_bom(
+            &target,
+            "{\n  # important\n  weaponType: BALLISTIC,\n  id: 'demo'\n}\n",
+        )
+        .unwrap();
+        let saved = save_editor_spec_with_json_options(
+            &root.to_string_lossy(),
+            EditorSpecKind::Weapon,
+            "demo",
+            serde_json::json!({"id":"demo","weaponType":"ENERGY"}),
+            JsonWriteOptions {
+                preserve_original_json: true,
+                confirmed_sources: Vec::new(),
+            },
+            Some(r#"{"weaponType":"ENERGY","id":"demo"}"#),
+        )
+        .unwrap();
+        let preserved = read_utf8_no_bom(&target).unwrap();
+        assert_eq!(saved.changes.len(), 1);
+        assert!(preserved.contains("# important"));
+        assert!(preserved.find("weaponType").unwrap() < preserved.find("id:").unwrap());
+        let normalized = save_editor_spec_with_json_options(
+            &root.to_string_lossy(),
+            EditorSpecKind::Weapon,
+            "demo",
+            serde_json::json!({"id":"demo","weaponType":"ENERGY"}),
+            JsonWriteOptions::default(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(normalized.changes.len(), 1);
+        assert!(!read_utf8_no_bom(&target).unwrap().contains("# important"));
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

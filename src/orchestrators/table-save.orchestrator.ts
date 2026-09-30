@@ -1,4 +1,4 @@
-import type { AssociatedSpecChange, CsvRowPatch, ModTableState, ProjectManifest, TableKey } from '@/shared/types';
+import type { AppFeedback, AssociatedSpecChange, CsvRowPatch, ModTableState, ProjectManifest, TableKey } from '@/shared/types';
 import { getAssociatedSpecCandidates } from '@/domain/tables/associated-spec-candidates';
 import { isCsvDeletedRow } from '@/domain/tables/csv-dirty';
 import { writeCsvPatch } from '@/services/write.service';
@@ -10,8 +10,9 @@ import { isLoadedCsvTableRow } from '@/domain/tables/csv-table-rows';
 import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 
-export type TableSaveResult = 'saved' | 'noop';
+export type TableSaveResult = 'saved' | 'noop' | 'cancelled';
 
 export interface CapturedTableSaveTarget {
   associatedSpecCandidates: AssociatedSpecCandidate[];
@@ -36,6 +37,7 @@ export function captureActiveTableSaveTarget(manifest: ProjectManifest | null): 
 export async function saveCapturedTableChanges(
   target: CapturedTableSaveTarget | null,
   associatedSpecs: AssociatedSpecChange[],
+  feedback?: AppFeedback,
 ): Promise<TableSaveResult> {
   const tables = useTablesStore();
   if (!target || tables.saving) return 'noop';
@@ -49,7 +51,10 @@ export async function saveCapturedTableChanges(
 
     const csvEditHistory = useTablesEditHistoryStore();
     const patches = buildCurrentTablePatches(state, table);
-    const result = await writeCsvPatch(manifest.sessionId, modRoot, table, patches, associatedSpecs);
+    const result = await runConfirmedJsonWrite(feedback, (options) =>
+      writeCsvPatch(manifest.sessionId, modRoot, table, patches, associatedSpecs, options),
+    );
+    if (!result) return 'cancelled';
     recordLogBestEffort({
       level: 'info',
       code: 'tables.csv_saved',

@@ -6,7 +6,7 @@ use super::super::definitions::entity_definitions::associated_spec_definition;
 use super::super::model::SessionCsvRow;
 use crate::{
     errors::{AppError, AppResult},
-    io::{FileChangeSetBuilder, read_json_file, strip_internal_fields},
+    io::{FileChangeSetBuilder, JsonWriteBatch, read_json_file, strip_internal_fields},
     models::{
         AssociatedSpecChange, AssociatedSpecChangeAction, CsvRowKeyMapping, CsvRowPatch,
         CsvRowPatchAction, CsvTableKey, WriteResult,
@@ -16,11 +16,28 @@ use crate::{
 use serde_json::{Map, Value};
 use std::path::Path;
 
+#[cfg(test)]
 pub fn save_csv_patch(
     session_id: &str,
     table: CsvTableKey,
     patches: Vec<CsvRowPatch>,
     associated_specs: Vec<AssociatedSpecChange>,
+) -> AppResult<WriteResult> {
+    save_csv_patch_with_json_options(
+        session_id,
+        table,
+        patches,
+        associated_specs,
+        crate::models::JsonWriteOptions::default(),
+    )
+}
+
+pub fn save_csv_patch_with_json_options(
+    session_id: &str,
+    table: CsvTableKey,
+    patches: Vec<CsvRowPatch>,
+    associated_specs: Vec<AssociatedSpecChange>,
+    options: crate::models::JsonWriteOptions,
 ) -> AppResult<WriteResult> {
     let handle = session_handle(session_id)?;
     let mut session = lock_session(&handle)?;
@@ -39,10 +56,12 @@ pub fn save_csv_patch(
     let row_values: Vec<&Map<String, Value>> = rows.iter().map(|row| &row.row).collect();
     let csv_text = render_csv_text(&header, &row_values)?;
     let mut builder = FileChangeSetBuilder::new(Path::new(&mod_root))?;
+    let mut json = JsonWriteBatch::new(options);
     builder.text_file(&rel_path, Some(csv_text))?;
     for spec in &associated_specs {
-        add_associated_spec_change(&mut builder, table, spec)?;
+        add_associated_spec_change(&mut builder, table, spec, &mut json)?;
     }
+    json.finish()?;
     let changes = builder.apply()?;
     {
         let table_data = registered_session_table_mut(&mut session, table)?;
@@ -110,6 +129,7 @@ fn add_associated_spec_change(
     builder: &mut FileChangeSetBuilder,
     table: CsvTableKey,
     change: &AssociatedSpecChange,
+    json: &mut JsonWriteBatch,
 ) -> AppResult<()> {
     let definition = associated_spec_definition(table).ok_or_else(|| {
         AppError::message(
@@ -142,7 +162,7 @@ fn add_associated_spec_change(
             let previous_rel_path = definition.default_rel_path(previous_id);
             let previous_full = builder.root().join(&previous_rel_path);
             let content = if previous_full.exists() {
-                rewrite_associated_spec_id(definition.id_field, &previous_full, &change.id)?
+                rewrite_associated_spec_id(definition.id_field, &previous_full, &change.id, json)?
             } else {
                 default_associated_spec_text(definition.id_field, &change.id, &change.row)?
             };
@@ -169,7 +189,12 @@ fn default_associated_spec_text(
     serde_json::to_string_pretty(&value).map_err(AppError::from)
 }
 
-fn rewrite_associated_spec_id(id_field: &str, path: &Path, new_id: &str) -> AppResult<String> {
+fn rewrite_associated_spec_id(
+    id_field: &str,
+    path: &Path,
+    new_id: &str,
+    json: &mut JsonWriteBatch,
+) -> AppResult<String> {
     let mut value = strip_internal_fields(&read_json_file(path)?);
     let Some(object) = value.as_object_mut() else {
         return Err(AppError::message(
@@ -178,7 +203,7 @@ fn rewrite_associated_spec_id(id_field: &str, path: &Path, new_id: &str) -> AppR
         ));
     };
     object.insert(id_field.to_string(), Value::String(new_id.to_string()));
-    serde_json::to_string_pretty(&value).map_err(AppError::from)
+    json.render(path, &value, None)
 }
 
 #[cfg(test)]
@@ -369,6 +394,114 @@ mod tests {
         assert!(!renamed.contains("old_weapon"));
         assert!(renamed.contains("\"id\": \"new_weapon\""));
         assert!(renamed.contains("\"weaponType\": \"BALLISTIC\""));
+    }
+
+    #[test]
+    fn csv_associated_rename_preserves_spec_comments() {
+        let root = temp_dir("csv_associated_rename_preserves_json");
+        std::fs::create_dir_all(root.join("data/weapons")).unwrap();
+        write_utf8_no_bom(
+            &root.join("data/weapons/weapon_data.csv"),
+            "id,name\nold_weapon,Old Weapon\n",
+        )
+        .unwrap();
+        write_utf8_no_bom(
+            &root.join("data/weapons/old_weapon.wpn"),
+            "{\n  # note\n  weaponType: BALLISTIC,\n  id: 'old_weapon'\n}\n",
+        )
+        .unwrap();
+        let mut trace =
+            crate::services::project::performance::PerformanceTrace::new("project.openSession");
+        let manifest = open_project_session_traced(&root, None, &mut trace).unwrap();
+        let window = query_csv_table_window(
+            &manifest.session_id,
+            CsvTableKey::Weapons,
+            0,
+            10,
+            None,
+            CsvFactionFilter::All,
+        )
+        .unwrap();
+        let mut row = window.rows[0].row.clone();
+        row.insert("id".to_string(), Value::String("new_weapon".to_string()));
+        let result = save_csv_patch_with_json_options(
+            &manifest.session_id,
+            CsvTableKey::Weapons,
+            vec![CsvRowPatch {
+                row_key: window.rows[0].row_key.clone(),
+                action: CsvRowPatchAction::Upsert,
+                row,
+            }],
+            vec![AssociatedSpecChange {
+                action: AssociatedSpecChangeAction::Rename,
+                id: "new_weapon".to_string(),
+                previous_id: Some("old_weapon".to_string()),
+                row: row_with_id("id", "new_weapon"),
+            }],
+            crate::models::JsonWriteOptions {
+                preserve_original_json: true,
+                confirmed_sources: Vec::new(),
+            },
+        )
+        .unwrap();
+        let renamed = read_utf8_no_bom(&root.join("data/weapons/new_weapon.wpn")).unwrap();
+        assert_eq!(result.changes.len(), 3);
+        assert!(renamed.contains("# note"));
+        assert!(renamed.find("weaponType").unwrap() < renamed.find("id:").unwrap());
+        assert!(!root.join("data/weapons/old_weapon.wpn").exists());
+        let _ = close_project_session(manifest.session_id);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn csv_and_spec_remain_unchanged_before_rewrite_confirmation() {
+        let root = temp_dir("csv_spec_rewrite_confirmation");
+        std::fs::create_dir_all(root.join("data/weapons")).unwrap();
+        let csv_path = root.join("data/weapons/weapon_data.csv");
+        let spec_path = root.join("data/weapons/old_weapon.wpn");
+        let csv_before = "id,name\nold_weapon,Old Weapon\n";
+        let spec_before = "{id:'old_weapon', arr:[1,,2]}\n";
+        write_utf8_no_bom(&csv_path, csv_before).unwrap();
+        write_utf8_no_bom(&spec_path, spec_before).unwrap();
+        let mut trace =
+            crate::services::project::performance::PerformanceTrace::new("project.openSession");
+        let manifest = open_project_session_traced(&root, None, &mut trace).unwrap();
+        let window = query_csv_table_window(
+            &manifest.session_id,
+            CsvTableKey::Weapons,
+            0,
+            10,
+            None,
+            CsvFactionFilter::All,
+        )
+        .unwrap();
+        let mut row = window.rows[0].row.clone();
+        row.insert("id".to_string(), Value::String("new_weapon".to_string()));
+        let result = save_csv_patch_with_json_options(
+            &manifest.session_id,
+            CsvTableKey::Weapons,
+            vec![CsvRowPatch {
+                row_key: window.rows[0].row_key.clone(),
+                action: CsvRowPatchAction::Upsert,
+                row,
+            }],
+            vec![AssociatedSpecChange {
+                action: AssociatedSpecChangeAction::Rename,
+                id: "new_weapon".to_string(),
+                previous_id: Some("old_weapon".to_string()),
+                row: row_with_id("id", "new_weapon"),
+            }],
+            crate::models::JsonWriteOptions {
+                preserve_original_json: true,
+                confirmed_sources: Vec::new(),
+            },
+        );
+        assert!(matches!(result, Err(AppError::JsonRewriteRequired { .. })));
+        assert_eq!(read_utf8_no_bom(&csv_path).unwrap(), csv_before);
+        assert_eq!(read_utf8_no_bom(&spec_path).unwrap(), spec_before);
+        assert!(!root.join("data/weapons/new_weapon.wpn").exists());
+        let _ = close_project_session(manifest.session_id);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

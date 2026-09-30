@@ -14,7 +14,7 @@ export function useConfigFactionEditorViewModel(params: {
   onSaved: (factionId: string | null) => void;
   previewRevision: Ref<number>;
   queryPreviewImages: (sessionId: string, factionId: string) => Promise<{ crestSrc: string; logoSrc: string }>;
-  saveFaction: (sessionId: string, modRoot: string, previousId: string, local: RowData, schema: FileSchema) => Promise<string>;
+  saveFaction: (sessionId: string, modRoot: string, previousId: string, local: RowData, schema: FileSchema) => Promise<string | null>;
   schema: Ref<FileSchema | null>;
   sessionId: Ref<string | null>;
 }) {
@@ -33,6 +33,7 @@ export function useConfigFactionEditorViewModel(params: {
       const saveSessionId = params.sessionId.value;
       if (!currentSchema || !saveModRoot || !saveSessionId) return;
       const savedId = await params.saveFaction(saveSessionId, saveModRoot, factionId, data, currentSchema);
+      if (!savedId) return;
       if (params.modRoot.value !== saveModRoot || params.sessionId.value !== saveSessionId) return;
       return { meta: savedId, value: data };
     },

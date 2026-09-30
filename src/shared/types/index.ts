@@ -14,6 +14,8 @@ export type {
   CsvRowKeyMapping,
   CsvRowPatch,
   CsvRowPatchAction,
+  JsonSourceConfirmation,
+  JsonWriteOptions,
   WriteResult,
 } from '@/shared/types/write.types';
 export type {

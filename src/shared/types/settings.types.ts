@@ -16,6 +16,7 @@ export interface AppSettings {
   customAccent: string;
   historyLimit: number;
   editMode: EditMode;
+  preserveOriginalJson?: boolean;
   starsectorRoot: string | null;
   logDirectory: string | null;
   logLevel: LogLevel;

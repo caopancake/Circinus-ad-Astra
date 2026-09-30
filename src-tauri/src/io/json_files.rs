@@ -1,11 +1,13 @@
 use crate::{
-    errors::{AppError, AppResult},
+    errors::{AppError, AppResult, JsonRewriteFile},
     io::{read_utf8_no_bom, validate_walk_entry},
-    parsers::parse_starsector_json,
+    models::JsonWriteOptions,
+    parsers::{PreserveResult, json_root_tail, parse_starsector_json, preserve_json_text},
 };
 use serde_json::{Map, Value};
 use std::{
     collections::BTreeMap,
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
@@ -15,6 +17,90 @@ pub fn read_json_file(path: &Path) -> AppResult<Value> {
     parse_starsector_json(&text).map_err(|error| {
         AppError::context(format!("解析 JSON 文件失败 ({})", path.display()), error)
     })
+}
+
+pub struct JsonWriteBatch {
+    options: JsonWriteOptions,
+    pending: Vec<JsonRewriteFile>,
+}
+
+impl JsonWriteBatch {
+    pub fn new(options: JsonWriteOptions) -> Self {
+        Self {
+            options,
+            pending: Vec::new(),
+        }
+    }
+
+    pub fn is_preserving(&self) -> bool {
+        self.options.preserve_original_json
+    }
+
+    pub fn render(
+        &mut self,
+        source_path: &Path,
+        value: &Value,
+        ordered_json: Option<&str>,
+    ) -> AppResult<String> {
+        let normalized = serde_json::to_string_pretty(value)?;
+        if !self.options.preserve_original_json || !source_path.exists() {
+            return Ok(normalized);
+        }
+        let source = read_utf8_no_bom(source_path)?;
+        match preserve_json_text(&source, value, ordered_json).map_err(|error| {
+            AppError::context(
+                format!("解析 JSON 文件失败 ({})", source_path.display()),
+                error,
+            )
+        })? {
+            PreserveResult::Preserved(text) => Ok(text),
+            PreserveResult::NeedsRewrite(reason) => {
+                let path = source_path.to_string_lossy().to_string();
+                let source_fingerprint = fingerprint(&std::fs::read(source_path)?);
+                let confirmed =
+                    self.options.confirmed_sources.iter().any(|item| {
+                        item.path == path && item.source_fingerprint == source_fingerprint
+                    });
+                if !confirmed {
+                    self.pending.push(JsonRewriteFile {
+                        path,
+                        reason: reason.to_string(),
+                        source_fingerprint,
+                    });
+                }
+                let tail = json_root_tail(&source).ok_or_else(|| {
+                    AppError::message(
+                        "json.root_tail_unknown",
+                        format!("无法确定 JSON 根对象结束位置: {}", source_path.display()),
+                    )
+                })?;
+                let rewritten = format!("{normalized}{tail}");
+                if parse_starsector_json(&rewritten).ok().as_ref() != Some(value) {
+                    return Err(AppError::message(
+                        "json.rewrite_invalid",
+                        format!("JSON 重排结果核验失败: {}", source_path.display()),
+                    ));
+                }
+                Ok(rewritten)
+            }
+        }
+    }
+
+    pub fn finish(self) -> AppResult<()> {
+        if self.pending.is_empty() {
+            Ok(())
+        } else {
+            Err(AppError::JsonRewriteRequired {
+                files: self.pending,
+            })
+        }
+    }
+}
+
+fn fingerprint(bytes: &[u8]) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
 }
 
 pub fn load_json_dir_by_id(
@@ -82,6 +168,9 @@ pub fn strip_internal_fields(value: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::JsonSourceConfirmation;
+    use crate::testutil::temp_dir;
+    use std::fs;
 
     #[test]
     fn strips_internal_fields_recursively() {
@@ -90,6 +179,74 @@ mod tests {
         assert!(clean.get("_source").is_none());
         assert_eq!(clean["nested"]["ok"], 2);
         assert!(clean["nested"].get("_temp").is_none());
+    }
+
+    #[test]
+    fn preserves_existing_json_and_rejects_unconfirmed_rewrite() {
+        let dir = temp_dir("json_write_batch_confirmation");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("demo.json");
+        crate::io::write_utf8_no_bom(&path, "{a:[1,,2], # keep\n b:3}\nEND").unwrap();
+        let mut batch = JsonWriteBatch::new(JsonWriteOptions {
+            preserve_original_json: true,
+            confirmed_sources: Vec::new(),
+        });
+        let value = serde_json::json!({"a":[1,null,2],"b":4});
+        let _ = batch.render(&path, &value, None).unwrap();
+        let files = match batch.finish().unwrap_err() {
+            AppError::JsonRewriteRequired { files } => files,
+            error => panic!("unexpected error: {error}"),
+        };
+        assert_eq!(files.len(), 1);
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "{a:[1,,2], # keep\n b:3}\nEND"
+        );
+
+        let mut confirmed = JsonWriteBatch::new(JsonWriteOptions {
+            preserve_original_json: true,
+            confirmed_sources: vec![JsonSourceConfirmation {
+                path: files[0].path.clone(),
+                source_fingerprint: files[0].source_fingerprint.clone(),
+            }],
+        });
+        let rendered = confirmed.render(&path, &value, None).unwrap();
+        confirmed.finish().unwrap();
+        assert_eq!(parse_starsector_json(&rendered).unwrap(), value);
+        assert!(rendered.ends_with("\nEND"));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn confirmation_is_rejected_after_source_changes() {
+        let dir = temp_dir("json_write_batch_changed_source");
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("demo.json");
+        crate::io::write_utf8_no_bom(&path, "{a:[1,,2]}").unwrap();
+        let value = serde_json::json!({"a":[1,null,3]});
+        let mut batch = JsonWriteBatch::new(JsonWriteOptions {
+            preserve_original_json: true,
+            confirmed_sources: Vec::new(),
+        });
+        batch.render(&path, &value, None).unwrap();
+        let files = match batch.finish().unwrap_err() {
+            AppError::JsonRewriteRequired { files } => files,
+            error => panic!("unexpected error: {error}"),
+        };
+        crate::io::write_utf8_no_bom(&path, "{a:[1,,2], b:4}").unwrap();
+        let mut retry = JsonWriteBatch::new(JsonWriteOptions {
+            preserve_original_json: true,
+            confirmed_sources: vec![JsonSourceConfirmation {
+                path: files[0].path.clone(),
+                source_fingerprint: files[0].source_fingerprint.clone(),
+            }],
+        });
+        retry.render(&path, &value, None).unwrap();
+        assert!(matches!(
+            retry.finish(),
+            Err(AppError::JsonRewriteRequired { .. })
+        ));
+        let _ = fs::remove_dir_all(dir);
     }
 }
 

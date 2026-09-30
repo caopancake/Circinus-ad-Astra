@@ -33,6 +33,7 @@ export function assertValidSettings(settings: AppSettings): void {
   readCustomAccent(settings.customAccent);
   readHistoryLimit(settings.historyLimit);
   readEditMode(settings.editMode);
+  readPreserveOriginalJson(settings.preserveOriginalJson);
   readLogLevel(settings.logLevel);
   readOptionalLogDirectory(settings.logDirectory);
 }
@@ -60,6 +61,12 @@ export function readHistoryLimit(value: number): number {
 
 export function readEditMode(value: EditMode): EditMode {
   if (!isSharedSettingValue(EDIT_MODES, value)) throw new Error(`Invalid edit mode: ${value}`);
+  return value;
+}
+
+export function readPreserveOriginalJson(value: boolean | undefined): boolean {
+  if (value === undefined) return true;
+  if (typeof value !== 'boolean') throw new Error(`Invalid preserve original JSON setting: ${value}`);
   return value;
 }
 

@@ -58,6 +58,11 @@ vi.mock('@/app/composables/use-app-feedback', () => ({
   useAppFeedback: () => mocks.feedback,
 }));
 
+vi.mock('@/orchestrators/json-write-confirmation.orchestrator', () => ({
+  runConfirmedJsonWrite: (_feedback: unknown, write: (options: unknown) => Promise<unknown>) =>
+    write({ preserveOriginalJson: true, confirmedSources: [] }),
+}));
+
 vi.mock('@/shared/runtime/dialog.runtime', () => ({
   pickEditorSpecFile: mocks.pickEditorSpecFile,
 }));
@@ -157,7 +162,14 @@ describe('useEditorWindowViewModel saving', () => {
     viewModel.updateEditorDraft('ship', { hullId: 'XY', hullName: 'Saved Name' });
     await viewModel.saveEditorData('ship');
 
-    expect(mocks.saveEditorSpecByKind).toHaveBeenCalledWith('s1', 'M:/mod', 'ship', 'XY', { hullId: 'XY', hullName: 'Saved Name' });
+    expect(mocks.saveEditorSpecByKind).toHaveBeenCalledWith(
+      's1',
+      'M:/mod',
+      'ship',
+      'XY',
+      { hullId: 'XY', hullName: 'Saved Name' },
+      { preserveOriginalJson: true, confirmedSources: [] },
+    );
     expect(mocks.emitEditorSpecSaved).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'ship', sessionId: 's1', modRoot: 'M:/mod', id: 'XY', writeResult: result }),
     );

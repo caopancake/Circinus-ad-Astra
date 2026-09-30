@@ -121,7 +121,7 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
                   previousId,
                   row,
                 }));
-              const result = await saveCapturedTableChanges(target, selected);
+              const result = await saveCapturedTableChanges(target, selected, feedback);
               showSaveResult(result);
             } catch (err) {
               feedback.error(err, '保存 CSV 失败');
@@ -130,7 +130,7 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
         });
         return;
       }
-      const result = await saveCapturedTableChanges(target, []);
+      const result = await saveCapturedTableChanges(target, [], feedback);
       showSaveResult(result);
     } catch (err) {
       feedback.error(err, '保存 CSV 失败');
@@ -310,10 +310,10 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
     feedback.success('工作区已关闭');
   }
 
-  function showSaveResult(result: 'saved' | 'noop') {
+  function showSaveResult(result: 'saved' | 'noop' | 'cancelled') {
     if (result === 'saved') {
       feedback.success('当前 CSV 表已保存');
-    } else {
+    } else if (result === 'noop') {
       feedback.info('没有需要保存的修改');
     }
   }

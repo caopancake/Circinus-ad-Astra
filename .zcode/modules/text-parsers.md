@@ -8,7 +8,9 @@
 
 `src-tauri/src/parsers/alex_csv.rs`：CSV-like 解析与渲染 owner，字符级行状态机对齐游戏 CSVParser（列数容忍、空行/`#` 行保留），并按最小引号规则渲染。
 `src-tauri/src/parsers/alex_json.rs`：JSON-like 字符级 tokener owner，逐项对齐游戏内置魔改 org.json（json.jar 2010 + LoadingUtils，经反编译核验）。
-`src-tauri/src/parsers/tool_json.rs`：JSON-like pretty 渲染 owner，负责写盘前的序列化规则。
+`src-tauri/src/parsers/preserve_json.rs`：结构化 JSON 原文更新 owner，定位字段文本范围并核验写回语义。
+`src-tauri/src/parsers/tool_json.rs`：工具私有 JSON 数据的 serde 读取入口。
+`src-tauri/src/services/editor_config/`：配置与 spec 保存入口，规范化模式使用 serde JSON pretty 序列化。
 `src-tauri/src/models/`：解析器输入输出模型与 CP1252 归一化映射 owner。
 `src-tauri/src/io/text.rs`：文本读取 owner，拥有 UTF-8 BOM 剥离与已知 CP1252 字节归一化入口。
 `src-tauri/src/io/csv_files.rs`：CSV 文件读写与路径上下文 owner。
@@ -52,6 +54,13 @@
 4. 解析产出结构化数据；结构错误保留 path 与行/列位置并抛出。
 5. pretty 渲染按写盘序列化规则输出文本。
 
+### 结构化 JSON 原样保存
+
+1. 保存入口捕获 `preserveOriginalJson`，读取现有目标或改名前源文件的原文与结构化数据。
+2. 开启时定位原文中的对象成员与值，只更新变化的范围，保留注释、原键顺序与根对象尾文；新增键按提交顺序追加。
+3. 更新结果经 JSON-like 解析器核验等于提交数据；无法安全定位或核验失败时返回受影响文件与源内容指纹，确认后复核源文件并整体序列化。
+4. 关闭时直接按原保存入口的规范化规则序列化，写入经既有 changeset 链路完成。
+
 ## 规范
 
 - CSV 解析必须保留可见空行（空 Map 行）、全逗号行、`#` 行和引号内换行；引号内 `\r\n` 按 `\n` 保留。
@@ -59,6 +68,8 @@
 - CSV 渲染必须保持原表头顺序与原文件的行序语义。
 - JSON-like 解析逐项对齐游戏魔改 org.json 与 LoadingUtils 的字面行为（含其缺陷，如 `#` 剥离不感知转义）；行为分歧必须逐项经用户裁决并注明，严禁扩展为通用 JSON 修复器。
 - JSON 根必须是对象，重复键必须报 json.duplicate_key，严禁静默 last-wins。
+- 结构化 JSON 原样保存必须保持语义不变的现有文件字节；删除字段时必须保留独占行注释，并移除字段行尾注释。
+- 需要整体重排的结构化 JSON 写入必须在 changeset 应用前取得确认；确认后必须按源内容指纹复核。
 - CP1252 归一化在读取时执行并随保存写回磁盘，且该归一化不可逆；UTF-8 BOM 在读取时剥离并随保存消失。
 - 除 UTF-8 BOM 剥离与已知 CP1252 智能引号修复外，读取口径保持严格 UTF-8 校验；严禁引入编码自动探测或全量 CP1252/GBK 读取解码，非 UTF-8 文件经用户显式选择源编码的转码动作修复。
 - 所有格式错误必须结构化携带路径与位置，严禁只返回字符串消息。

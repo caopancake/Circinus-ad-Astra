@@ -10,6 +10,7 @@ import type {
   FileChangeRecord,
   FileChangeReplayDirection,
   IndexedConfigEntityWrite,
+  JsonWriteOptions,
   ProjectSessionId,
   RowData,
   SkinEntityWrite,
@@ -24,8 +25,11 @@ export function saveCsvPatch(
   table: TableKey,
   patches: CsvRowPatch[],
   associatedSpecs: AssociatedSpecChange[],
+  jsonWrite?: JsonWriteOptions,
 ): Promise<WriteResult> {
-  return invoke('save_csv_patch', { payload: { sessionId, modRoot, table, patches, associatedSpecs } });
+  return invoke('save_csv_patch', {
+    payload: { sessionId, modRoot, table, patches, associatedSpecs, ...(jsonWrite ? { jsonWrite } : {}) },
+  });
 }
 
 export function saveTextFile(sessionId: ProjectSessionId | null, modRoot: string, path: string, text: string): Promise<WriteResult> {
@@ -47,8 +51,20 @@ export function saveEditorSpec(
   kind: EditorSpecKind,
   id: string,
   data: RowData,
+  jsonWrite?: JsonWriteOptions,
 ): Promise<WriteResult> {
-  return invoke('save_editor_spec', { payload: { sessionId, modRoot, kind, id, data } });
+  return invoke('save_editor_spec', {
+    payload: { sessionId, modRoot, kind, id, data, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(data) } : {}) },
+  });
+}
+
+export function saveModInfo(
+  sessionId: ProjectSessionId,
+  modRoot: string,
+  data: RowData,
+  jsonWrite: JsonWriteOptions,
+): Promise<WriteResult> {
+  return invoke('save_mod_info', { payload: { sessionId, modRoot, data, jsonWrite, orderedJson: JSON.stringify(data) } });
 }
 
 export function saveModFiles(sessionId: ProjectSessionId, modRoot: string, files: AssociatedFileChange[]): Promise<WriteResult> {
@@ -64,7 +80,7 @@ export function applyFileChangeSet(
   return invoke('apply_file_change_set', { payload: { sessionId, modRoot, direction, changes } });
 }
 
-export function saveIndexedConfigEntity(write: IndexedConfigEntityWrite): Promise<WriteResult> {
+export function saveIndexedConfigEntity(write: IndexedConfigEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
   return invoke('save_indexed_config_entity', {
     payload: {
       modRoot: write.modRoot,
@@ -75,6 +91,9 @@ export function saveIndexedConfigEntity(write: IndexedConfigEntityWrite): Promis
       indexRow: write.indexRow,
       entityData: write.entityData,
       deletePreviousTarget: write.deletePreviousTarget,
+      ...(jsonWrite
+        ? { jsonWrite, orderedJson: JSON.stringify(write.kind === 'faction' ? write.entityData.file : write.entityData.descriptor) }
+        : {}),
     },
   });
 }
@@ -98,8 +117,10 @@ export function deleteIndexedConfigEntity(write: DeleteIndexedConfigEntityWrite)
   return invoke('delete_indexed_config_entity', { payload: write });
 }
 
-export function saveVariantEntity(write: VariantEntityWrite): Promise<WriteResult> {
-  return invoke('save_variant_entity', { payload: write });
+export function saveVariantEntity(write: VariantEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
+  return invoke('save_variant_entity', {
+    payload: { ...write, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(write.data) } : {}) },
+  });
 }
 
 export function createVariantEntity(write: VariantEntityWrite): Promise<WriteResult> {
@@ -110,8 +131,10 @@ export function deleteVariantEntity(write: DeleteVariantEntityWrite): Promise<Wr
   return invoke('delete_variant_entity', { payload: write });
 }
 
-export function saveSkinEntity(write: SkinEntityWrite): Promise<WriteResult> {
-  return invoke('save_skin_entity', { payload: write });
+export function saveSkinEntity(write: SkinEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
+  return invoke('save_skin_entity', {
+    payload: { ...write, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(write.data) } : {}) },
+  });
 }
 
 export function createSkinEntity(write: SkinEntityWrite): Promise<WriteResult> {

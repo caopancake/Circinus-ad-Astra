@@ -2,8 +2,8 @@ use crate::domain::editor_config_definitions::FACTION_SPEC_DEFINITION;
 use crate::{
     domain::config::validate_config_id,
     errors::{AppError, AppResult},
-    io::{FileChangeSetBuilder, read_csv_data, strip_internal_fields},
-    models::{IndexedConfigKind, IndexedEntityRefresh, WriteResult},
+    io::{FileChangeSetBuilder, JsonWriteBatch, read_csv_data, strip_internal_fields},
+    models::{IndexedConfigKind, IndexedEntityRefresh, JsonWriteOptions, WriteResult},
     parsers::render_csv_text,
 };
 use serde_json::{Map, Value};
@@ -11,6 +11,14 @@ use std::path::Path;
 
 type IndexRows = Vec<Map<String, Value>>;
 type IndexTable = (Vec<String>, IndexRows);
+
+pub struct IndexedSaveInput<'a> {
+    pub index_row: Map<String, Value>,
+    pub entity_data: Value,
+    pub delete_previous_target: bool,
+    pub json_write: JsonWriteOptions,
+    pub ordered_json: Option<&'a str>,
+}
 
 pub fn save_indexed_config_entity(
     mod_root: &str,
@@ -21,6 +29,35 @@ pub fn save_indexed_config_entity(
     entity_data: Value,
     delete_previous_target: bool,
 ) -> AppResult<WriteResult<Value>> {
+    save_indexed_config_with_json(
+        mod_root,
+        kind,
+        previous_id,
+        next_id,
+        IndexedSaveInput {
+            index_row,
+            entity_data,
+            delete_previous_target,
+            json_write: JsonWriteOptions::default(),
+            ordered_json: None,
+        },
+    )
+}
+
+pub fn save_indexed_config_with_json(
+    mod_root: &str,
+    kind: IndexedConfigKind,
+    previous_id: Option<&str>,
+    next_id: &str,
+    input: IndexedSaveInput<'_>,
+) -> AppResult<WriteResult<Value>> {
+    let IndexedSaveInput {
+        index_row,
+        entity_data,
+        delete_previous_target,
+        json_write,
+        ordered_json,
+    } = input;
     let next_id = validate_config_id(next_id, kind.invalid_id_message())?.to_string();
     let previous_id = previous_id
         .filter(|value| !value.trim().is_empty())
@@ -77,7 +114,16 @@ pub fn save_indexed_config_entity(
         definition.index_rel_path(),
         Some(render_csv_text(&header, &rows.iter().collect::<Vec<_>>())?),
     )?;
-    definition.add_save_changes(&mut builder, &next_id, &entity_data)?;
+    let source_id = previous_id.as_deref().unwrap_or(&next_id);
+    let mut json = JsonWriteBatch::new(json_write);
+    definition.add_save_changes(
+        &mut builder,
+        source_id,
+        &next_id,
+        &entity_data,
+        &mut json,
+        ordered_json,
+    )?;
     if delete_previous_target {
         if let Some(previous) = previous_id
             .as_deref()
@@ -86,6 +132,7 @@ pub fn save_indexed_config_entity(
             definition.add_delete_target_change(&mut builder, previous)?;
         }
     }
+    json.finish()?;
     let changes = builder.apply()?;
     Ok(WriteResult::from_refreshed_entity(
         changes,
@@ -171,12 +218,21 @@ struct IndexedConfigDefinition {
     target_rel_path: fn(&str) -> String,
     row_matches: fn(&Map<String, Value>, &[String], &str) -> bool,
     normalize_index_row: fn(Map<String, Value>, &str) -> Map<String, Value>,
-    add_save_changes:
-        fn(&mut FileChangeSetBuilder, &IndexedConfigDefinition, &str, &Value) -> AppResult<()>,
+    add_save_changes: AddSaveChanges,
     add_delete_target_change:
         fn(&mut FileChangeSetBuilder, &IndexedConfigDefinition, &str) -> AppResult<()>,
     rename_strategy: RenameStrategy,
 }
+
+type AddSaveChanges = fn(
+    &mut FileChangeSetBuilder,
+    &IndexedConfigDefinition,
+    &str,
+    &str,
+    &Value,
+    &mut JsonWriteBatch,
+    Option<&str>,
+) -> AppResult<()>;
 
 fn indexed_config_definition(
     kind: IndexedConfigKind,
@@ -227,10 +283,21 @@ impl IndexedConfigDefinition {
     fn add_save_changes(
         &self,
         builder: &mut FileChangeSetBuilder,
+        source_id: &str,
         id: &str,
         entity_data: &Value,
+        json: &mut JsonWriteBatch,
+        ordered_json: Option<&str>,
     ) -> AppResult<()> {
-        (self.add_save_changes)(builder, self, id, entity_data)
+        (self.add_save_changes)(
+            builder,
+            self,
+            source_id,
+            id,
+            entity_data,
+            json,
+            ordered_json,
+        )
     }
 
     fn add_delete_target_change(
@@ -382,25 +449,37 @@ fn normalize_mission_index_row(mut row: Map<String, Value>, id: &str) -> Map<Str
 fn add_faction_save_changes(
     builder: &mut FileChangeSetBuilder,
     definition: &IndexedConfigDefinition,
+    source_id: &str,
     id: &str,
     entity_data: &Value,
+    json: &mut JsonWriteBatch,
+    ordered_json: Option<&str>,
 ) -> AppResult<()> {
     let file = entity_data.get("file").ok_or_else(|| {
         AppError::message("config.missing_faction_file", "missing faction file data")
     })?;
     let clean = strip_internal_fields(file);
-    builder.text_file(
-        definition.target_rel_path(id),
-        Some(serde_json::to_string_pretty(&clean)?),
-    )?;
+    let source = builder.root().join(definition.target_rel_path(source_id));
+    let rendered = json.render(&source, &clean, ordered_json)?;
+    if json.is_preserving()
+        && source_id == id
+        && source.exists()
+        && crate::io::read_utf8_no_bom(&source)? == rendered
+    {
+        return Ok(());
+    }
+    builder.text_file(definition.target_rel_path(id), Some(rendered))?;
     Ok(())
 }
 
 fn add_mission_save_changes(
     builder: &mut FileChangeSetBuilder,
     definition: &IndexedConfigDefinition,
+    source_id: &str,
     id: &str,
     entity_data: &Value,
+    json: &mut JsonWriteBatch,
+    ordered_json: Option<&str>,
 ) -> AppResult<()> {
     let descriptor = entity_data.get("descriptor").ok_or_else(|| {
         AppError::message(
@@ -415,15 +494,25 @@ fn add_mission_save_changes(
             AppError::message("config.missing_mission_text", "missing mission text data")
         })?;
     let clean = strip_internal_fields(descriptor);
-    builder
-        .text_file(
+    let source = builder.root().join(format!(
+        "{}/descriptor.json",
+        definition.target_rel_path(source_id)
+    ));
+    let rendered = json.render(&source, &clean, ordered_json)?;
+    let descriptor_unchanged = json.is_preserving()
+        && source_id == id
+        && source.exists()
+        && crate::io::read_utf8_no_bom(&source)? == rendered;
+    if !descriptor_unchanged {
+        builder.text_file(
             format!("{}/descriptor.json", definition.target_rel_path(id)),
-            Some(serde_json::to_string_pretty(&clean)?),
-        )?
-        .text_file(
-            format!("{}/mission_text.txt", definition.target_rel_path(id)),
-            Some(text.to_string()),
+            Some(rendered),
         )?;
+    }
+    builder.text_file(
+        format!("{}/mission_text.txt", definition.target_rel_path(id)),
+        Some(text.to_string()),
+    )?;
     Ok(())
 }
 
@@ -455,6 +544,45 @@ mod tests {
         services::file_changes::apply_file_change_set,
     };
     use std::fs;
+
+    #[test]
+    fn faction_save_preserves_spec_comments_and_order() {
+        let root = temp_dir("indexed_faction_preserves_json");
+        let dir = root.join("data/world/factions");
+        fs::create_dir_all(&dir).unwrap();
+        write_utf8_no_bom(
+            &dir.join("factions.csv"),
+            "faction\ndata/world/factions/demo.faction\n",
+        )
+        .unwrap();
+        write_utf8_no_bom(
+            &dir.join("demo.faction"),
+            "{\n  # note\n  displayName: 'Old',\n  id: 'demo'\n}\n",
+        )
+        .unwrap();
+        let result = save_indexed_config_with_json(
+            &root.to_string_lossy(),
+            IndexedConfigKind::Faction,
+            Some("demo"),
+            "demo",
+            IndexedSaveInput {
+                index_row: Map::new(),
+                entity_data: serde_json::json!({"file":{"displayName":"New","id":"demo"}}),
+                delete_previous_target: false,
+                json_write: JsonWriteOptions {
+                    preserve_original_json: true,
+                    confirmed_sources: Vec::new(),
+                },
+                ordered_json: Some(r#"{"displayName":"New","id":"demo"}"#),
+            },
+        )
+        .unwrap();
+        let text = read_utf8_no_bom(&dir.join("demo.faction")).unwrap();
+        assert_eq!(result.changes.len(), 2);
+        assert!(text.contains("# note"));
+        assert!(text.find("displayName").unwrap() < text.find("id:").unwrap());
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn faction_save_can_rename_file_and_index_with_undo_redo() {

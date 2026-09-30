@@ -8,7 +8,7 @@
 
 `src/stores/settings.store.ts`：settings 运行态 owner，只持状态、setter 与派生值；初始快照经统一初始化入口注入。
 `src/domain/settings/theme.ts`：主题令牌与色彩数学 owner，拥有 accent 预设、light/dark 中性色与 `createThemeColors` 纯函数。
-`src/domain/settings/rules.ts`：设置校验 owner，拥有主题/accent/自定义色/历史上限/editMode/日志级别/日志目录的读取校验与归一化。
+`src/domain/settings/rules.ts`：设置校验 owner，拥有主题/accent/自定义色/历史上限/editMode/原样保存/日志级别/日志目录的读取校验与归一化。
 `src/app/composables/settings/use-theme-dom-effect.ts`：主题 DOM 副作用 owner，watch 主题令牌并写 root dataset 与 CSS 变量。
 `src/app/WindowShell.vue`：唯一窗口壳，main 模式启动设置持久化、child 模式启动设置镜像并挂载主题 effect。
 `src/orchestrators/settings-persistence.orchestrator.ts`：设置持久化与镜像 owner，负责保存、广播、接收镜像与 historyLimit 同步。
@@ -64,6 +64,7 @@
 - `starsectorRoot` 仅作默认目录提示，不构成路径授权。
 - `logDirectory=null` 表示 app data；空白字符串无效。
 - `logLevel` 只允许 `info`（默认档，丢弃 debug 条目）或 `debug`（详细档，全量保留）；缺省视为 info。
+- `preserveOriginalJson` 必须是布尔值；缺省视为 true。该设置必须随完整 snapshot 持久化并镜像到子窗口，结构化 JSON 保存动作必须在开始时捕获本次使用的值。
 - 保存失败不得静默：必须记录错误日志且不广播。
 - 子窗口不得发送设置广播，镜像监听是单向接收。
 

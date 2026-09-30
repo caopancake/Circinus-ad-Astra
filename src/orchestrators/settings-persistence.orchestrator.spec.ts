@@ -29,12 +29,13 @@ const BASE_SETTINGS = {
   customAccent: '#3388cc',
   historyLimit: 20,
   editMode: 'smart',
+  preserveOriginalJson: true,
   starsectorRoot: null,
   logDirectory: null,
   logLevel: 'info',
 } as const;
 
-function settingsFixture(overrides: { theme?: 'light' | 'dark'; historyLimit?: number } = {}) {
+function settingsFixture(overrides: { theme?: 'light' | 'dark'; historyLimit?: number; preserveOriginalJson?: boolean } = {}) {
   return { ...BASE_SETTINGS, ...overrides };
 }
 
@@ -80,6 +81,17 @@ describe('settings persistence orchestration', () => {
     );
   });
 
+  it('persists the JSON preservation switch and mirrors it', async () => {
+    const { nextTick } = await import('vue');
+    const settings = useSettingsStore();
+    settings.setPreserveOriginalJson(false);
+    await nextTick();
+    await vi.waitFor(() => expect(mocks.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ preserveOriginalJson: false })));
+    expect(settings.settingsSnapshot().preserveOriginalJson).toBe(false);
+    settings.setPreserveOriginalJson(true);
+    await nextTick();
+  });
+
   it('syncs the history limit into the file history store', async () => {
     const { nextTick } = await import('vue');
     const settings = useSettingsStore();
@@ -116,9 +128,11 @@ describe('settings persistence orchestration', () => {
 
     const dispose = startSettingsMirror();
     await vi.waitFor(() => expect(mirrorHandler).not.toBeNull());
-    mirrorHandler!(settingsFixture({ theme: 'dark', historyLimit: 3 }));
+    mirrorHandler!(settingsFixture({ theme: 'dark', historyLimit: 3, preserveOriginalJson: false }));
 
     expect(settings.theme).toBe('dark');
+    expect(settings.preserveOriginalJson).toBe(false);
+    settings.setPreserveOriginalJson(true);
     dispose();
   });
 

@@ -1,4 +1,4 @@
-import type { IndexedConfigKind, SkinFile, VariantFile, WriteResult } from '@/shared/types';
+import type { AppFeedback, IndexedConfigKind, SkinFile, VariantFile, WriteResult } from '@/shared/types';
 import type { RowData } from '@/shared/types';
 import {
   writeCreateIndexedConfigEntity,
@@ -8,6 +8,7 @@ import {
   writeDeleteSkinEntity,
   writeDeleteVariantEntity,
   writeIndexedConfigEntity,
+  writeModInfo,
   writeModFiles,
   writeSkinEntity,
   writeVariantEntity,
@@ -16,26 +17,39 @@ import { createDefaultSkin, createDefaultVariant, indexedConfigHistoryLabel } fr
 import { indexedConfigEntityData, skinEntityData, variantEntityData } from '@/domain/config/config-records';
 import { useProjectStore } from '@/stores/project.store';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
+import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 
-export async function saveModInfoAction(sessionId: string, modRoot: string, data: RowData): Promise<WriteResult> {
-  const result = await writeModFiles(sessionId, modRoot, [
-    { relPath: 'mod_info.json', afterText: JSON.stringify(data, null, 2), afterDataBase64: null },
-  ]);
+export async function saveModInfoAction(
+  sessionId: string,
+  modRoot: string,
+  data: RowData,
+  feedback?: AppFeedback,
+): Promise<WriteResult | null> {
+  const result = await runConfirmedJsonWrite(feedback, (options) =>
+    options.preserveOriginalJson
+      ? writeModInfo(sessionId, modRoot, data, options)
+      : writeModFiles(sessionId, modRoot, [{ relPath: 'mod_info.json', afterText: JSON.stringify(data, null, 2), afterDataBase64: null }]),
+  );
+  if (!result) return null;
   await recordConfigWrite(modRoot, sessionId, result, '保存 mod_info.json');
   return result;
 }
 
-export async function saveIndexedEntityAction(write: {
-  sessionId: string;
-  modRoot: string;
-  kind: IndexedConfigKind;
-  previousId: string | null;
-  nextId: string;
-  indexRow: RowData;
-  entityData: RowData;
-  deletePreviousTarget: boolean;
-}): Promise<string> {
-  const result = await writeIndexedConfigEntity(write);
+export async function saveIndexedEntityAction(
+  write: {
+    sessionId: string;
+    modRoot: string;
+    kind: IndexedConfigKind;
+    previousId: string | null;
+    nextId: string;
+    indexRow: RowData;
+    entityData: RowData;
+    deletePreviousTarget: boolean;
+  },
+  feedback?: AppFeedback,
+): Promise<string | null> {
+  const result = await runConfirmedJsonWrite(feedback, (options) => writeIndexedConfigEntity(write, options));
+  if (!result) return null;
   const entity = indexedConfigEntityData(result);
   await recordConfigWrite(write.modRoot, write.sessionId, result, indexedConfigHistoryLabel(write.kind, 'save', entity.entityId));
   return entity.entityId;
@@ -75,14 +89,17 @@ export async function saveVariantAction(
   variantId: string,
   data: RowData,
   previousId: string | null,
-): Promise<VariantFile> {
-  const result = await writeVariantEntity({
+  feedback?: AppFeedback,
+): Promise<VariantFile | null> {
+  const write = {
     sessionId,
     modRoot,
     previousId,
     nextId: variantId,
     data,
-  });
+  };
+  const result = await runConfirmedJsonWrite(feedback, (options) => writeVariantEntity(write, options));
+  if (!result) return null;
   const variant = variantEntityData(result);
   await recordConfigWrite(modRoot, sessionId, result, `保存装配 ${variant.variantId}`);
   return variant;
@@ -113,14 +130,17 @@ export async function saveSkinAction(
   skinHullId: string,
   data: RowData,
   previousId: string | null,
-): Promise<SkinFile> {
-  const result = await writeSkinEntity({
+  feedback?: AppFeedback,
+): Promise<SkinFile | null> {
+  const write = {
     sessionId,
     modRoot,
     previousId,
     nextId: skinHullId,
     data,
-  });
+  };
+  const result = await runConfirmedJsonWrite(feedback, (options) => writeSkinEntity(write, options));
+  if (!result) return null;
   const skin = skinEntityData(result);
   await recordConfigWrite(modRoot, sessionId, result, `保存舰船皮肤 ${skin.skinHullId}`);
   return skin;
@@ -146,5 +166,6 @@ export async function deleteSkinAction(sessionId: string, modRoot: string, relPa
 }
 
 async function recordConfigWrite(modRoot: string, sessionId: string, result: WriteResult, label: string) {
+  if (result.changes.length === 0) return;
   await completeSavedWrite({ modRoot, sessionId, result, label }, useProjectStore());
 }

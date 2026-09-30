@@ -83,6 +83,7 @@ pub fn run() {
             commands::transcode_file_to_utf8,
             commands::save_editor_spec,
             commands::save_mod_files,
+            commands::save_mod_info,
             commands::apply_file_change_set,
         ])
         .run(tauri::generate_context!())

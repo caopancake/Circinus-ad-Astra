@@ -41,6 +41,8 @@ pub struct AppSettings {
     pub history_limit: u32,
     #[serde(default = "default_edit_mode")]
     pub edit_mode: EditMode,
+    #[serde(default = "default_preserve_original_json")]
+    pub preserve_original_json: bool,
     #[serde(default, deserialize_with = "optional_non_empty_string")]
     pub starsector_root: Option<String>,
     #[serde(default, deserialize_with = "optional_non_empty_string")]
@@ -57,6 +59,7 @@ impl Default for AppSettings {
             custom_accent: default_custom_accent(),
             history_limit: default_history_limit(),
             edit_mode: default_edit_mode(),
+            preserve_original_json: default_preserve_original_json(),
             starsector_root: None,
             log_directory: None,
             log_level: default_log_level(),
@@ -82,6 +85,10 @@ fn default_history_limit() -> u32 {
 
 fn default_edit_mode() -> EditMode {
     EditMode::Smart
+}
+
+fn default_preserve_original_json() -> bool {
+    true
 }
 
 fn default_log_level() -> AppLogLevel {
@@ -123,5 +130,14 @@ mod tests {
         .unwrap();
 
         assert_eq!(settings.starsector_root, None);
+    }
+
+    #[test]
+    fn preserve_original_json_defaults_true_for_existing_settings() {
+        let old: AppSettings = serde_json::from_value(json!({"theme":"light"})).unwrap();
+        assert!(old.preserve_original_json);
+        let disabled: AppSettings =
+            serde_json::from_value(json!({"preserveOriginalJson":false})).unwrap();
+        assert!(!disabled.preserve_original_json);
     }
 }

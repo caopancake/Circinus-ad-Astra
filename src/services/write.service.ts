@@ -10,6 +10,7 @@ import {
   saveEditorSpec,
   saveIndexedConfigEntity,
   saveModFiles,
+  saveModInfo,
   saveSkinEntity,
   saveTextFile,
   saveVariantEntity,
@@ -26,6 +27,7 @@ import type {
   FileChangeRecord,
   FileChangeReplayDirection,
   IndexedConfigEntityWrite,
+  JsonWriteOptions,
   EditorSpecKind,
   RowData,
   SkinEntityWrite,
@@ -54,8 +56,9 @@ export async function writeCsvPatch(
   table: TableKey,
   patches: CsvRowPatch[],
   associatedSpecs: AssociatedSpecChange[],
+  jsonWrite?: JsonWriteOptions,
 ): Promise<WriteResult> {
-  return runExclusiveWrite(`csv:${sessionId}:${table}`, () => saveCsvPatch(sessionId, modRoot, table, patches, associatedSpecs));
+  return runExclusiveWrite(`csv:${sessionId}:${table}`, () => saveCsvPatch(sessionId, modRoot, table, patches, associatedSpecs, jsonWrite));
 }
 
 export async function writeTextFile(sessionId: string | null, modRoot: string, path: string, text: string): Promise<WriteResult> {
@@ -72,16 +75,23 @@ export async function writeEditorSpec(
   kind: EditorSpecKind,
   id: string,
   data: RowData,
+  jsonWrite?: JsonWriteOptions,
 ): Promise<WriteResult> {
-  return runExclusiveWrite(`spec:${kind}:${modRoot}:${id}`, () => saveEditorSpec(sessionId, modRoot, kind, id, data));
+  return runExclusiveWrite(`spec:${kind}:${modRoot}:${id}`, () => saveEditorSpec(sessionId, modRoot, kind, id, data, jsonWrite));
+}
+
+export async function writeModInfo(sessionId: string, modRoot: string, data: RowData, jsonWrite: JsonWriteOptions): Promise<WriteResult> {
+  return runExclusiveWrite(`mod-info:${sessionId}:${modRoot}`, () => saveModInfo(sessionId, modRoot, data, jsonWrite));
 }
 
 export async function writeModFiles(sessionId: string, modRoot: string, files: AssociatedFileChange[]): Promise<WriteResult> {
   return runExclusiveWrite(`mod-files:${sessionId}:${modRoot}`, () => saveModFiles(sessionId, modRoot, files));
 }
 
-export async function writeIndexedConfigEntity(write: IndexedConfigEntityWrite): Promise<WriteResult> {
-  return runExclusiveWrite(`indexed-save:${write.sessionId}:${write.kind}:${write.nextId}`, () => saveIndexedConfigEntity(write));
+export async function writeIndexedConfigEntity(write: IndexedConfigEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
+  return runExclusiveWrite(`indexed-save:${write.sessionId}:${write.kind}:${write.nextId}`, () =>
+    saveIndexedConfigEntity(write, jsonWrite),
+  );
 }
 
 export async function writeCreateIndexedConfigEntity(write: IndexedConfigEntityWrite): Promise<WriteResult> {
@@ -92,8 +102,8 @@ export async function writeDeleteIndexedConfigEntity(write: DeleteIndexedConfigE
   return runExclusiveWrite(`indexed-delete:${write.sessionId}:${write.kind}:${write.id}`, () => deleteIndexedConfigEntity(write));
 }
 
-export async function writeVariantEntity(write: VariantEntityWrite): Promise<WriteResult> {
-  return runExclusiveWrite(`variant-save:${write.sessionId}:${write.nextId}`, () => saveVariantEntity(write));
+export async function writeVariantEntity(write: VariantEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
+  return runExclusiveWrite(`variant-save:${write.sessionId}:${write.nextId}`, () => saveVariantEntity(write, jsonWrite));
 }
 
 export async function writeCreateVariantEntity(write: VariantEntityWrite): Promise<WriteResult> {
@@ -104,8 +114,8 @@ export async function writeDeleteVariantEntity(write: DeleteVariantEntityWrite):
   return runExclusiveWrite(`variant-delete:${write.sessionId}:${write.relPath}`, () => deleteVariantEntity(write));
 }
 
-export async function writeSkinEntity(write: SkinEntityWrite): Promise<WriteResult> {
-  return runExclusiveWrite(`skin-save:${write.sessionId}:${write.nextId}`, () => saveSkinEntity(write));
+export async function writeSkinEntity(write: SkinEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
+  return runExclusiveWrite(`skin-save:${write.sessionId}:${write.nextId}`, () => saveSkinEntity(write, jsonWrite));
 }
 
 export async function writeCreateSkinEntity(write: SkinEntityWrite): Promise<WriteResult> {

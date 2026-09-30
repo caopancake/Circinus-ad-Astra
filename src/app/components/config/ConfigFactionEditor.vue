@@ -49,7 +49,7 @@ const props = defineProps<{
   sessionId: string | null;
   queryPreviewImages: (sessionId: string, factionId: string) => Promise<{ logoSrc: string; crestSrc: string }>;
   schemaRuntimeContext: SchemaRuntimeContext | null;
-  saveFaction: (sessionId: string, modRoot: string, previousId: string, local: RowData, schema: FileSchema) => Promise<string>;
+  saveFaction: (sessionId: string, modRoot: string, previousId: string, local: RowData, schema: FileSchema) => Promise<string | null>;
   deleteFaction: (sessionId: string, modRoot: string, id: string, deleteFile: boolean) => Promise<boolean>;
 }>();
 const emit = defineEmits<{ saved: [factionId: string | null] }>();

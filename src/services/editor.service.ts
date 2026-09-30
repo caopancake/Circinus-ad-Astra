@@ -179,10 +179,11 @@ export async function saveEditorSpecByKind(
   kind: EditorSpecKind,
   id: string,
   data: RowData,
+  jsonWrite?: import('@/shared/types').JsonWriteOptions,
 ): Promise<WriteResult> {
   ensureSpecContext(modRoot, id);
   try {
-    return await writeEditorSpec(sessionId, modRoot, kind, id, data);
+    return await writeEditorSpec(sessionId, modRoot, kind, id, data, jsonWrite);
   } catch (error) {
     throw withCause(`保存 ${id} spec 失败`, error, `save-${kind}-spec`);
   }

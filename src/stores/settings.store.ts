@@ -11,6 +11,7 @@ import {
   readHistoryLimit,
   readLogLevel,
   readOptionalLogDirectory,
+  readPreserveOriginalJson,
   readTheme,
   normalizeHex,
   MAX_HISTORY_LIMIT,
@@ -30,6 +31,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const customAccent = ref(readCustomAccent(initialSettings.customAccent));
   const historyLimit = ref(readHistoryLimit(initialSettings.historyLimit));
   const editMode = ref<EditMode>(readEditMode(initialSettings.editMode));
+  const preserveOriginalJson = ref(readPreserveOriginalJson(initialSettings.preserveOriginalJson));
   const starsectorRoot = ref(initialSettings.starsectorRoot);
   const logDirectory = ref(readOptionalLogDirectory(initialSettings.logDirectory));
   const logLevel = ref<LogLevel>(readLogLevel(initialSettings.logLevel));
@@ -72,6 +74,10 @@ export const useSettingsStore = defineStore('settings', () => {
     editMode.value = mode;
   }
 
+  function setPreserveOriginalJson(enabled: boolean) {
+    preserveOriginalJson.value = readPreserveOriginalJson(enabled);
+  }
+
   function setStarsectorRoot(path: string | null) {
     starsectorRoot.value = path;
   }
@@ -91,6 +97,7 @@ export const useSettingsStore = defineStore('settings', () => {
       customAccent: customAccent.value,
       historyLimit: historyLimit.value,
       editMode: editMode.value,
+      preserveOriginalJson: preserveOriginalJson.value,
       starsectorRoot: starsectorRoot.value,
       logDirectory: logDirectory.value,
       logLevel: logLevel.value,
@@ -103,6 +110,7 @@ export const useSettingsStore = defineStore('settings', () => {
     customAccent.value = readCustomAccent(settings.customAccent);
     historyLimit.value = readHistoryLimit(settings.historyLimit);
     editMode.value = readEditMode(settings.editMode);
+    preserveOriginalJson.value = readPreserveOriginalJson(settings.preserveOriginalJson);
     starsectorRoot.value = settings.starsectorRoot;
     logDirectory.value = readOptionalLogDirectory(settings.logDirectory);
     logLevel.value = readLogLevel(settings.logLevel);
@@ -113,6 +121,7 @@ export const useSettingsStore = defineStore('settings', () => {
     activeAccentHex,
     customAccent,
     editMode,
+    preserveOriginalJson,
     historyLimit,
     logDirectory,
     logLevel,
@@ -125,6 +134,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setAccent,
     setCustomAccent,
     setEditMode,
+    setPreserveOriginalJson,
     setHistoryLimit,
     setLogDirectory,
     setLogLevel,

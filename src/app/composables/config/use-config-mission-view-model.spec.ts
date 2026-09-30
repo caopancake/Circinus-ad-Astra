@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   createIndexedEntityAction: vi.fn(),
   deleteIndexedEntityAction: vi.fn(),
-  saveIndexedEntityAction: vi.fn(),
+  saveIndexedEntityAction: vi.fn(async () => 'm2'),
   listConfigMissionRecords: vi.fn(async (): Promise<Array<{ id: string; list: Record<string, string>; iconRef: null }>> => []),
   getConfigMissionEditorData: vi.fn(),
   feedback: {
@@ -177,6 +177,7 @@ describe('useConfigMissionViewModel', () => {
     expect(nextId).toBe('m2');
     expect(mocks.saveIndexedEntityAction).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'mission', previousId: 'm1', nextId: 'm2', deletePreviousTarget: true }),
+      mocks.feedback,
     );
     expect(mocks.feedback.success).toHaveBeenCalledWith(expect.stringContaining('已保存'));
   });

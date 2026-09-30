@@ -196,8 +196,9 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     const renameContext = configEntityRenameContext(currentId, nextId);
     const saved =
       family.id === 'variant'
-        ? await saveVariantAction(saveSessionId, saveModRoot, nextId, data, renameContext.previousId)
-        : await saveSkinAction(saveSessionId, saveModRoot, nextId, data, renameContext.previousId);
+        ? await saveVariantAction(saveSessionId, saveModRoot, nextId, data, renameContext.previousId, feedback)
+        : await saveSkinAction(saveSessionId, saveModRoot, nextId, data, renameContext.previousId, feedback);
+    if (!saved) return null;
     if (project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId) return saved;
     await loadFiles();
     selectedId.value = nextId;

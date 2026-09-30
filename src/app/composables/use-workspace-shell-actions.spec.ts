@@ -180,7 +180,7 @@ describe('useWorkspaceShellActions', () => {
     const feedback = feedbackStub();
     const actions = useWorkspaceShellActions(feedback);
     await actions.saveChanges();
-    expect(mocks.saveCapturedTableChanges).toHaveBeenCalledWith(expect.anything(), []);
+    expect(mocks.saveCapturedTableChanges).toHaveBeenCalledWith(expect.anything(), [], feedback);
     expect(feedback.success).toHaveBeenCalledWith('当前 CSV 表已保存');
   });
 

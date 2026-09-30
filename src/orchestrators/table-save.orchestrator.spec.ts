@@ -119,6 +119,7 @@ describe('table-save orchestrator', () => {
       'ships',
       [{ rowKey: 'ships:r1', action: 'upsert', row: { id: 'npc1', hullName: 'B' } }],
       [],
+      { preserveOriginalJson: false, confirmedSources: [] },
     );
     expect(completeSavedWrite).toHaveBeenCalledWith(
       {
@@ -145,7 +146,10 @@ describe('table-save orchestrator', () => {
     const target = captureActiveTableSaveTarget(project.getManifest(MOD_ROOT));
 
     expect(await saveCapturedTableChanges(target, [])).toBe('saved');
-    expect(writeCsvPatch).toHaveBeenCalledWith('sess-1', MOD_ROOT, 'ships', [{ rowKey: 'ships:r1', action: 'delete', row: {} }], []);
+    expect(writeCsvPatch).toHaveBeenCalledWith('sess-1', MOD_ROOT, 'ships', [{ rowKey: 'ships:r1', action: 'delete', row: {} }], [], {
+      preserveOriginalJson: false,
+      confirmedSources: [],
+    });
   });
 
   it('is a noop when the session changed since capture', async () => {

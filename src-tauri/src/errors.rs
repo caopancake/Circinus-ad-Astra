@@ -1,5 +1,13 @@
 use serde::{Serialize, Serializer};
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonRewriteFile {
+    pub path: String,
+    pub reason: String,
+    pub source_fingerprint: String,
+}
+
 pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Debug, thiserror::Error)]
@@ -19,6 +27,8 @@ pub enum AppError {
     Json(#[from] serde_json::Error),
     #[error("{0}")]
     Base64(#[from] base64::DecodeError),
+    #[error("JSON 格式保留需要确认")]
+    JsonRewriteRequired { files: Vec<JsonRewriteFile> },
 }
 
 impl AppError {
@@ -46,6 +56,7 @@ impl AppError {
             Self::Csv(_) => "parse.csv",
             Self::Json(_) => "parse.json",
             Self::Base64(_) => "data.base64",
+            Self::JsonRewriteRequired { .. } => "json.rewrite_confirmation_required",
         }
     }
 }
@@ -56,9 +67,12 @@ impl Serialize for AppError {
         S: Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("AppError", 2)?;
+        let mut state = serializer.serialize_struct("AppError", 3)?;
         state.serialize_field("code", self.code())?;
         state.serialize_field("message", &self.to_string())?;
+        if let Self::JsonRewriteRequired { files } = self {
+            state.serialize_field("files", files)?;
+        }
         state.end()
     }
 }

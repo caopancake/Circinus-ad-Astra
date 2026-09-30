@@ -12,7 +12,13 @@ export function useConfigMissionEditorViewModel(params: {
   modRoot: Ref<string | null>;
   onSaved: (missionId: string | null) => void;
   queryMissionEditorData: (sessionId: string, id: string) => Promise<ConfigMissionEditorData | null>;
-  saveMission: (sessionId: string, modRoot: string, previousId: string, localMission: RowData, schema: FileSchema) => Promise<string>;
+  saveMission: (
+    sessionId: string,
+    modRoot: string,
+    previousId: string,
+    localMission: RowData,
+    schema: FileSchema,
+  ) => Promise<string | null>;
   schema: Ref<FileSchema | null>;
   sessionId: Ref<string | null>;
 }) {
@@ -43,6 +49,7 @@ export function useConfigMissionEditorViewModel(params: {
         return;
       }
       const savedId = await params.saveMission(saveSessionId, saveModRoot, missionId, data, currentSchema);
+      if (!savedId) return;
       if (params.modRoot.value !== saveModRoot || params.sessionId.value !== saveSessionId) return;
       return {
         meta: savedId,

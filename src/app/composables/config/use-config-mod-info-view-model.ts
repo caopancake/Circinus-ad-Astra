@@ -23,7 +23,8 @@ export function useConfigModInfoViewModel() {
       const schema = pendingSaveSchema;
       if (!schema) return;
       const file = configModInfoSaveData(data, schema);
-      await saveModInfoAction(target.sessionId, target.modRoot, file);
+      const saved = await saveModInfoAction(target.sessionId, target.modRoot, file, feedback);
+      if (!saved) return;
       return { value: configModInfoEditorModel(deepClone(file)) };
     },
     targetKey: (target) => `${target.sessionId}\n${target.modRoot}`,
