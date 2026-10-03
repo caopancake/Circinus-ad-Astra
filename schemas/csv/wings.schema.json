@@ -4,7 +4,7 @@
   "columns": [
     { "key": "id", "label": "ID", "control": "text" },
     { "key": "variant", "label": "装配", "control": "reference", "source": "csv:variants.variantId" },
-    { "key": "tags", "label": "标签", "control": "tags", "source": "csv:wings.tags" },
+    { "key": "tags", "label": "Tags 标签", "control": "tags", "source": "csv:wings.tags" },
     { "key": "tier", "label": "级别", "control": "number", "step": 1 },
     { "key": "rarity", "label": "稀有度", "control": "number", "step": 0.01 },
     { "key": "fleet pts", "label": "舰队点", "control": "number", "step": 1 },

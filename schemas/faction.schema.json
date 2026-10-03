@@ -500,8 +500,8 @@
             {
               "key": "warships",
               "type": "integer",
-              "label": "主力舰权重",
-              "description": "舰队中主力战舰的配比权重",
+              "label": "常规战舰权重",
+              "description": "舰队中常规战舰的配比权重",
               "required": true,
               "editable": true,
               "default": 5,
@@ -578,7 +578,7 @@
               "key": "aggression",
               "type": "integer",
               "label": "攻击性",
-              "description": "AI 军官默认攻击性倾向（1=谨慎, 5=鲁莽）",
+              "description": "AI 军官默认攻击性倾向（1=谨慎更多, 5=鲁莽更多）",
               "required": true,
               "editable": true,
               "default": 3,
@@ -762,23 +762,23 @@
           "key": "file.internalComms",
           "type": "string",
           "label": "内部通讯 ID",
-          "description": "势力内部通讯对话的引用 ID",
+          "description": "无作用，可不填",
           "required": false,
           "editable": true
         },
         {
           "key": "file.portraits",
           "type": "object",
-          "label": "肖像",
-          "description": "势力人物肖像图片路径",
+          "label": "头像",
+          "description": "势力人物头像图片路径",
           "required": false,
           "editable": true,
           "nested": [
             {
               "key": "standard_male",
               "type": "string-array",
-              "label": "男性肖像",
-              "description": "男性人物肖像图片路径列表",
+              "label": "男性头像",
+              "description": "男性人物头像图片路径列表",
               "required": false,
               "editable": true,
               "default": []
@@ -786,8 +786,8 @@
             {
               "key": "standard_female",
               "type": "string-array",
-              "label": "女性肖像",
-              "description": "女性人物肖像图片路径列表",
+              "label": "女性头像",
+              "description": "女性人物头像图片路径列表",
               "required": false,
               "editable": true,
               "default": []

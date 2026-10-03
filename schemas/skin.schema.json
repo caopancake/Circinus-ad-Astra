@@ -12,46 +12,46 @@
         {
           "key": "skinHullId",
           "type": "string",
-          "label": "skinHullId",
+          "label": "皮肤的船体 ID",
           "required": true
         },
         {
           "key": "baseHullId",
           "type": "enum",
-          "label": "baseHullId",
+          "label": "基础船体 ID",
           "required": true,
           "source": "csv:ships.id"
         },
         {
           "key": "hullName",
           "type": "string",
-          "label": "hullName"
+          "label": "船体名称"
         },
         {
           "key": "hullDesignation",
           "type": "string",
-          "label": "hullDesignation"
+          "label": "定位"
         },
         {
           "key": "descriptionId",
           "type": "enum",
-          "label": "descriptionId",
+          "label": "覆盖描述 ID",
           "source": "csv:descriptions.id"
         },
         {
           "key": "descriptionPrefix",
           "type": "string",
-          "label": "descriptionPrefix"
+          "label": "描述前缀"
         },
         {
           "key": "tech",
           "type": "string",
-          "label": "tech"
+          "label": "科技"
         },
         {
           "key": "spriteName",
           "type": "path-image",
-          "label": "spriteName"
+          "label": "贴图路径"
         }
       ]
     },
@@ -62,28 +62,28 @@
         {
           "key": "tags",
           "type": "tag-select",
-          "label": "tags",
+          "label": "标签",
           "source": "csv:ships.tags"
         },
         {
           "key": "removeHints",
           "type": "string-array",
-          "label": "removeHints"
+          "label": "移除 Hints 标记"
         },
         {
           "key": "addHints",
           "type": "string-array",
-          "label": "addHints"
+          "label": "添加 Hints 标记"
         },
         {
           "key": "restoreToBaseHull",
           "type": "boolean",
-          "label": "restoreToBaseHull"
+          "label": "可恢复为基础船体"
         },
         {
           "key": "incompatibleWithBaseHull",
           "type": "boolean",
-          "label": "incompatibleWithBaseHull"
+          "label": "与基础船体不兼容"
         }
       ]
     },
@@ -94,49 +94,49 @@
         {
           "key": "fleetPoints",
           "type": "integer",
-          "label": "fleetPoints",
+          "label": "舰队点数",
           "min": 0
         },
         {
           "key": "ordnancePoints",
           "type": "integer",
-          "label": "ordnancePoints",
+          "label": "装配点数",
           "min": 0
         },
         {
           "key": "baseValueMult",
           "type": "float",
-          "label": "baseValueMult",
+          "label": "基础价值倍数",
           "min": 0,
           "step": 0.05
         },
         {
           "key": "suppliesToRecover",
           "type": "integer",
-          "label": "suppliesToRecover",
+          "label": "维修补给",
           "min": 0
         },
         {
           "key": "suppliesPerMonth",
           "type": "integer",
-          "label": "suppliesPerMonth",
+          "label": "月维持补给",
           "min": 0
         },
         {
           "key": "fighterBays",
           "type": "integer",
-          "label": "fighterBays",
+          "label": "甲板数量",
           "min": 0
         },
         {
           "key": "maxSpeed",
           "type": "integer",
-          "label": "maxSpeed"
+          "label": "战斗内速度"
         },
         {
           "key": "shieldEfficiency",
           "type": "float",
-          "label": "shieldEfficiency",
+          "label": "护盾效率",
           "min": 0,
           "step": 0.05
         }
@@ -149,13 +149,13 @@
         {
           "key": "builtInMods",
           "type": "string-array",
-          "label": "builtInMods",
+          "label": "内置插件",
           "source": "csv:hullmods.id"
         },
         {
           "key": "removeBuiltInMods",
           "type": "string-array",
-          "label": "removeBuiltInMods",
+          "label": "移除内置插件",
           "source": "csv:hullmods.id"
         }
       ]
@@ -167,7 +167,7 @@
         {
           "key": "builtInWeapons",
           "type": "key-value",
-          "label": "builtInWeapons",
+          "label": "内置武器",
           "valueSchema": {
             "key": "weaponId",
             "type": "enum",
@@ -178,18 +178,18 @@
         {
           "key": "removeBuiltInWeapons",
           "type": "string-array",
-          "label": "removeBuiltInWeapons",
+          "label": "移除内置武器",
           "source": "csv:weapons.id"
         },
         {
           "key": "removeWeaponSlots",
           "type": "string-array",
-          "label": "removeWeaponSlots"
+          "label": "移除武器槽"
         },
         {
           "key": "weaponSlotChanges",
           "type": "key-value",
-          "label": "weaponSlotChanges",
+          "label": "改变武器槽",
           "valueSchema": {
             "key": "slot",
             "type": "object",
@@ -198,7 +198,7 @@
               {
                 "key": "type",
                 "type": "enum",
-                "label": "type",
+                "label": "类型",
                 "options": [
                   "BALLISTIC",
                   "ENERGY",
@@ -216,24 +216,24 @@
               {
                 "key": "size",
                 "type": "enum",
-                "label": "size",
+                "label": "大小",
                 "options": ["SMALL", "MEDIUM", "LARGE"]
               },
               {
                 "key": "mount",
                 "type": "enum",
-                "label": "mount",
+                "label": "安装方式",
                 "options": ["TURRET", "HARDPOINT", "HIDDEN"]
               },
               {
                 "key": "angle",
                 "type": "float",
-                "label": "angle"
+                "label": "角度"
               },
               {
                 "key": "arc",
                 "type": "float",
-                "label": "arc"
+                "label": "射角"
               }
             ]
           }
@@ -247,7 +247,7 @@
         {
           "key": "builtInWings",
           "type": "array",
-          "label": "builtInWings",
+          "label": "内置联队",
           "item": {
             "key": "wingId",
             "type": "enum",
@@ -259,18 +259,18 @@
     },
     {
       "id": "system",
-      "label": "系统与视觉",
+      "label": "战术系统与视觉",
       "fields": [
         {
           "key": "systemId",
           "type": "enum",
-          "label": "systemId",
+          "label": "战术系统 ID",
           "source": "csv:shipSystems.id"
         },
         {
           "key": "coversColor",
           "type": "color-rgba",
-          "label": "coversColor"
+          "label": "武器盖板颜色"
         }
       ]
     },
@@ -281,12 +281,12 @@
         {
           "key": "removeEngineSlots",
           "type": "string-array",
-          "label": "removeEngineSlots"
+          "label": "移除引擎槽"
         },
         {
           "key": "engineSlotChanges",
           "type": "key-value",
-          "label": "engineSlotChanges",
+          "label": "改变引擎槽",
           "valueSchema": {
             "key": "engine",
             "type": "object",
@@ -295,22 +295,22 @@
               {
                 "key": "style",
                 "type": "string",
-                "label": "style"
+                "label": "风格"
               },
               {
                 "key": "length",
                 "type": "float",
-                "label": "length"
+                "label": "长度"
               },
               {
                 "key": "width",
                 "type": "float",
-                "label": "width"
+                "label": "宽度"
               },
               {
                 "key": "angle",
                 "type": "float",
-                "label": "angle"
+                "label": "角度"
               }
             ]
           }

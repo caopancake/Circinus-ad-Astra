@@ -48,7 +48,7 @@
     },
     {
       "key": "tags",
-      "label": "标签",
+      "label": "Tags 标签",
       "control": "tags",
       "source": "csv:commodities.tags"
     },

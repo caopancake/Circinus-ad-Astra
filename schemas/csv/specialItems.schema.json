@@ -4,7 +4,7 @@
   "columns": [
     { "key": "name", "label": "名称", "control": "text" },
     { "key": "id", "label": "ID", "control": "text" },
-    { "key": "tags", "label": "标签", "control": "tags", "source": "csv:specialItems.tags" },
+    { "key": "tags", "label": "Tags 标签", "control": "tags", "source": "csv:specialItems.tags" },
     { "key": "tech/manufacturer", "label": "设计类型", "control": "text" },
     { "key": "rarity", "label": "稀有度", "control": "text" },
     { "key": "base price", "label": "基础价格", "control": "number", "step": 1 },

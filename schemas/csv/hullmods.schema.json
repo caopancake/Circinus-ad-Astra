@@ -7,7 +7,7 @@
     { "key": "tier", "label": "等级", "control": "number", "step": 1 },
     { "key": "rarity", "label": "稀有度", "control": "number", "step": 0.01 },
     { "key": "tech/manufacturer", "label": "设计类型", "control": "text" },
-    { "key": "tags", "label": "标签", "control": "tags", "source": "csv:hullmods.tags" },
+    { "key": "tags", "label": "Tags 标签", "control": "tags", "source": "csv:hullmods.tags" },
     { "key": "uiTags", "label": "UI 标签", "control": "tags", "source": "csv:hullmods.uiTags" },
     { "key": "base value", "label": "基础价值", "control": "number", "step": 1 },
     { "key": "unlocked", "label": "已解锁", "control": "boolean" },

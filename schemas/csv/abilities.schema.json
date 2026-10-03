@@ -5,7 +5,7 @@
     { "key": "name", "label": "名称", "control": "text" },
     { "key": "id", "label": "ID", "control": "text" },
     { "key": "type", "label": "类型", "control": "enum", "options": ["campaign", "combat"] },
-    { "key": "tags", "label": "标签", "control": "tags", "source": "csv:abilities.tags" },
+    { "key": "tags", "label": "Tags 标签", "control": "tags", "source": "csv:abilities.tags" },
     { "key": "activationDays", "label": "激活天数", "control": "number", "step": 0.1 },
     { "key": "activationCooldown", "label": "激活冷却", "control": "number", "step": 0.1 },
     { "key": "durationDays", "label": "持续天数", "control": "number", "step": 0.1 },

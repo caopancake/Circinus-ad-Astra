@@ -10,7 +10,7 @@
     { "key": "upkeep", "label": "维护费", "control": "number", "step": 1 },
     { "key": "downgrade", "label": "降级为", "control": "text" },
     { "key": "upgrade", "label": "升级为", "control": "text" },
-    { "key": "tags", "label": "标签", "control": "tags", "source": "csv:industries.tags" },
+    { "key": "tags", "label": "Tags 标签", "control": "tags", "source": "csv:industries.tags" },
     { "key": "data", "label": "数据", "control": "text" },
     { "key": "image", "label": "图标", "control": "path-image" },
     { "key": "plugin", "label": "插件", "control": "text" },

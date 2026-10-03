@@ -12,25 +12,25 @@
         {
           "key": "variantId",
           "type": "string",
-          "label": "variantId",
+          "label": "装配 ID",
           "required": true
         },
         {
           "key": "hullId",
           "type": "enum",
-          "label": "hullId",
+          "label": "船体 ID",
           "required": true,
           "source": "csv:ships.id"
         },
         {
           "key": "displayName",
           "type": "string",
-          "label": "displayName"
+          "label": "显示名称"
         },
         {
           "key": "goalVariant",
           "type": "boolean",
-          "label": "goalVariant"
+          "label": "默认可选装配"
         }
       ]
     },
@@ -41,13 +41,13 @@
         {
           "key": "fluxVents",
           "type": "integer",
-          "label": "fluxVents",
+          "label": "幅能耗散管道",
           "min": 0
         },
         {
           "key": "fluxCapacitors",
           "type": "integer",
-          "label": "fluxCapacitors",
+          "label": "幅能寄存器",
           "min": 0
         }
       ]
@@ -59,19 +59,19 @@
         {
           "key": "hullMods",
           "type": "string-array",
-          "label": "hullMods",
+          "label": "船体插件",
           "source": "csv:hullmods.id"
         },
         {
           "key": "permaMods",
           "type": "string-array",
-          "label": "permaMods",
+          "label": "永久插件",
           "source": "csv:hullmods.id"
         },
         {
           "key": "sMods",
           "type": "string-array",
-          "label": "sMods",
+          "label": "S 插件",
           "source": "csv:hullmods.id"
         }
       ]
@@ -83,29 +83,29 @@
         {
           "key": "weaponGroups",
           "type": "array-of-object",
-          "label": "weaponGroups",
+          "label": "武器组",
           "nested": [
             {
               "key": "mode",
               "type": "enum",
-              "label": "mode",
+              "label": "模式",
               "options": ["LINKED", "ALTERNATING", "LINKED_GROUP", "ALTERNATING_GROUP"]
             },
             {
               "key": "weapons",
               "type": "key-value",
-              "label": "weapons",
+              "label": "武器",
               "valueSchema": {
                 "key": "weaponId",
                 "type": "enum",
-                "label": "weapon",
+                "label": "武器 ID",
                 "source": "csv:weapons.id"
               }
             },
             {
               "key": "autofire",
               "type": "boolean",
-              "label": "autofire"
+              "label": "自动开火"
             }
           ]
         }
@@ -118,11 +118,11 @@
         {
           "key": "wings",
           "type": "array",
-          "label": "wings",
+          "label": "联队",
           "item": {
             "key": "wingId",
             "type": "enum",
-            "label": "wing",
+            "label": "联队 ID",
             "source": "csv:wings.id"
           }
         }
@@ -136,11 +136,11 @@
           "key": "modules",
           "type": "key-value",
           "format": "array-of-entries",
-          "label": "modules",
+          "label": "模块",
           "valueSchema": {
             "key": "variantId",
             "type": "string",
-            "label": "variantId"
+            "label": "装配 ID"
           }
         }
       ]
@@ -153,7 +153,7 @@
         {
           "key": "quality",
           "type": "float",
-          "label": "quality",
+          "label": "质量",
           "min": 0,
           "max": 1,
           "step": 0.05
@@ -161,7 +161,7 @@
         {
           "key": "weaponQuality",
           "type": "float",
-          "label": "weaponQuality",
+          "label": "武器质量",
           "min": 0,
           "max": 1,
           "step": 0.05
@@ -169,7 +169,7 @@
         {
           "key": "fighterQuality",
           "type": "float",
-          "label": "fighterQuality",
+          "label": "战机质量",
           "min": 0,
           "max": 1,
           "step": 0.05
@@ -177,27 +177,27 @@
         {
           "key": "doctrine",
           "type": "object",
-          "label": "doctrine",
+          "label": "舰船学说",
           "nested": [
             {
               "key": "warships",
               "type": "integer",
-              "label": "warships"
+              "label": "常规战舰"
             },
             {
               "key": "carriers",
               "type": "integer",
-              "label": "carriers"
+              "label": "航母"
             },
             {
               "key": "phaseShips",
               "type": "integer",
-              "label": "phaseShips"
+              "label": "相位战舰"
             },
             {
               "key": "officerQuality",
               "type": "integer",
-              "label": "officerQuality"
+              "label": "军官质量"
             }
           ]
         }

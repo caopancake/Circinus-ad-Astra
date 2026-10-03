@@ -20,15 +20,15 @@
     { "key": "toggle", "label": "切换", "control": "boolean" },
     { "key": "noDissipation", "label": "禁止耗散", "control": "boolean" },
     { "key": "noHardDissipation", "label": "禁止硬幅能耗散", "control": "boolean" },
-    { "key": "hardFlux", "label": "硬幅能", "control": "boolean" },
+    { "key": "hardFlux", "label": "产生硬幅能", "control": "boolean" },
     { "key": "noFiring", "label": "禁止开火", "control": "boolean" },
     { "key": "noTurning", "label": "禁止转向", "control": "boolean" },
     { "key": "noStrafing", "label": "禁止横移", "control": "boolean" },
     { "key": "noAccel", "label": "禁止加速", "control": "boolean" },
     { "key": "noShield", "label": "禁止护盾", "control": "boolean" },
-    { "key": "noVent", "label": "禁止排幅", "control": "boolean" },
-    { "key": "isPhaseCloak", "label": "相位", "control": "boolean" },
-    { "key": "tags", "label": "标签", "control": "tags", "source": "csv:shipSystems.tags" },
+    { "key": "noVent", "label": "禁止强制排散", "control": "boolean" },
+    { "key": "isPhaseCloak", "label": "视作相位", "control": "boolean" },
+    { "key": "tags", "label": "Tags 标签", "control": "tags", "source": "csv:shipSystems.tags" },
     { "key": "icon", "label": "图标", "control": "path-image" }
   ]
 }
