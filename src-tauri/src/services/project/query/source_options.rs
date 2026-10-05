@@ -322,10 +322,9 @@ fn source_option_label_for_row(
             &row.row,
             core_data,
             context.session,
-        )? {
-            if display_name != value {
-                return Ok(format!("{display_name} ({value})"));
-            }
+        )? && display_name != value
+        {
+            return Ok(format!("{display_name} ({value})"));
         }
         let name = row
             .row

@@ -89,10 +89,10 @@ pub(crate) fn open_project_session_traced(
     drop(guard);
     // Open concentrated cold loads of core assets; persist them once here so
     // the dump never runs inside a query.
-    if let Some(root) = &manifest.starsector_root {
-        if let Err(error) = cache::flush_core_cache(root) {
-            crate::diagnostics::record(format!("core cache flush failed: {error}"));
-        }
+    if let Some(root) = &manifest.starsector_root
+        && let Err(error) = cache::flush_core_cache(root)
+    {
+        crate::diagnostics::record(format!("core cache flush failed: {error}"));
     }
     Ok(manifest)
 }

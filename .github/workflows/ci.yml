@@ -45,6 +45,9 @@ jobs:
       - name: Frontend build
         run: npm run build
 
+      - name: Tauri build and version alignment
+        run: npm run tauri -- build --no-bundle
+
       - name: Rust format check
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
 

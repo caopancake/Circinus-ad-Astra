@@ -4,11 +4,11 @@ setlocal
 
 set "PROJECT_DIR=%~dp0"
 set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
-set "EXE_NAME=starsector-devtool.exe"
+set "EXE_NAME=circinus-ad-astra.exe"
 set "SOURCE_EXE=%PROJECT_DIR%\src-tauri\target\release\%EXE_NAME%"
 
 echo ============================================
-echo   Starsector DevTool Build Script
+echo   Circinus ad Astra Build Script
 echo ============================================
 echo.
 
@@ -24,8 +24,8 @@ if not exist "%PROJECT_DIR%\src-tauri\Cargo.toml" (
     exit /b 1
 )
 
-echo [1/4] Stopping running Starsector DevTool processes...
-taskkill /f /im starsector-devtool.exe >nul 2>&1
+echo [1/4] Stopping running Circinus ad Astra processes...
+taskkill /f /im circinus-ad-astra.exe >nul 2>&1
 echo   [OK] Cleared.
 
 echo.

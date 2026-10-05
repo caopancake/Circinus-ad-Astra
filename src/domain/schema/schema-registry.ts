@@ -31,8 +31,8 @@ import submarketsColumnsRaw from '../../../schemas/csv/submarkets.schema.json';
 import weaponsColumnsRaw from '../../../schemas/csv/weapons.schema.json';
 import wingsColumnsRaw from '../../../schemas/csv/wings.schema.json';
 
-const FIELD_SCHEMA_VERSION = 'starsector-devtool/field-schema/v1';
-const CSV_COLUMNS_VERSION = 'starsector-devtool/csv-columns/v1';
+const FIELD_SCHEMA_VERSION = 'circinus-ad-astra/field-schema/v1';
+const CSV_COLUMNS_VERSION = 'circinus-ad-astra/csv-columns/v1';
 
 const SCHEMAS: Record<string, FileSchema> = {
   'mod-info': parseFileSchema('mod-info', modInfoSchemaRaw),

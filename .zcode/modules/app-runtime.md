@@ -15,6 +15,7 @@
 `src/app/naive-ui.runtime.ts`：Naive UI 按需注册 owner。
 `src/services/app-settings.service.ts`：主窗口 settings 读取入口，经 shared API 调用后端。
 `index.html`：`#app` 挂载点与启动错误呈现容器。
+`src/assets/app-icon.svg`：标题栏透明罗盘图标资源。
 
 ## 边界
 
@@ -60,6 +61,7 @@
 - 启动链路的控件注册必须显式登记，禁止通过副作用自动注册控件。
 - 主窗口与子窗口的模式差异必须由唯一窗口壳的 mode 参数表达，严禁出现第二份 Provider 栈。
 - 启动错误呈现必须 HTML 转义消息内容，严禁拼接未转义文本。
+- 标题栏必须使用 `src/assets/app-icon.svg`，图标区域必须保持 24 px × 24 px。
 
 ## 陷阱
 

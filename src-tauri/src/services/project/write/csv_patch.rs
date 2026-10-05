@@ -787,10 +787,10 @@ mod tests {
         if let Ok(canonical) = path.canonicalize() {
             return canonical.to_string_lossy().to_string();
         }
-        if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
-            if let Ok(canonical_parent) = parent.canonicalize() {
-                return canonical_parent.join(name).to_string_lossy().to_string();
-            }
+        if let (Some(parent), Some(name)) = (path.parent(), path.file_name())
+            && let Ok(canonical_parent) = parent.canonicalize()
+        {
+            return canonical_parent.join(name).to_string_lossy().to_string();
         }
         path.to_string_lossy().to_string()
     }

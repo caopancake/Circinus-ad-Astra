@@ -1,17 +1,17 @@
 [package]
-name = "starsector-devtool"
+name = "circinus-ad-astra"
 version = "0.1.0"
 description = "Native Starsector mod configuration tool"
-authors = ["Starsector DevTool"]
+authors = ["Circinus ad Astra"]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.90"
 
 [lib]
-name = "starsector_devtool_lib"
+name = "circinus_ad_astra_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "^2.7.1", features = [] }
 
 [dependencies]
 base64 = "0.23"
@@ -21,9 +21,9 @@ encoding_rs = "0.8"
 regex = "1.11"
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
-tauri = { version = "2", features = [] }
-tauri-plugin-dialog = "2"
-tauri-plugin-single-instance = "2"
+tauri = { version = "^2.12.1", features = [] }
+tauri-plugin-dialog = "^2.8.1"
+tauri-plugin-single-instance = "^2.5.2"
 thiserror = "2"
 walkdir = "2.5"
 

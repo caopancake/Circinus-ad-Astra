@@ -1,5 +1,5 @@
 {
-  "$schema": "starsector-devtool/csv-columns/v1",
+  "$schema": "circinus-ad-astra/csv-columns/v1",
   "table": "simOpponents",
   "columns": [{ "key": "variant id", "label": "装配", "control": "reference", "source": "csv:variants.variantId" }]
 }

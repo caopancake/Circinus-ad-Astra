@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    starsector_devtool_lib::run();
+    circinus_ad_astra_lib::run();
 }

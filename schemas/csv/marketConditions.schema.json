@@ -1,5 +1,5 @@
 {
-  "$schema": "starsector-devtool/csv-columns/v1",
+  "$schema": "circinus-ad-astra/csv-columns/v1",
   "table": "marketConditions",
   "columns": [
     { "key": "name", "label": "名称", "control": "text" },

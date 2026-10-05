@@ -99,16 +99,14 @@ pub fn save_indexed_config_with_json(
     let mut builder = FileChangeSetBuilder::new(mod_root)?;
     if delete_previous_target
         && definition.rename_strategy == RenameStrategy::CopyDirectoryBeforeWrite
-    {
-        if let Some(previous) = previous_id
+        && let Some(previous) = previous_id
             .as_deref()
             .filter(|previous| *previous != next_id)
-        {
-            builder.copy_directory(
-                definition.target_rel_path(previous),
-                definition.target_rel_path(&next_id),
-            )?;
-        }
+    {
+        builder.copy_directory(
+            definition.target_rel_path(previous),
+            definition.target_rel_path(&next_id),
+        )?;
     }
     builder.root_text_file(
         definition.index_rel_path(),
@@ -124,13 +122,12 @@ pub fn save_indexed_config_with_json(
         &mut json,
         ordered_json,
     )?;
-    if delete_previous_target {
-        if let Some(previous) = previous_id
+    if delete_previous_target
+        && let Some(previous) = previous_id
             .as_deref()
             .filter(|previous| *previous != next_id)
-        {
-            definition.add_delete_target_change(&mut builder, previous)?;
-        }
+    {
+        definition.add_delete_target_change(&mut builder, previous)?;
     }
     json.finish()?;
     let changes = builder.apply()?;

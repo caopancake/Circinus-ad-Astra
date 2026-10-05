@@ -490,13 +490,13 @@ fn collect_edits(
                         .first()
                         .map(|member| line_indent(source, member.key_span.start))
                         .unwrap_or_else(|| format!("{}  ", line_indent(source, close)));
-                    if let Some(last) = members.last() {
-                        if !separator.is_empty() {
-                            edits.push(Edit {
-                                span: last.value.span.end..last.value.span.end,
-                                text: separator.to_string(),
-                            });
-                        }
+                    if let Some(last) = members.last()
+                        && !separator.is_empty()
+                    {
+                        edits.push(Edit {
+                            span: last.value.span.end..last.value.span.end,
+                            text: separator.to_string(),
+                        });
                     }
                     let line_start = source[..close].rfind('\n').map_or(close, |index| index + 1);
                     if !source[line_start..close].trim().is_empty() {

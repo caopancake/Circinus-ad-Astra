@@ -1,5 +1,5 @@
 {
-  "$schema": "starsector-devtool/field-schema/v1",
+  "$schema": "circinus-ad-astra/field-schema/v1",
   "id": "variant",
   "fileType": "variant",
   "displayName": "装配",

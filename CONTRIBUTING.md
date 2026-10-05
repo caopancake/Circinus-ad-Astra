@@ -1,12 +1,12 @@
 # Contributing
 
-感谢你帮助改进 Starsector DevTool。本项目是 Windows 桌面 Mod 编辑器；任何贡献都应保持 Mod 数据隔离、文件写入边界和可回放的保存历史。
+感谢你帮助改进 Circinus ad Astra。本项目是 Windows 桌面 Mod 编辑器；任何贡献都应保持 Mod 数据隔离、文件写入边界和可回放的保存历史。
 
 ## 提交 Issue
 
 请先搜索现有 Issue。新问题应尽量提供：
 
-- DevTool 版本、Windows 版本，以及从 Release 运行还是从源码运行；
+- Circinus ad Astra 版本、Windows 版本，以及从 Release 运行还是从源码运行；
 - Starsector 目录还是独立 Mod 目录、相关游戏版本，以及是否配置了游戏目录；
 - 最小复现步骤、预期结果、实际结果和截图；
 - 可脱敏的报错文本或日志上下文。
@@ -15,7 +15,7 @@
 
 ## 开发准备
 
-需要 Node.js（含 npm）、Rust stable 的 MSVC 工具链，以及 Windows。安装依赖并启动开发模式：
+开发必须使用 Node.js（含 npm）、`rust-toolchain.toml` 固定的 Rust 1.95.0 MSVC 工具链，以及 Windows。安装依赖并启动开发模式：
 
 ```powershell
 npm install
@@ -28,7 +28,7 @@ npm.cmd run tauri -- dev
 npm.cmd run tauri -- build --no-bundle
 ```
 
-产物默认位于 `src-tauri\target\release\starsector-devtool.exe`。不要在仍需保留的运行实例上直接使用 `build.ps1` 或 `build.bat`：这两个便捷脚本会强制关闭应用并删除前端构建目录。
+产物默认位于 `src-tauri\target\release\circinus-ad-astra.exe`。不要在仍需保留的运行实例上直接使用 `build.ps1` 或 `build.bat`：这两个便捷脚本会强制关闭应用并删除前端构建目录。
 
 ## 改动要求
 

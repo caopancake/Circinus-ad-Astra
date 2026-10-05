@@ -1,5 +1,5 @@
 {
-  "$schema": "starsector-devtool/field-schema/v1",
+  "$schema": "circinus-ad-astra/field-schema/v1",
   "id": "faction",
   "fileType": ".faction",
   "displayName": "势力定义",

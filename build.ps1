@@ -2,11 +2,11 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
 
 $ProjectDir = $PSScriptRoot
-$ExeName = "starsector-devtool.exe"
+$ExeName = "circinus-ad-astra.exe"
 $SourceExe = Join-Path $ProjectDir "src-tauri\target\release\$ExeName"
 
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  Starsector DevTool Build Script" -ForegroundColor Cyan
+Write-Host "  Circinus ad Astra Build Script" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -20,8 +20,8 @@ if (-not (Test-Path (Join-Path $ProjectDir "src-tauri\Cargo.toml"))) {
     exit 1
 }
 
-Write-Host "[1/4] Stopping running Starsector DevTool processes..." -ForegroundColor Yellow
-Get-Process -Name "starsector-devtool" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Write-Host "[1/4] Stopping running Circinus ad Astra processes..." -ForegroundColor Yellow
+Get-Process -Name "circinus-ad-astra" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Write-Host "  [OK] Cleared." -ForegroundColor Green
 
 Write-Host ""

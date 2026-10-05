@@ -1,5 +1,5 @@
 {
-  "$schema": "starsector-devtool/well-known-labels/v1",
+  "$schema": "circinus-ad-astra/well-known-labels/v1",
   "tags": {
     "base_bp": {
       "label": "基础蓝图",

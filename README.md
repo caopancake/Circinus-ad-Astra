@@ -1,4 +1,4 @@
-# Starsector DevTool
+# Circinus ad Astra
 
 Windows 桌面版 Starsector Mod 配置工具，使用 Tauri 2 + Vue 3 + TypeScript + Rust 构建。
 
@@ -30,7 +30,7 @@ Windows 桌面版 Starsector Mod 配置工具，使用 Tauri 2 + Vue 3 + TypeScr
 ## 运行与开发环境
 
 - 运行环境：Windows；使用原版回退资源时需要本机已安装的 Starsector。
-- 源码开发：Node.js（含 npm）与 Rust stable 的 MSVC 工具链。
+- 源码开发必须使用 Node.js（含 npm）与 `rust-toolchain.toml` 固定的 Rust 1.95.0 MSVC 工具链；Cargo 声明的最低 Rust 版本为 1.90。
 - 依赖版本以 [package.json](./package.json) 和 [src-tauri/Cargo.toml](./src-tauri/Cargo.toml) 为准。
 
 ## 技术栈
@@ -61,12 +61,12 @@ npm.cmd run tauri -- build --no-bundle
 构建完成后产物位于：
 
 ```text
-src-tauri\target\release\starsector-devtool.exe
+src-tauri\target\release\circinus-ad-astra.exe
 ```
 
 项目只发布单文件 exe，不生成安装包；`tauri.conf.json` 的 bundle 安装包打包已显式关闭。
 
-仓库也提供 [build.ps1](./build.ps1) 与 [build.bat](./build.bat)。这两个便捷脚本会结束正在运行的 `starsector-devtool` 进程并清理 `dist/`，仅应在确认可中断当前程序时使用。为了兼容性考虑，bat 脚本是必须的。
+仓库也提供 [build.ps1](./build.ps1) 与 [build.bat](./build.bat)。这两个便捷脚本会结束正在运行的 `circinus-ad-astra` 进程并清理 `dist/`，仅应在确认可中断当前程序时使用。为了兼容性考虑，bat 脚本是必须的。
 
 ## 验证
 

@@ -58,7 +58,7 @@ git diff --check
 ```
 
 - 开发运行使用 `npm.cmd run tauri -- dev`。
-- 无安装包构建使用 `npm.cmd run tauri -- build --no-bundle`，产物位于 `src-tauri\target\release\starsector-devtool.exe`。
+- 无安装包构建使用 `npm.cmd run tauri -- build --no-bundle`，产物位于 `src-tauri\target\release\circinus-ad-astra.exe`。
 - 验证失败时必须报告完整命令、退出码、失败位置和阻塞条件；命令必须执行到自然结束。
 
 ## 事后要求

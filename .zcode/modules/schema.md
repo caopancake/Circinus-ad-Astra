@@ -22,6 +22,7 @@
 ## 边界
 
 - schema 资产只能经唯一加载入口消费，入口处执行逐属性运行时校验；资产外严禁二次强转。
+- schema 资产与加载器必须使用 `circinus-ad-astra/` 版本标识前缀。
 - 资产正式形态统一带 `$schema` 版本头：spec 资产为 `field-schema/v1` 加 `sections`（可选 `sources`），CSV 列资产为 `csv-columns/v1` 加与表注册表 key 一致的 `table` 与 `columns`。
 - CSV 列 schema 文件命名依据为表注册表 key；游戏原文件名的映射唯一归后端表注册表所有，资产命名严禁复制第二套游戏文件名体系。
 - well-known 标签资产只允许经后端唯一加载入口编译期内嵌消费，加载时必须校验版本头，严禁在查询逻辑内重建标签表。

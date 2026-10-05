@@ -10,7 +10,7 @@ describe('schema registry', () => {
     for (const id of SPEC_IDS) {
       const schema = getSchema(id);
       expect(schema, id).not.toBeNull();
-      expect(schema?.$schema).toBe('starsector-devtool/field-schema/v1');
+      expect(schema?.$schema).toBe('circinus-ad-astra/field-schema/v1');
       expect(schema?.id).toBe(id);
       expect(schema?.sections?.length).toBeGreaterThan(0);
       for (const section of schema?.sections ?? []) {

@@ -1,5 +1,5 @@
 {
-  "$schema": "starsector-devtool/csv-columns/v1",
+  "$schema": "circinus-ad-astra/csv-columns/v1",
   "table": "industries",
   "columns": [
     { "key": "id", "label": "ID", "control": "text" },

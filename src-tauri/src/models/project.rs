@@ -25,7 +25,7 @@ pub enum CsvTableKey {
 pub const CSV_FACTION_FIELD: &str = "_faction";
 pub const CSV_DEFAULT_FACTION_ID: &str = "other";
 /// Frozen on-disk log file name; every writer and validator must share it.
-pub const LOG_FILE: &str = "starsector-devtool.log";
+pub const LOG_FILE: &str = "circinus-ad-astra.log";
 
 impl CsvTableKey {
     pub fn as_str(self) -> &'static str {

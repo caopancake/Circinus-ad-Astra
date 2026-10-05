@@ -9,11 +9,11 @@ fn unique_suffix() -> u128 {
 }
 
 pub(crate) fn temp_path(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("starsector_devtool_{name}_{}", unique_suffix()))
+    std::env::temp_dir().join(format!("circinus_ad_astra_{name}_{}", unique_suffix()))
 }
 
 pub(crate) fn temp_dir(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("starsector_devtool_{name}_{}", unique_suffix()));
+    let path = std::env::temp_dir().join(format!("circinus_ad_astra_{name}_{}", unique_suffix()));
     std::fs::create_dir_all(&path).unwrap();
     path
 }

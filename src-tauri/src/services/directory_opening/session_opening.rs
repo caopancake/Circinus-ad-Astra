@@ -17,10 +17,10 @@ pub fn open_project_session_with_root(
     mod_root: String,
     starsector_root: Option<String>,
 ) -> AppResult<ProjectManifest> {
-    if let Ok(app_data_dir) = app_paths::app_data_dir(app_handle.clone()) {
-        if let Err(error) = configure_persistent_index_cache(&app_data_dir) {
-            crate::diagnostics::record(format!("persistent index cache configure failed: {error}"));
-        }
+    if let Ok(app_data_dir) = app_paths::app_data_dir(app_handle.clone())
+        && let Err(error) = configure_persistent_index_cache(&app_data_dir)
+    {
+        crate::diagnostics::record(format!("persistent index cache configure failed: {error}"));
     }
     let mut trace = PerformanceTrace::new("project.openSession");
     let mod_root_boundary = FsRootBoundary::new(Path::new(&mod_root), "mod root")?;

@@ -8,7 +8,7 @@ function field(key: string, extra: Partial<FieldSchema> = {}): FieldSchema {
 
 function schemaFixture(sections: { id: string; fields: FieldSchema[] }[], sources?: FileSchema['sources']): FileSchema {
   return {
-    $schema: 'starsector-devtool/field-schema/v1',
+    $schema: 'circinus-ad-astra/field-schema/v1',
     id: 'fixture',
     sources,
     sections: sections.map((section) => ({ id: section.id, label: section.id, fields: section.fields })),

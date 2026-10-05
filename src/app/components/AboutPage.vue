@@ -2,7 +2,7 @@
   <div class="settings-page">
     <header class="settings-header about-header">
       <h1>关于</h1>
-      <p>Starsector DevTool 的版本、作者和更新记录。</p>
+      <p>Circinus ad Astra 的版本、作者和更新记录。</p>
     </header>
 
     <section class="settings-section">
@@ -10,7 +10,7 @@
       <div class="about-info-list">
         <div class="settings-row">
           <span>名称</span>
-          <strong>Starsector DevTool</strong>
+          <strong>Circinus ad Astra</strong>
         </div>
         <div class="settings-row">
           <span>当前版本</span>

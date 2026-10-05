@@ -7,7 +7,7 @@
 use serde::Deserialize;
 use std::{collections::BTreeMap, sync::LazyLock};
 
-pub const WELL_KNOWN_LABELS_SCHEMA_VERSION: &str = "starsector-devtool/well-known-labels/v1";
+pub const WELL_KNOWN_LABELS_SCHEMA_VERSION: &str = "circinus-ad-astra/well-known-labels/v1";
 
 #[derive(Deserialize)]
 struct WellKnownLabelAsset {

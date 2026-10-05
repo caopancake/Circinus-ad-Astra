@@ -67,10 +67,10 @@ pub(in crate::services::project) fn variant_resource_refs(
     data: &Value,
 ) -> BTreeMap<String, ResourceRef> {
     let mut refs = BTreeMap::new();
-    if let Some(hull_id) = string_field(data, "hullId") {
-        if let Ok(Some(resource)) = hull_resource_ref(session, origin, &hull_id) {
-            refs.insert("sprite".to_string(), resource);
-        }
+    if let Some(hull_id) = string_field(data, "hullId")
+        && let Ok(Some(resource)) = hull_resource_ref(session, origin, &hull_id)
+    {
+        refs.insert("sprite".to_string(), resource);
     }
     refs
 }
@@ -92,10 +92,10 @@ pub(in crate::services::project) fn skin_entity_resource_refs(
                 "sprite",
             ),
         );
-    } else if let Some(base_hull_id) = string_field(data, "baseHullId") {
-        if let Ok(Some(resource)) = hull_resource_ref(session, ResourceSource::Mod, &base_hull_id) {
-            refs.insert("sprite".to_string(), resource);
-        }
+    } else if let Some(base_hull_id) = string_field(data, "baseHullId")
+        && let Ok(Some(resource)) = hull_resource_ref(session, ResourceSource::Mod, &base_hull_id)
+    {
+        refs.insert("sprite".to_string(), resource);
     }
     refs
 }

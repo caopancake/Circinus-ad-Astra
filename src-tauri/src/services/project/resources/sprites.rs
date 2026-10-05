@@ -158,10 +158,10 @@ mod tests {
     ) -> BTreeMap<String, String> {
         let mut sprites = BTreeMap::new();
         for (id, value) in ship_files {
-            if let Some(sprite) = value.get("spriteName").and_then(Value::as_str) {
-                if let Ok(Some(data_url)) = load_sprite_data_url(mod_root, core_dir, sprite) {
-                    sprites.insert(id.clone(), data_url);
-                }
+            if let Some(sprite) = value.get("spriteName").and_then(Value::as_str)
+                && let Ok(Some(data_url)) = load_sprite_data_url(mod_root, core_dir, sprite)
+            {
+                sprites.insert(id.clone(), data_url);
             }
         }
         sprites
@@ -176,10 +176,10 @@ mod tests {
         for (id, value) in weapon_specs {
             let mut weapon_sprites = BTreeMap::new();
             for field in crate::services::project::model::WEAPON_SPRITE_FIELDS {
-                if let Some(sprite) = value.get(field).and_then(Value::as_str) {
-                    if let Ok(Some(data_url)) = load_sprite_data_url(mod_root, core_dir, sprite) {
-                        weapon_sprites.insert(field.to_string(), data_url);
-                    }
+                if let Some(sprite) = value.get(field).and_then(Value::as_str)
+                    && let Ok(Some(data_url)) = load_sprite_data_url(mod_root, core_dir, sprite)
+                {
+                    weapon_sprites.insert(field.to_string(), data_url);
                 }
             }
             if !weapon_sprites.is_empty() {

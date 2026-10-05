@@ -7,7 +7,7 @@ import SchemaFormRenderer from './SchemaFormRenderer.vue';
 import { editorUiStubs } from '@/test/ui-stubs';
 
 const schema: FileSchema = {
-  $schema: 'starsector-devtool/field-schema/v1',
+  $schema: 'circinus-ad-astra/field-schema/v1',
   id: 'fixture',
   sections: [
     { id: 'main', label: '主要', fields: [{ key: 'name', type: 'string', label: '名称' }] },

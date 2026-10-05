@@ -1,6 +1,6 @@
 # Overview
 
-Starsector_DevTool 是一个 Windows 桌面 Starsector Mod 配置工具，目标是把 Mod 的表格、spec、配置实体与文件编辑放进同一个受控产品里。
+Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，目标是把 Mod 的表格、spec、配置实体与文件编辑放进同一个受控产品里。
 
 ## 项目目标
 

@@ -321,10 +321,12 @@ fn string_to_value(word: &str) -> Option<Value> {
     if !matches!(first, '0'..='9' | '.' | '-' | '+') {
         return Some(Value::String(word.to_string()));
     }
-    if first == '0' && word.len() > 2 && matches!(word.as_bytes()[1], b'x' | b'X') {
-        if let Ok(value) = i32::from_str_radix(&word[2..], 16) {
-            return Some(Value::Number(value.into()));
-        }
+    if first == '0'
+        && word.len() > 2
+        && matches!(word.as_bytes()[1], b'x' | b'X')
+        && let Ok(value) = i32::from_str_radix(&word[2..], 16)
+    {
+        return Some(Value::Number(value.into()));
     }
     if word.contains(['.', 'e', 'E']) {
         return match word.parse::<f64>() {

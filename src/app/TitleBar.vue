@@ -1,9 +1,9 @@
 <template>
   <header class="titlebar" @pointerdown="startDrag" @dblclick="toggleMaximize">
     <div class="titlebar-brand">
-      <span class="titlebar-mark">SD</span>
+      <img class="titlebar-mark" :src="appIcon" alt="Circinus ad Astra" draggable="false" />
       <div class="titlebar-text">
-        <strong>Starsector DevTool</strong>
+        <strong>Circinus ad Astra</strong>
         <span :title="project.activeManifest?.modRoot ?? ''">{{ workspace.activeMod?.displayName || '尚未打开项目' }}</span>
       </div>
     </div>
@@ -52,6 +52,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import appIcon from '@/assets/app-icon.svg';
 import { useWorkspaceNavigationActions } from '@/app/composables/use-workspace-navigation-actions';
 import { useProjectStore } from '@/stores/project.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';

@@ -19,6 +19,7 @@
 ## 边界
 
 - settings 只写 app data，禁止 browser storage、workspace 或 Mod 目标；子窗口不读写文件、不补默认值。
+- 应用私有数据目录必须由 Tauri 标识 `com.caopancake.circinus-ad-astra` 解析。
 - 主题令牌计算归 domain 纯函数，输入校验归 domain 校验规则，store 只持状态；store 内严禁写 DOM。
 - 主题 DOM 副作用唯一归主题 effect，由唯一窗口壳挂载；主窗口与子窗口都经该 effect 生效。
 - 主窗口拥有设置持久化权威；子窗口只能从 URL snapshot 初始化并监听完整 snapshot 事件镜像。
