@@ -34,6 +34,7 @@ let wrapper: import('@vue/test-utils').VueWrapper | null = null;
 afterEach(() => {
   wrapper?.unmount();
   wrapper = null;
+  vi.unstubAllGlobals();
 });
 
 function mountEditor(weapon: RowData) {

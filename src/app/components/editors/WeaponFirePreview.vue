@@ -59,6 +59,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useShortcutDispatch } from '@/app/composables/use-shortcut-dispatch';
+import { useCanvasSurface, watchCanvasPixelRatio } from '@/app/composables/canvas/use-canvas-surface';
 import EditorFooter from '@/app/components/editors/common/EditorFooter.vue';
 import EditorHeader from '@/app/components/editors/common/EditorHeader.vue';
 import EditorInspector from '@/app/components/editors/common/EditorInspector.vue';
@@ -86,6 +87,8 @@ defineEmits<{ close: [] }>();
 
 const canvasRef = ref<HTMLCanvasElement>();
 const previewStageRef = ref<HTMLElement>();
+const surface = useCanvasSurface(canvasRef);
+let stopPixelRatio: (() => void) | null = null;
 const running = ref(true);
 const firing = ref(false);
 const speed = ref(1);
@@ -188,7 +191,7 @@ function setView(mode: WeaponViewMode) {
 }
 function scalePx() {
   const c = canvasRef.value;
-  return c ? (c.width - 140) / Math.max(params.value.range, 100) : 0.5;
+  return c ? (surface.size().width - 140) / Math.max(params.value.range, 100) : 0.5;
 }
 function rangePx() {
   return params.value.range * scalePx();
@@ -238,7 +241,7 @@ function beginBeamCharge() {
 }
 function weaponOrigin() {
   const c = canvasRef.value;
-  return { x: 80, y: c ? c.height / 2 : 0 };
+  return { x: 80, y: c ? surface.size().height / 2 : 0 };
 }
 function barrelAt(index: number): BarrelState | null {
   if (index < 0 || index >= barrelCount.value) return null;
@@ -397,24 +400,24 @@ function draw() {
   const c = canvasRef.value;
   if (!c) return;
   const ctx = c.getContext('2d')!;
-  ctx.imageSmoothingEnabled = false;
+  const dimensions = surface.size();
   const p = params.value;
   const end = weaponOrigin().x + rangePx();
-  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.clearRect(0, 0, dimensions.width, dimensions.height);
   ctx.fillStyle = CANVAS_CLEAR_COLOR;
-  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillRect(0, 0, dimensions.width, dimensions.height);
   ctx.strokeStyle = CANVAS_GRID_COLOR;
-  for (let x = 80; x < c.width; x += 50) {
+  for (let x = 80; x < dimensions.width; x += 50) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
-    ctx.lineTo(x, c.height);
+    ctx.lineTo(x, dimensions.height);
     ctx.stroke();
   }
   ctx.setLineDash([6, 4]);
   ctx.strokeStyle = '#ef444488';
   ctx.beginPath();
   ctx.moveTo(end, 40);
-  ctx.lineTo(end, c.height - 40);
+  ctx.lineTo(end, dimensions.height - 40);
   ctx.stroke();
   ctx.setLineDash([]);
   drawWeapon(ctx);
@@ -479,10 +482,7 @@ function resize() {
   const c = canvasRef.value;
   if (!c) return;
   const rect = previewStageRef.value?.getBoundingClientRect();
-  c.width = Math.max(1, Math.floor(rect?.width ?? 1400));
-  c.height = Math.max(1, Math.floor(rect?.height ?? 760));
-  const ctx = c.getContext('2d');
-  if (ctx) ctx.imageSmoothingEnabled = false;
+  surface.resize(rect?.width, rect?.height);
   draw();
 }
 function loadSpriteImages() {
@@ -502,12 +502,14 @@ useShortcutDispatch({
   },
 });
 onMounted(() => {
+  stopPixelRatio = watchCanvasPixelRatio(resize);
   loadSpriteImages();
   resize();
   window.addEventListener('resize', resize);
   reset();
 });
 onUnmounted(() => {
+  stopPixelRatio?.();
   cancelAnimationFrame(anim);
   window.removeEventListener('resize', resize);
 });

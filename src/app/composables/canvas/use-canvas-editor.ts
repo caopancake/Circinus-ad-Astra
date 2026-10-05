@@ -3,6 +3,7 @@ import type { Point } from '@/domain/editors/editor-types';
 import type { RowData } from '@/shared/types';
 import { useCanvasHistory } from '@/app/composables/canvas/use-canvas-history';
 import { useCanvasDrawing } from '@/app/composables/canvas/use-canvas-drawing';
+import { watchCanvasPixelRatio } from '@/app/composables/canvas/use-canvas-surface';
 import type { CanvasViewport } from '@/app/composables/canvas/use-canvas-viewport';
 import { useShortcutDispatch } from '@/app/composables/use-shortcut-dispatch';
 import {
@@ -120,12 +121,13 @@ export function useCanvasEditor<TPreview>(options: {
   const revealInProgress = ref(false);
 
   let last = { x: 0, y: 0 };
+  let stopPixelRatio: (() => void) | null = null;
 
   function drawBase(ctx: CanvasRenderingContext2D) {
-    const canvas = ctx.canvas;
+    const dimensions = viewport.size();
     const center = viewport.center();
-    drawing.clear(ctx, canvas.width, canvas.height);
-    drawing.drawGrid(ctx, { center, height: canvas.height, scale: scale.value, width: canvas.width });
+    drawing.clear(ctx, dimensions.width, dimensions.height);
+    drawing.drawGrid(ctx, { center, height: dimensions.height, scale: scale.value, width: dimensions.width });
   }
 
   function drawMirrorAxis(ctx: CanvasRenderingContext2D) {
@@ -137,7 +139,7 @@ export function useCanvasEditor<TPreview>(options: {
     ctx.setLineDash([6, 6]);
     ctx.beginPath();
     ctx.moveTo(0, axisY);
-    ctx.lineTo(ctx.canvas.width, axisY);
+    ctx.lineTo(viewport.size().width, axisY);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.font = '11px sans-serif';
@@ -403,6 +405,7 @@ export function useCanvasEditor<TPreview>(options: {
   });
 
   onMounted(() => {
+    stopPixelRatio = watchCanvasPixelRatio(resizeCanvas);
     window.addEventListener('resize', resizeCanvas);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
@@ -414,6 +417,7 @@ export function useCanvasEditor<TPreview>(options: {
   });
 
   onUnmounted(() => {
+    stopPixelRatio?.();
     window.removeEventListener('resize', resizeCanvas);
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keyup', onKeyUp);

@@ -27,6 +27,7 @@ afterEach(() => {
   wrapper?.unmount();
   wrapper = null;
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function mountPreview(overrides: Record<string, unknown> = {}) {

@@ -1,5 +1,6 @@
 import { ref, type ShallowRef } from 'vue';
 import type { Point } from '@/domain/editors/editor-types';
+import { useCanvasSurface } from '@/app/composables/canvas/use-canvas-surface';
 export type { Point } from '@/domain/editors/editor-types';
 
 type CoordinateSpace = 'ship' | 'weapon';
@@ -7,22 +8,11 @@ type CoordinateSpace = 'ship' | 'weapon';
 export function useCanvasViewport(canvasRef: Readonly<ShallowRef<HTMLCanvasElement | null>>, initialScale: number, maxScale: number) {
   const scale = ref(initialScale);
   const pan = ref<Point>({ x: 0, y: 0 });
+  const surface = useCanvasSurface(canvasRef);
 
   function center(): Point {
-    const canvas = canvasRef.value;
-    if (!canvas) return { x: pan.value.x, y: pan.value.y };
-    return { x: canvas.width / 2 + pan.value.x, y: canvas.height / 2 + pan.value.y };
-  }
-
-  function resize(width?: number, height?: number) {
-    const canvas = canvasRef.value;
-    if (!canvas) return false;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.floor(width ?? rect.width));
-    canvas.height = Math.max(1, Math.floor(height ?? rect.height));
-    const ctx = canvas.getContext('2d');
-    if (ctx) ctx.imageSmoothingEnabled = false;
-    return true;
+    const dimensions = surface.size();
+    return { x: dimensions.width / 2 + pan.value.x, y: dimensions.height / 2 + pan.value.y };
   }
 
   function panBy(dx: number, dy: number) {
@@ -55,7 +45,8 @@ export function useCanvasViewport(canvasRef: Readonly<ShallowRef<HTMLCanvasEleme
     fromCanvas,
     pan,
     panBy,
-    resize,
+    resize: surface.resize,
+    size: surface.size,
     scale,
     toCanvas,
     zoom,
