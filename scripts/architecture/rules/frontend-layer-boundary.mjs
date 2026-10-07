@@ -97,11 +97,15 @@ function orchestratorCycleFailures(files) {
     (file) => file.rel.startsWith('src/orchestrators/') && file.rel.endsWith('.ts') && !file.rel.endsWith('.spec.ts'),
   );
   const graph = new Map();
+  const modules = new Set(orchestratorFiles.map((file) => file.rel));
   for (const file of orchestratorFiles) {
     const targets = [];
     for (const imported of importedProjectPaths(file)) {
       const target = classifyFrontendPath(imported.resolved);
-      if (target.layer === 'orchestrators') targets.push(imported.resolved);
+      if (target.layer === 'orchestrators' && !imported.typeOnly) {
+        const resolved = [imported.resolved, `${imported.resolved}.ts`, `${imported.resolved}/index.ts`].find((path) => modules.has(path));
+        if (resolved) targets.push(resolved);
+      }
     }
     graph.set(file.rel, targets);
   }

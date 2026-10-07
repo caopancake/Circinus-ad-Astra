@@ -34,8 +34,15 @@ export function assertValidSettings(settings: AppSettings): void {
   readHistoryLimit(settings.historyLimit);
   readEditMode(settings.editMode);
   readPreserveOriginalJson(settings.preserveOriginalJson);
+  readAllowCoreEditing(settings.allowCoreEditing);
   readLogLevel(settings.logLevel);
   readOptionalLogDirectory(settings.logDirectory);
+}
+
+export function readAllowCoreEditing(value: boolean | undefined): boolean {
+  if (value === undefined) return false;
+  if (typeof value !== 'boolean') throw new Error(`Invalid allow core editing setting: ${value}`);
+  return value;
 }
 
 export function readTheme(value: AppTheme): AppTheme {

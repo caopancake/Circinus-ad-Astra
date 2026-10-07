@@ -19,7 +19,6 @@ interface QueryCacheEntry extends QueryIdentity {
 interface PendingQueryEntry extends QueryIdentity {
   promise: Promise<unknown>;
   sessionId: string;
-  version: number;
 }
 
 export interface QueryCacheInvalidationEvent {
@@ -69,19 +68,17 @@ export async function queryCached<T>(
     recordPerformance('frontend.queryCache', performance.now() - startedAt, { queryKind, hit: true, pending: true });
     return (await pendingQuery.promise) as T;
   }
-  const version = cache.versionOf(key);
   const loaded = loader()
     .then((value) => {
-      if (cache.versionOf(key) === version) {
+      if (cache.getPending<PendingQueryEntry>(key)?.promise === loaded) {
         cache.set(key, { queryKind, parameters, sessionId, value });
       }
       return value;
     })
     .finally(() => {
       if (cache.getPending<PendingQueryEntry>(key)?.promise === loaded) cache.deletePending(key);
-      if (!cache.hasPending(key) && !cache.has(key)) cache.deleteVersion(key);
     });
-  cache.setPending<PendingQueryEntry>(key, { queryKind, parameters, promise: loaded, sessionId, version });
+  cache.setPending<PendingQueryEntry>(key, { queryKind, parameters, promise: loaded, sessionId });
   const value = await loaded;
   recordPerformance('frontend.queryCache', performance.now() - startedAt, { queryKind, hit: false });
   return value;
@@ -97,11 +94,10 @@ export function invalidateQueryCacheForSession(sessionId: string) {
       invalidatedQueries.push(queryIdentity(entry));
       cache.delete(key);
     }
-    for (const key of [...cache.keys()]) {
+    for (const key of [...cache.pendingKeys()]) {
       const pendingEntry = cache.getPending<PendingQueryEntry>(key);
       if (!pendingEntry || pendingEntry.sessionId !== sessionId) continue;
       invalidatedQueries.push(queryIdentity(pendingEntry));
-      cache.bumpVersion(key);
       cache.deletePending(key);
     }
   }
@@ -119,12 +115,11 @@ export function invalidateQueryCacheByProject(sessionId: string, invalidation: P
       invalidatedQueries.push(queryIdentity(entry));
       cache.delete(key);
     }
-    for (const key of [...cache.keys()]) {
+    for (const key of [...cache.pendingKeys()]) {
       const pendingEntry = cache.getPending<PendingQueryEntry>(key);
       if (!pendingEntry || pendingEntry.sessionId !== sessionId) continue;
       if (!shouldInvalidateQuery(pendingEntry, invalidation)) continue;
       invalidatedQueries.push(queryIdentity(pendingEntry));
-      cache.bumpVersion(key);
       cache.deletePending(key);
     }
   }
@@ -137,7 +132,8 @@ export function subscribeQueryInvalidations(listener: QueryCacheInvalidationList
 }
 
 export function hasQueryInvalidation(event: QueryCacheInvalidationEvent, queryKind: QueryCacheKind): boolean {
-  if (event.scope === 'session') return false;
+  if (event.scope === 'session') return true;
+  if (event.invalidation) return event.invalidation.queryScopes.some((scope) => scope.kind === queryKind);
   return event.queries.some((query) => query.queryKind === queryKind);
 }
 
@@ -147,7 +143,10 @@ export function hasEntityInvalidation(
   kind: EntityKind,
   id: string | null = null,
 ): boolean {
-  if (event.scope === 'session') return false;
+  if (event.scope === 'session') return true;
+  if (event.invalidation) {
+    return event.invalidation.queryScopes.some((scope) => queryScopeMatchesEntity(scope, queryKind, kind, id));
+  }
   return event.queries.some((query) => {
     if (query.queryKind !== queryKind) return false;
     if (queryParameterText(query.parameters, 'kind') !== kind) return false;
@@ -157,7 +156,7 @@ export function hasEntityInvalidation(
 }
 
 export function hasSourceInvalidation(event: QueryCacheInvalidationEvent, source: string): boolean {
-  if (event.scope === 'session') return false;
+  if (event.scope === 'session') return true;
   if (event.invalidation) {
     return event.invalidation.queryScopes.some((scope) => queryScopeMatchesSourceOptions(scope, source));
   }
@@ -167,7 +166,10 @@ export function hasSourceInvalidation(event: QueryCacheInvalidationEvent, source
 }
 
 export function hasTableInvalidation(event: QueryCacheInvalidationEvent, queryKind: 'csv-table-window', table: string): boolean {
-  if (event.scope === 'session') return false;
+  if (event.scope === 'session') return true;
+  if (event.invalidation) {
+    return event.invalidation.queryScopes.some((scope) => scope.kind === queryKind && (!scope.table || scope.table === table));
+  }
   return event.queries.some((query) => query.queryKind === queryKind && queryParameterText(query.parameters, 'table') === table);
 }
 
@@ -184,7 +186,7 @@ function notifyQueryCacheInvalidated(
   scope: QueryCacheInvalidationEvent['scope'],
   invalidation: ProjectInvalidation | null,
 ) {
-  if (queries.length === 0) return;
+  if (queries.length === 0 && scope !== 'session' && !invalidation) return;
   const event: QueryCacheInvalidationEvent = {
     invalidation,
     queries,

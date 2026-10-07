@@ -1,0 +1,36 @@
+// Starsector 0.98a-RC8 loader enums.
+export const PROJECTILE_SPAWN_TYPES = ['BEAM', 'BALLISTIC_AS_BEAM', 'BALLISTIC', 'PLASMA', 'MISSILE', 'OTHER'] as const;
+
+export const MISSILE_TYPES = [
+  'FLARE',
+  'FLARE_SEEKER',
+  'MOTE',
+  'FLARE_JAMMER',
+  'ROCKET',
+  'MISSILE',
+  'MISSILE_TWO_STAGE_SECOND_UNGUIDED',
+  'HEATSEEKER',
+  'CIRCLE_TARGET',
+  'MIRV',
+  'TORPEDO',
+  'BOMB',
+  'BOMB_WITH_SLOW',
+  'BOMB_WITH_ACCEL',
+  'PHASE_CHARGE',
+  'PHASE_MINE',
+  'NO_AI',
+] as const;
+
+export const SYSTEM_TYPES = [
+  'WEAPON',
+  'ENGINE_MOD',
+  'SHIELD_MOD',
+  'STAT_MOD',
+  'FAST_RELOAD',
+  'AMMO_RELOAD',
+  'TELEPORTER',
+  'PHASE_CLOAK',
+  'DISPLACER',
+  'DRONE_LAUNCHER',
+  'EMP',
+] as const;

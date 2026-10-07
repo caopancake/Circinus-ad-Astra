@@ -8,7 +8,7 @@
 
 `src/main.ts`：启动入口 owner，解析 URL 窗口类型、加载 settings、初始化 settings store、创建 Vue 与 Pinia、注册 Naive UI，并按窗口类型异步加载唯一窗口根。
 `src/app/WindowShell.vue`：唯一窗口壳 owner，以 main/child 模式区分设置持久化与设置镜像，统一挂载 Naive Provider 栈与主题 DOM effect。
-`src/app/App.vue`：主窗口根，以 main 模式包装唯一窗口壳。
+`src/app/App.vue`：主窗口根，以 main 模式包装唯一窗口壳并装配主窗口内容。
 `src/app/EditorWindowApp.vue`：编辑器子窗口根，以 child 模式包装编辑器窗口内容。
 `src/app/FileEditorApp.vue`：文件编辑器子窗口根，以 child 模式包装文件编辑器窗口内容。
 `src/app/theme-overrides.ts`：Naive UI 主题覆盖构建 owner，消费主题令牌生成 provider 覆盖。
@@ -23,6 +23,7 @@
 - settings 读取只在主窗口进行；子窗口只能消费主窗口传入的完整 snapshot，严禁自行读盘或补默认值。
 - 窗口创建、单例复用与跨窗口事件不归本模块；本模块只消费已建立的窗口身份参数。
 - 每个窗口类型只允许加载唯一对应的根组件；不得静态导入所有窗口根扩大任一窗口的启动依赖。
+- 共享窗口壳只允许装配 provider、设置生命周期与主题 effect，主窗口内容必须由主窗口根注入。
 - 新增控件必须在启动注册表中显式登记；非 provider 控件按首次渲染异步解析。
 - 主题令牌计算归 settings store，主题 DOM 写入归唯一窗口壳挂载的主题 effect；启动与挂载链路本身不写主题。
 - 启动失败只允许写入 `#app` 的错误呈现容器，并尽力显示已创建窗口，不得静默白屏。

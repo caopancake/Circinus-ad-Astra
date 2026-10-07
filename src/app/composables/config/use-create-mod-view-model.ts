@@ -65,6 +65,7 @@ export function useCreateModViewModel() {
   async function settleCreatedModOpening(created: Awaited<ReturnType<typeof createModProject>>) {
     try {
       const opened = await openCreatedModProject(created);
+      if (!opened) return;
       feedback.success(`Mod 已创建并打开：${opened.modName}`);
       for (const warning of opened.warnings) feedback.warning(warning);
     } catch (error) {

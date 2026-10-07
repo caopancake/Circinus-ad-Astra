@@ -60,6 +60,16 @@ describe('useEditTargetDraftSession dirty binding', () => {
     expect(session.dirty.value).toBe(false);
     expect(session.draftValue.value).toEqual({ a: 1 });
   });
+
+  it('dispatches two-way model assignments through the draft state machine', () => {
+    const session = createSession();
+    session.loadBaseForTarget(target, { a: 1 });
+    session.draftValue.value = { a: 2 };
+    expect(session.dirty.value).toBe(true);
+    session.applyExternalForTarget(target, { a: 3 });
+    expect(session.draftValue.value).toEqual({ a: 2 });
+    expect(session.pendingExternalValue.value).toEqual({ a: 3 });
+  });
 });
 
 describe('useEditTargetDraftSession save binding', () => {
@@ -98,6 +108,37 @@ describe('useEditTargetDraftSession save binding', () => {
     expect(session.pendingExternalValue.value).toEqual({ a: 2 });
     expect(session.hasPendingExternalValue.value).toBe(true);
     expect(session.saving.value).toBe(false);
+    session.draftValue.value = { a: 1 };
+    expect(session.dirty.value).toBe(true);
+    session.resetDraft();
+    expect(session.draftValue.value).toEqual({ a: 2 });
+    expect(session.dirty.value).toBe(false);
+  });
+
+  it('preserves a return to the old baseline while a save is pending', async () => {
+    let resolveSave!: (snapshot: EditTargetSnapshot<SampleValue>) => void;
+    const session = createSession({ save: () => new Promise((resolve) => (resolveSave = resolve)) });
+    session.loadBaseForTarget(target, { a: 1 });
+    session.draftValue.value = { a: 2 };
+    const pending = session.saveDraft();
+    session.draftValue.value = { a: 1 };
+    resolveSave({ value: { a: 2 } });
+    await pending;
+    expect(session.draftValue.value).toEqual({ a: 1 });
+    expect(session.dirty.value).toBe(true);
+    session.loadPendingExternal();
+    expect(session.draftValue.value).toEqual({ a: 2 });
+    expect(session.dirty.value).toBe(false);
+  });
+
+  it('keeps rejected saves dirty and skips the saved callback', async () => {
+    const onSaved = vi.fn();
+    const session = createSession({ save: async () => {}, onSaved });
+    session.loadBaseForTarget(target, { a: 1 });
+    session.draftValue.value = { a: 2 };
+    expect(await session.saveDraft()).toBeNull();
+    expect(session.dirty.value).toBe(true);
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });
 

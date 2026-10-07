@@ -7,19 +7,94 @@ use crate::{
     models::{FileChangeKind, FileChangeRecord, FileSnapshot},
 };
 use base64::{Engine as _, engine::general_purpose};
-use std::{fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::Path,
+    sync::{Arc, Condvar, LazyLock, Mutex, Weak},
+};
 use walkdir::WalkDir;
+
+static ROOT_WRITE_COORDINATORS: LazyLock<Mutex<BTreeMap<String, Weak<RootWriteCoordinator>>>> =
+    LazyLock::new(|| Mutex::new(BTreeMap::new()));
+
+struct RootWriteCoordinator {
+    writing: Mutex<bool>,
+    released: Condvar,
+}
+
+pub struct RootWriteLock {
+    coordinator: Arc<RootWriteCoordinator>,
+}
+
+impl Drop for RootWriteLock {
+    fn drop(&mut self) {
+        if let Ok(mut writing) = self.coordinator.writing.lock() {
+            *writing = false;
+            self.coordinator.released.notify_one();
+        }
+    }
+}
+
+pub fn acquire_root_write_lock(root: &Path) -> AppResult<RootWriteLock> {
+    let canonical_root = FsRootBoundary::new(root, "write root")?
+        .root()
+        .to_string_lossy()
+        .to_string();
+    #[cfg(windows)]
+    let canonical_root = canonical_root.to_lowercase();
+    let coordinator = {
+        let mut coordinators = ROOT_WRITE_COORDINATORS.lock().map_err(|_| {
+            AppError::message("write.lock_poisoned", "write coordinator lock poisoned")
+        })?;
+        coordinators.retain(|_, coordinator| coordinator.strong_count() > 0);
+        if let Some(coordinator) = coordinators.get(&canonical_root).and_then(Weak::upgrade) {
+            coordinator
+        } else {
+            let coordinator = Arc::new(RootWriteCoordinator {
+                writing: Mutex::new(false),
+                released: Condvar::new(),
+            });
+            coordinators.insert(canonical_root, Arc::downgrade(&coordinator));
+            coordinator
+        }
+    };
+    let mut writing = coordinator
+        .writing
+        .lock()
+        .map_err(|_| AppError::message("write.lock_poisoned", "write coordinator lock poisoned"))?;
+    while *writing {
+        writing = coordinator.released.wait(writing).map_err(|_| {
+            AppError::message("write.lock_poisoned", "write coordinator lock poisoned")
+        })?;
+    }
+    *writing = true;
+    drop(writing);
+    Ok(RootWriteLock { coordinator })
+}
 
 pub struct FileChangeSetBuilder {
     boundary: FsRootBoundary,
     changes: Vec<FileChangeRecord>,
+    _write_lock: RootWriteLock,
 }
 
 impl FileChangeSetBuilder {
     pub fn new(root: &Path) -> AppResult<Self> {
+        let boundary = FsRootBoundary::new(root, "changeset root")?;
+        let write_lock = acquire_root_write_lock(boundary.root())?;
+        Ok(Self {
+            boundary,
+            changes: Vec::new(),
+            _write_lock: write_lock,
+        })
+    }
+
+    pub fn new_with_lock(root: &Path, write_lock: RootWriteLock) -> AppResult<Self> {
         Ok(Self {
             boundary: FsRootBoundary::new(root, "changeset root")?,
             changes: Vec::new(),
+            _write_lock: write_lock,
         })
     }
 
@@ -191,12 +266,16 @@ pub fn build_directory_replace_change(
 }
 
 pub fn apply_changes(changes: &[FileChangeRecord], direction: ChangeDirection) -> AppResult<()> {
-    let mut rollback = Vec::new();
-    for change in changes {
-        let path = Path::new(&change.path);
-        rollback.push(build_current_state(path)?);
+    let rollback = changes
+        .iter()
+        .map(|change| build_current_state(Path::new(&change.path)))
+        .collect::<AppResult<Vec<_>>>()?;
+    for (index, change) in changes.iter().enumerate() {
         if let Err(error) = apply_one(change, direction) {
-            return Err(changeset_apply_error(error, rollback_changes(&rollback)));
+            return Err(changeset_apply_error(
+                error,
+                rollback_changes(&rollback[..=index]),
+            ));
         }
     }
     Ok(())
@@ -409,7 +488,53 @@ fn restore_snapshot_file(path: &Path, file: &FileSnapshot) -> AppResult<()> {
 mod tests {
     use super::*;
     use crate::testutil::temp_dir;
-    use std::fs;
+    use std::{fs, sync::mpsc, thread, time::Duration};
+
+    #[test]
+    fn root_write_lock_serializes_same_canonical_root() {
+        let root = temp_dir("root_write_lock_serializes");
+        let held = acquire_root_write_lock(&root).unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (released_tx, released_rx) = mpsc::channel();
+        let thread_root = root.clone();
+        let worker = thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            let _lock = acquire_root_write_lock(&thread_root).unwrap();
+            released_tx.send(()).unwrap();
+        });
+        started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert!(released_rx.recv_timeout(Duration::from_millis(50)).is_err());
+        drop(held);
+        released_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        worker.join().unwrap();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn later_snapshot_failure_keeps_all_earlier_targets_unchanged() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let root = temp_dir("snapshot_preflight");
+        let first = root.join("first.txt");
+        let second = root.join("second.txt");
+        fs::write(&first, "first before").unwrap();
+        fs::write(&second, "second before").unwrap();
+        let changes = [
+            build_text_change(&first, Some("first after".to_string())).unwrap(),
+            build_text_change(&second, Some("second after".to_string())).unwrap(),
+        ];
+        let locked = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&second)
+            .unwrap();
+        let result = apply_changes(&changes, ChangeDirection::Redo);
+        let first_after = fs::read_to_string(&first).unwrap();
+        drop(locked);
+        fs::remove_dir_all(root).unwrap();
+        assert!(result.is_err());
+        assert_eq!(first_after, "first before");
+    }
 
     #[test]
     fn rollback_changes_reports_restore_errors() {

@@ -86,8 +86,10 @@ function applyManifestSummaries(state: ModTableState, manifest: ProjectManifest)
   for (const key of TABLE_KEYS) {
     const summary = manifest.tableSummaries[key];
     state.headers[key] = summary.header;
-    state.totalRows[key] = summary.totalRows ?? 0;
-    state.filteredRows[key] = summary.totalRows ?? 0;
+    if (summary.totalRows !== null) {
+      state.totalRows[key] = summary.totalRows;
+      state.filteredRows[key] = summary.totalRows;
+    }
   }
 }
 

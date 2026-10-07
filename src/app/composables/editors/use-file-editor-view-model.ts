@@ -4,9 +4,10 @@ import { loadEditableFileData, writeEditableFileText } from '@/services/files.se
 import {
   emitFileEditorSaved,
   listenFileEditorFocusLine,
+  listenFileEditorProjectInvalidated,
   listenFileEditorTextApplied,
 } from '@/orchestrators/file-editor-window.orchestrator';
-import { normalizeFsPath } from '@/shared/lib/paths';
+import { isAbsoluteFsPath, joinRootRelativePath, normalizeFsPath, pathBelongsToRoot } from '@/shared/lib/paths';
 import type { UnlistenFn } from '@/windows/tauri.events';
 import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
 import { useTextHistory } from '@/app/composables/use-text-history';
@@ -64,7 +65,9 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
   const textHistory = useTextHistory();
   let unlistenFocusLine: UnlistenFn | null = null;
   let unlistenTextApplied: UnlistenFn | null = null;
+  let unlistenProjectInvalidated: UnlistenFn | null = null;
   let disposed = false;
+  let externalReadId = 0;
 
   const text = draftSession.draftValue;
   const dirty = draftSession.dirty;
@@ -99,11 +102,39 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
       if (event.sessionId !== params.sessionId) return;
       if (normalizeFsPath(event.modRoot) !== normalizeFsPath(params.modRoot)) return;
       if (normalizeFsPath(event.path) !== normalizeFsPath(params.filePath)) return;
+      externalReadId++;
       applyExternalText(event.text);
     });
     if (disposed) {
       unlistenTextApplied?.();
       unlistenTextApplied = null;
+      return;
+    }
+    const syncFilePath = params.filePath;
+    const syncModRoot = params.modRoot;
+    const syncSessionId = params.sessionId;
+    if (syncFilePath === null || syncModRoot === null || syncSessionId === null) return;
+    unlistenProjectInvalidated = await listenFileEditorProjectInvalidated(async (event) => {
+      if (disposed) return;
+      if (event.manifest.sessionId !== syncSessionId) return;
+      if (normalizeFsPath(event.manifest.modRoot) !== normalizeFsPath(syncModRoot)) return;
+      const affected = event.invalidation.paths.some((path) => {
+        const changedPath = isAbsoluteFsPath(path) ? path : joinRootRelativePath(syncModRoot, path);
+        return pathBelongsToRoot(syncFilePath, changedPath);
+      });
+      if (!affected) return;
+      const requestId = ++externalReadId;
+      try {
+        const loaded = await loadEditableFileData(syncSessionId, syncModRoot, syncFilePath);
+        if (disposed || requestId !== externalReadId) return;
+        applyExternalText(loaded.text);
+      } catch (error) {
+        feedback.error(error, '外部文件更新同步失败');
+      }
+    });
+    if (disposed) {
+      unlistenProjectInvalidated?.();
+      unlistenProjectInvalidated = null;
     }
   }
 
@@ -114,6 +145,8 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
     unlistenFocusLine = null;
     unlistenTextApplied?.();
     unlistenTextApplied = null;
+    unlistenProjectInvalidated?.();
+    unlistenProjectInvalidated = null;
   }
 
   async function loadFile() {

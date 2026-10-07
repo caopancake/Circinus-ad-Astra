@@ -1,6 +1,7 @@
 use super::super::{
     cache::{lock_session, session_handle},
     definitions::entity_definitions::entity_definition,
+    definitions::entity_resources::weapon_resource_refs,
 };
 use crate::{
     errors::AppResult,
@@ -31,6 +32,16 @@ pub fn query_entity_list(session_id: &str, kind: EntityKind) -> AppResult<Vec<En
     let definition = entity_definition(kind)?;
     (definition.prepare)(&mut session)?;
     (definition.list)(&mut session)
+}
+
+pub fn query_weapon_draft_resources(
+    session_id: &str,
+    id: &str,
+    draft: &serde_json::Value,
+) -> AppResult<std::collections::BTreeMap<String, crate::models::ResourceRef>> {
+    let handle = session_handle(session_id)?;
+    let _session = lock_session(&handle)?;
+    Ok(weapon_resource_refs(id, draft))
 }
 
 #[cfg(test)]
@@ -90,6 +101,22 @@ mod tests {
     }
 
     #[test]
+    fn draft_weapon_resources_are_derived_from_submitted_snapshot() {
+        let root = temp_dir("draft_weapon_resources");
+        let mut trace = crate::services::project::PerformanceTrace::new("project.openSession");
+        let manifest = open_project_session_traced(&root, None, &mut trace).unwrap();
+        let draft = serde_json::json!({"id":"weapon", "turretSprite":"graphics/draft.png"});
+        let resources =
+            query_weapon_draft_resources(&manifest.session_id, "weapon", &draft).unwrap();
+        assert_eq!(resources["turretSprite"].rel_path, "graphics/draft.png");
+        assert_eq!(resources["turretSprite"].owner_id, "weapon");
+        assert_eq!(resources["turretSprite"].key, "turretSprite");
+        close_project_session(manifest.session_id).unwrap();
+        assert!(query_weapon_draft_resources("closed", "weapon", &draft).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn mission_entity_query_returns_none_for_unregistered_mission() {
         let root = temp_dir("mission_entity_missing");
         std::fs::create_dir_all(root.join("data/missions/demo")).unwrap();
@@ -142,6 +169,7 @@ mod tests {
                 path: "data/missions/mission_list.csv".to_string(),
                 rows: None,
                 next_row_seq: 0,
+                saved_text: None,
             },
         );
         let session = super::super::super::model::ProjectSession {

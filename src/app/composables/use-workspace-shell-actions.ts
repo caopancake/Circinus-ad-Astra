@@ -57,8 +57,10 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   async function refreshWorkspace() {
     const root = workspace.gameOverview?.starsectorRoot;
     if (!root) return;
+    const generation = workspace.getWorkspaceGeneration();
     try {
       const overview = await scanDirectoryGameOverview(root);
+      if (workspace.getWorkspaceGeneration() !== generation || workspace.gameOverview?.starsectorRoot !== root) return;
       workspace.clearModOpeningFailures();
       workspace.setGameOverview(overview);
       settings.setStarsectorRoot(overview.starsectorRoot);
@@ -244,6 +246,7 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   }
 
   function handleDirectoryOpeningOutcome(outcome: DirectoryOpeningOutcome, path: string | null = null) {
+    if (outcome.type === 'cancelled') return;
     if (outcome.type === 'game-overview') {
       if (workspace.gameOverview?.starsectorRoot) settings.setStarsectorRoot(workspace.gameOverview.starsectorRoot);
       feedback.success(`游戏目录已扫描：${outcome.availableModCount} 个 Mod`);

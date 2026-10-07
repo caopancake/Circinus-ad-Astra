@@ -169,6 +169,7 @@ export interface HullReferencesResult {
   groups: HullReferenceGroup[];
   hullNames: Record<string, string>;
   sprites: Record<string, ResourceRef>;
+  builtInWeaponSlots: Record<string, string[]>;
 }
 
 export interface GameScanWarning {

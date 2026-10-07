@@ -1,27 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { SYSTEM_STRUCTURED_FIELD_KEYS, TYPE_EXCLUSIVE_FIELDS } from './system-fields';
+import { SYSTEM_STRUCTURED_FIELD_KEYS } from './system-fields';
+import { SYSTEM_TYPES } from './game-spec-enums';
 
 describe('system field registries', () => {
-  it('keeps every type-exclusive field inside the structured key set', () => {
-    for (const [typeName, fields] of Object.entries(TYPE_EXCLUSIVE_FIELDS)) {
-      for (const field of fields) {
-        expect(SYSTEM_STRUCTURED_FIELD_KEYS.has(field), `${typeName}:${field}`).toBe(true);
-      }
-    }
-  });
-
-  it('declares exclusive fields for every special system type', () => {
-    expect(Object.keys(TYPE_EXCLUSIVE_FIELDS)).toEqual([
+  it('offers every type accepted by the game system loader', () => {
+    expect(SYSTEM_TYPES).toEqual([
+      'WEAPON',
       'ENGINE_MOD',
       'SHIELD_MOD',
+      'STAT_MOD',
+      'FAST_RELOAD',
+      'AMMO_RELOAD',
+      'TELEPORTER',
       'PHASE_CLOAK',
       'DISPLACER',
-      'WEAPON',
       'DRONE_LAUNCHER',
+      'EMP',
     ]);
-    for (const fields of Object.values(TYPE_EXCLUSIVE_FIELDS)) {
-      expect(fields.length).toBeGreaterThan(0);
-    }
   });
 
   it('keeps the core structured keys every system spec shares', () => {

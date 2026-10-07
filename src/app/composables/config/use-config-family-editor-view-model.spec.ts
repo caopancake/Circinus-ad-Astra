@@ -13,14 +13,19 @@ const mocks = vi.hoisted(() => ({
     confirmWarning: vi.fn(),
     choose: vi.fn(async () => null),
   },
+  slotOptions: vi.fn(async (_session: string, hull: string) => [
+    { origin: 'mod', options: [{ value: `${hull}_slot`, label: `${hull}_slot`, origin: 'mod', description: null, resourceRef: null }] },
+  ]),
 }));
+
+vi.mock('@/services/config-resource.service', () => ({ queryBuiltInWeaponSlotOptions: mocks.slotOptions }));
 
 vi.mock('@/app/composables/use-app-feedback', () => ({
   useAppFeedback: () => mocks.feedback,
 }));
 
 import { useConfigFamilyEditorViewModel } from './use-config-family-editor-view-model';
-import { variantFamily } from '@/domain/config/config-entity-families';
+import { variantFamily, skinFamily } from '@/domain/config/config-entity-families';
 import { initializeSettingsStore } from '@/stores/settings.store';
 import type { RowData } from '@/shared/types';
 import type { ConfigFamilyFile } from '@/domain/config/config-entity-families';
@@ -47,8 +52,12 @@ interface EditorParams {
   onSaved: ReturnType<typeof vi.fn>;
 }
 
-function mountEditor() {
-  const files = ref<ConfigFamilyFile[]>([fileFixture('v1'), fileFixture('v2')]);
+function mountEditor(family = variantFamily) {
+  const files = ref<ConfigFamilyFile[]>(
+    family.id === 'skin'
+      ? [{ data: { skinHullId: 'v1', baseHullId: 'h1' }, relPath: 'data/hulls/skins/v1.skin' }]
+      : [fileFixture('v1'), fileFixture('v2')],
+  );
   const selectedId = ref('v1');
   const saveFile = vi.fn(
     async (_sessionId: string, _modRoot: string, current: ConfigFamilyFile, data: RowData): Promise<ConfigFamilyFile | null> => ({
@@ -62,7 +71,7 @@ function mountEditor() {
     {
       setup() {
         vm = useConfigFamilyEditorViewModel({
-          family: variantFamily,
+          family,
           dataRevision: ref(0),
           modRoot: ref('M:/mod'),
           onSaved,
@@ -84,6 +93,19 @@ describe('useConfigFamilyEditorViewModel', () => {
     setActivePinia(createPinia());
     initializeSettingsStore({ ...SETTINGS });
     vi.clearAllMocks();
+  });
+
+  it('queries removal slot ids for the current draft base hull', async () => {
+    const { vm } = mountEditor(skinFamily);
+    await vi.waitFor(() => expect(vm.draftData.value.baseHullId).toBe('h1'));
+    expect(vm.schemaRuntimeContext.value!.sourceContextKey).toBe('h1');
+    const first = await vm.schemaRuntimeContext.value!.querySourceOptions!('hull:builtInWeaponSlots');
+    expect(first[0]!.options[0]!.value).toBe('h1_slot');
+    vm.draftData.value = { ...vm.draftData.value, baseHullId: 'h2' };
+    const next = await vm.schemaRuntimeContext.value!.querySourceOptions!('hull:builtInWeaponSlots');
+    expect(vm.schemaRuntimeContext.value!.sourceContextKey).toBe('h2');
+    expect(next[0]!.options[0]!.value).toBe('h2_slot');
+    expect(mocks.slotOptions).toHaveBeenLastCalledWith('sess-1', 'h2');
   });
 
   it('loads the selected file data into the draft', async () => {

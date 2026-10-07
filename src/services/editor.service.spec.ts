@@ -4,6 +4,7 @@ import type { EntityData, ResourceRef, RowData, WriteResult } from '@/shared/typ
 const mocks = vi.hoisted(() => ({
   querySessionEntity: vi.fn(),
   querySessionEntityList: vi.fn(async () => [] as { id: string }[]),
+  querySessionWeaponDraftResources: vi.fn(async () => ({})),
   queryResourceDataUrls: vi.fn(async () => [] as (string | null)[]),
   writeEditorSpec: vi.fn(),
   loadImportedEditorSpecFile: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/services/query.service', () => ({
   querySessionEntity: mocks.querySessionEntity,
   querySessionEntityList: mocks.querySessionEntityList,
+  querySessionWeaponDraftResources: mocks.querySessionWeaponDraftResources,
 }));
 
 vi.mock('@/services/resource-cache.service', () => ({
@@ -91,6 +93,50 @@ describe('queryEditorEntityBundle', () => {
       { label: 'proj1', value: 'proj1' },
       { label: 'proj2', value: 'proj2' },
     ]);
+  });
+
+  it('loads preview dependencies from the current draft weapon reference', async () => {
+    mocks.querySessionEntity.mockImplementation(async (_sessionId: string, kind: string, id: string) => {
+      if (kind === 'weapon') {
+        return entity({ id, spec: { id, projectileSpecId: 'proj_a', turretSprite: 'graphics/a.png' }, csvRow: { id } }, {
+          turretSprite: { source: 'mod', relPath: 'graphics/saved.png', ownerKind: 'weapon', ownerId: id, key: 'turretSprite' },
+        } as unknown as Record<string, ResourceRef>);
+      }
+      if (kind === 'projectile' && id === 'proj_b') return entity({ id, specClass: 'projectile', length: 42 }, {});
+      if (kind === 'projectile' && id === 'proj_a') return entity({ id, specClass: 'projectile', length: 10 }, {});
+      return null;
+    });
+    mocks.queryResourceDataUrls.mockResolvedValue(['data:image/png;base64,DRAFT']);
+    mocks.querySessionWeaponDraftResources.mockResolvedValue({
+      turretSprite: { source: 'mod', relPath: 'graphics/draft.png', ownerKind: 'weapon', ownerId: 'railgun', key: 'turretSprite' },
+    });
+
+    const bundle = await queryEditorEntityBundle('s1', 'weapon-preview', 'railgun', {
+      id: 'railgun',
+      projectileSpecId: 'proj_b',
+      turretSprite: 'graphics/draft.png',
+    });
+
+    expect(bundle.kind).toBe('weapon-preview');
+    if (bundle.kind !== 'weapon-preview') return;
+    expect(bundle.weapon.projectileSpecId).toBe('proj_b');
+    expect(bundle.projectileSpecs).toEqual({ proj_b: { id: 'proj_b', specClass: 'projectile', length: 42 } });
+    expect(bundle.weaponSpriteData).toEqual({ turretSprite: 'data:image/png;base64,DRAFT' });
+    expect(mocks.querySessionWeaponDraftResources).toHaveBeenCalledWith('s1', 'railgun', {
+      id: 'railgun',
+      projectileSpecId: 'proj_b',
+      turretSprite: 'graphics/draft.png',
+    });
+    expect(mocks.queryResourceDataUrls).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a missing draft projectile as a preview query error', async () => {
+    mocks.querySessionEntity.mockImplementation(async (_sessionId: string, kind: string, id: string) =>
+      kind === 'weapon' ? entity({ id, spec: { id, projectileSpecId: 'saved' }, csvRow: { id } }) : null,
+    );
+    await expect(
+      queryEditorEntityBundle('s1', 'weapon-preview', 'railgun', { id: 'railgun', projectileSpecId: 'missing' }),
+    ).rejects.toThrow('找不到预览弹体 missing');
   });
 
   it('rejects weapon queries without entity data', async () => {

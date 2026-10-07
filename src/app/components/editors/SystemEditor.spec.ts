@@ -60,13 +60,15 @@ describe('SystemEditor type switching', () => {
     installCanvas2DStub();
   });
 
-  it('strips the previous type exclusive fields when the type changes', async () => {
+  it('preserves shared effects and unknown fields when the system type changes', async () => {
     const editor = mountEditor({
       id: 'sys1',
       type: 'ENGINE_MOD',
       engineGlowColor: [255, 0, 0, 255],
       engineGlowLengthMult: 2,
       alwaysAccelerate: true,
+      shieldThicknessMult: 2,
+      shipAlpha: 0.5,
       displayName: 'Engine',
     });
     // The select bound to the system type lives in the basic section.
@@ -85,14 +87,30 @@ describe('SystemEditor type switching', () => {
     await nextTick();
     const emitted = editor.emitted('draft-changed')?.at(-1)?.[0] as Record<string, unknown>;
     expect(emitted.type).toBe('SHIELD_MOD');
-    expect(emitted.engineGlowColor).toBeUndefined();
-    expect(emitted.engineGlowLengthMult).toBeUndefined();
-    expect(emitted.alwaysAccelerate).toBeUndefined();
-    // Shared fields survive the type switch.
+    expect(emitted.engineGlowColor).toEqual([255, 0, 0, 255]);
+    expect(emitted.engineGlowLengthMult).toBe(2);
+    expect(emitted.alwaysAccelerate).toBe(true);
+    expect(emitted.shieldThicknessMult).toBe(2);
+    expect(emitted.shipAlpha).toBe(0.5);
     expect(emitted.displayName).toBe('Engine');
   });
 
-  it('keeps type exclusive fields when the type does not change', async () => {
+  it('renders shared engine, shield and alpha controls for stat systems', () => {
+    const editor = mountEditor({ id: 'sys1', type: 'STAT_MOD' });
+    expect(editor.text()).toContain('引擎视觉');
+    expect(editor.text()).toContain('护盾视觉');
+    expect(editor.text()).toContain('舰船透明度');
+    const options = editor
+      .findAll('select')[0]!
+      .findAll('option')
+      .map((option) => option.text());
+    expect(options).toContain('FAST_RELOAD');
+    expect(options).toContain('AMMO_RELOAD');
+    expect(options).toContain('TELEPORTER');
+    expect(options).toContain('EMP');
+  });
+
+  it('keeps fields when the type does not change', async () => {
     const editor = mountEditor({ id: 'sys1', type: 'PHASE_CLOAK', shipAlpha: 0.5 });
     expect(editor.emitted('draft-changed')).toBeUndefined();
   });

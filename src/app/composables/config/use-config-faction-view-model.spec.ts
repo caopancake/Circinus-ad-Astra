@@ -102,4 +102,11 @@ describe('useConfigFactionViewModel saveFaction', () => {
       feedbackStub,
     );
   });
+
+  it('returns no saved id after rejecting an invalid faction id', async () => {
+    const vm = mountViewModel();
+    expect(await vm.saveFaction('sess-1', 'M:/mod', 'existing', { file: { id: 'bad id' } }, schema)).toBeNull();
+    expect(mocks.saveIndexedEntityAction).not.toHaveBeenCalled();
+    expect(feedbackStub.warning).toHaveBeenCalledWith(expect.stringContaining('势力 ID'), 'config.id_invalid');
+  });
 });

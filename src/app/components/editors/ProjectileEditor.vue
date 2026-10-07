@@ -25,7 +25,7 @@
               <div class="form-grid">
                 <label>spawnType</label
                 ><n-select
-                  :options="toOptions(['BALLISTIC', 'BALLISTIC_AS_BEAM', 'ENERGY'])"
+                  :options="toOptions([...PROJECTILE_SPAWN_TYPES])"
                   :value="localProjectile.spawnType"
                   @update:value="setField('spawnType', $event)"
                 />
@@ -76,7 +76,7 @@
                 <label>missileType</label
                 ><n-select
                   :value="localProjectile.missileType"
-                  :options="toOptions(['MISSILE', 'ROCKET', 'MIRV', 'PHASE'])"
+                  :options="toOptions([...MISSILE_TYPES])"
                   @update:value="setField('missileType', $event)"
                 />
                 <label>sprite</label><n-input :value="localProjectile.sprite" @update:value="setField('sprite', $event)" />
@@ -147,6 +147,8 @@ import type { RowData } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
 import { entryKey } from '@/shared/lib/entry-keys';
 import { normalizeProjectileSpec } from '@/domain/editors/lib/normalize';
+import { MISSILE_TYPES, PROJECTILE_SPAWN_TYPES } from '@/domain/editors/lib/game-spec-enums';
+import { createProjectileEngineSlot } from '@/domain/editors/lib/projectile-fields';
 import { useObjectField } from '@/app/composables/editors/use-object-field';
 import { useResourceReference } from '@/app/composables/editors/use-resource-reference';
 import { editorCollapseTheme, toOptions } from '@/domain/editors/lib/editor-constants';
@@ -219,7 +221,7 @@ function setSlotLoc(i: number, axis: number, value: number | null) {
   commitDraft();
 }
 function addEngineSlot() {
-  engineSlots.value.push({ loc: [0, 0], angle: 180, width: 8, length: 20, style: 'CUSTOM' });
+  engineSlots.value.push(createProjectileEngineSlot(engineSlots.value));
   commitDraft();
 }
 function removeEngineSlot(i: number) {

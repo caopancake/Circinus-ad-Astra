@@ -23,6 +23,9 @@ function createDefaultModNavigationContext(): ModNavigationContext {
 
 export const useWorkspaceStore = defineStore('workspace', () => {
   const mods = ref<Map<string, ModEntry>>(new Map());
+  const modGenerations = new Map<string, number>();
+  let nextModGeneration = 0;
+  let workspaceGeneration = 0;
   const activeModRoot = ref<string | null>(null);
   const currentView = ref<WorkspaceView>('overview');
   const configView = ref<ConfigView>('mod-overview');
@@ -42,8 +45,24 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const hasWorkspaceContext = computed(() => hasGameWorkspace.value || hasLoadedMods.value);
 
   function registerMod(entry: ModEntry) {
+    const generation = ++nextModGeneration;
+    modGenerations.set(entry.modRoot, generation);
     mods.value.set(entry.modRoot, entry);
     modNavigationContexts.value.set(entry.modRoot, createDefaultModNavigationContext());
+    return generation;
+  }
+
+  function getModGeneration(modRoot: string): number | null {
+    return modGenerations.get(modRoot) ?? null;
+  }
+
+  function getWorkspaceGeneration(): number {
+    return workspaceGeneration;
+  }
+
+  function revokeWorkspaceGeneration(): number {
+    workspaceGeneration += 1;
+    return workspaceGeneration;
   }
 
   function setModOpeningFailure(failure: ModOpeningFailure) {
@@ -73,6 +92,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 
   function removeLoadedModEntry(modRoot: string) {
+    modGenerations.delete(modRoot);
     mods.value.delete(modRoot);
     modNavigationContexts.value.delete(modRoot);
     cleanupColumnWidthsForMod(modRoot);
@@ -213,9 +233,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     clearModOpeningFailure,
     clearModOpeningFailures,
     getColumnWidths,
+    getModGeneration,
+    getWorkspaceGeneration,
     isModImported,
     isModView,
     registerMod,
+    revokeWorkspaceGeneration,
     removeLoadedModEntry,
     setColumnWidths,
     setGameOverview,

@@ -111,15 +111,15 @@ export function useConfigMissionViewModel() {
     schema: FileSchema,
   ): Promise<string | null> {
     const activeModRoot = modRoot.value;
-    if (!activeModRoot || activeModRoot !== saveModRoot || sessionId.value !== saveSessionId) return previousId;
+    if (!activeModRoot || activeModRoot !== saveModRoot || sessionId.value !== saveSessionId) return null;
     const draft = configMissionSaveDraft(localMission, schema);
     if (!draft.nextId) {
       feedback.warning('mission 不能为空');
-      return previousId;
+      return null;
     }
     if (!isConfigEntityId(draft.nextId)) {
       feedback.warning(configEntityIdInvalidMessage('战役 ID', draft.nextId), 'config.id_invalid');
-      return previousId;
+      return null;
     }
     if (!(await saveMissionDraft(saveSessionId, saveModRoot, previousId, draft))) return null;
     return draft.nextId;

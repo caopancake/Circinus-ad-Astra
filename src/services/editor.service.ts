@@ -1,4 +1,4 @@
-import { querySessionEntity, querySessionEntityList } from '@/services/query.service';
+import { querySessionEntity, querySessionEntityList, querySessionWeaponDraftResources } from '@/services/query.service';
 import { AppError, withCause } from '@/shared/lib/errors';
 import { queryResourceDataUrls } from '@/services/resource-cache.service';
 import { writeEditorSpec } from '@/services/write.service';
@@ -59,8 +59,9 @@ export async function queryEditorEntityBundle(
   sessionId: ProjectSessionId,
   kind: EditorWindowKind,
   id: string,
+  draftSnapshot?: RowData,
 ): Promise<EditorEntityBundle> {
-  return BUNDLE_LOADERS[kind](sessionId, id);
+  return BUNDLE_LOADERS[kind](sessionId, id, draftSnapshot);
 }
 
 export async function refreshBundleResources(sessionId: ProjectSessionId, bundle: EditorEntityBundle): Promise<EditorEntityBundle> {
@@ -83,6 +84,7 @@ export async function refreshBundleProjectiles(
 ): Promise<EditorEntityBundle> {
   if (bundle.kind !== 'weapon' && bundle.kind !== 'weapon-preview') return bundle;
   const nextProjectileSpecs = options.projectileSpecs ? await queryProjectileSpecs(sessionId, bundle.projectileSpecs) : null;
+  if (bundle.kind === 'weapon-preview' && nextProjectileSpecs) requirePreviewProjectile(bundle.weapon, nextProjectileSpecs);
   if (bundle.kind === 'weapon') {
     return {
       ...bundle,
@@ -96,7 +98,10 @@ export async function refreshBundleProjectiles(
   };
 }
 
-const BUNDLE_LOADERS: Record<EditorWindowKind, (sessionId: ProjectSessionId, id: string) => Promise<EditorEntityBundle>> = {
+const BUNDLE_LOADERS: Record<
+  EditorWindowKind,
+  (sessionId: ProjectSessionId, id: string, draftSnapshot?: RowData) => Promise<EditorEntityBundle>
+> = {
   ship: queryShipEditorBundle,
   weapon: (sessionId, id) => queryWeaponEditorBundle(sessionId, id),
   projectile: queryProjectileEditorBundle,
@@ -125,22 +130,37 @@ async function queryWeaponEditorBundle(sessionId: ProjectSessionId, id: string):
   };
 }
 
-async function queryWeaponPreviewBundle(sessionId: ProjectSessionId, id: string): Promise<WeaponPreviewEntityBundle> {
+async function queryWeaponPreviewBundle(
+  sessionId: ProjectSessionId,
+  id: string,
+  draftSnapshot?: RowData,
+): Promise<WeaponPreviewEntityBundle> {
+  const bundle = await queryWeaponLikeBundle(sessionId, id, draftSnapshot);
+  requirePreviewProjectile(bundle.weapon, bundle.projectileSpecs);
   return {
     kind: 'weapon-preview',
-    ...(await queryWeaponLikeBundle(sessionId, id)),
+    ...bundle,
   };
+}
+
+function requirePreviewProjectile(weapon: RowData, projectiles: Record<string, RowData>): void {
+  if (weapon.specClass === 'beam') return;
+  const id = typeof weapon.projectileSpecId === 'string' ? weapon.projectileSpecId : '';
+  if (!id || !projectiles[id]) throw new AppError(`找不到预览弹体 ${id}。`, { action: 'query-editor-entity' });
 }
 
 async function queryWeaponLikeBundle(
   sessionId: ProjectSessionId,
   id: string,
+  weaponOverride?: RowData,
 ): Promise<Omit<WeaponEditorEntityBundle, 'kind' | 'projectileOptions'>> {
   const weapon = requireEditorEntity(await querySessionEntity(sessionId, 'weapon', id), 'weapon', id);
   const weaponEntity = requireRowData(weapon.data, `武器 ${id} 数据无效`);
-  const weaponSpec = requireRowData(weaponEntity.spec, `武器 ${id} spec 数据无效`);
+  const savedWeaponSpec = requireRowData(weaponEntity.spec, `武器 ${id} spec 数据无效`);
+  const weaponSpec = weaponOverride ?? savedWeaponSpec;
   const weaponCsvRow = requireRowData(weaponEntity.csvRow, `武器 ${id} CSV 数据无效`);
   const isNew = Object.keys(weaponSpec).length === 0;
+  const resourceRefs = weaponOverride ? await querySessionWeaponDraftResources(sessionId, id, weaponOverride) : weapon.resourceRefs;
   const projectileId = typeof weaponSpec.projectileSpecId === 'string' ? weaponSpec.projectileSpecId : '';
   const weaponProjectile = projectileId ? await querySessionEntity(sessionId, 'projectile', projectileId) : null;
   return {
@@ -148,8 +168,8 @@ async function queryWeaponLikeBundle(
     weaponCsvRow,
     isNew,
     projectileSpecs: weaponProjectile ? { [projectileId]: requireRowData(weaponProjectile.data, `弹体 ${projectileId} 数据无效`) } : {},
-    resourceRefs: Object.values(weapon.resourceRefs),
-    weaponSpriteData: await queryWeaponSprites(sessionId, weapon.resourceRefs),
+    resourceRefs: Object.values(resourceRefs),
+    weaponSpriteData: await queryWeaponSprites(sessionId, resourceRefs),
   };
 }
 

@@ -20,6 +20,7 @@ interface ManagedWindowCall {
   title: string;
   urlParams: Record<string, string | undefined>;
   size: { height: number; minHeight: number; minWidth: number; width: number };
+  focusEvent?: { name: string; data: unknown };
 }
 
 function firstWindowCall(): ManagedWindowCall {
@@ -50,12 +51,12 @@ describe('openEditorWindow', () => {
     vi.clearAllMocks();
   });
 
-  it('opens a singleton editor window keyed by kind, mod root and id', async () => {
+  it('opens a singleton editor window keyed by session, kind, mod root and id', async () => {
     await openEditorWindow(baseRequest);
     expect(mocks.openManagedWindow).toHaveBeenCalledTimes(1);
     const request = firstWindowCall();
     expect(request.labelPrefix).toBe('editor-ship');
-    expect(request.singletonKey).toBe(JSON.stringify(['ship', 'C:/mods/alpha', 'XY']));
+    expect(request.singletonKey).toBe(JSON.stringify(['s1', 'ship', 'C:/mods/alpha', 'XY']));
     expect(request.title).toBe('舰船编辑器 - XY');
     expect(request.size).toMatchObject({ width: 1160, height: 760 });
     expect(request.urlParams).toMatchObject({
@@ -70,10 +71,27 @@ describe('openEditorWindow', () => {
     expect(request.urlParams.draftSnapshot).toBeUndefined();
   });
 
+  it('opens a distinct window after the same Mod target gets a new session', async () => {
+    await openEditorWindow(baseRequest);
+    await openEditorWindow({ ...baseRequest, sessionId: 's2' });
+    const calls = mocks.openManagedWindow.mock.calls as unknown as Array<[ManagedWindowCall]>;
+    expect(calls[0]![0].singletonKey).not.toBe(calls[1]![0].singletonKey);
+    expect(calls[1]![0].urlParams.sessionId).toBe('s2');
+  });
+
   it('passes the draft snapshot through the URL when small enough', async () => {
     await openEditorWindow({ ...baseRequest, kind: 'weapon', draftSnapshot: { id: 'railgun' } });
     const request = firstWindowCall();
     expect(JSON.parse(request.urlParams.draftSnapshot ?? 'null')).toEqual({ id: 'railgun' });
+  });
+
+  it('updates an existing preview window with the latest draft snapshot', async () => {
+    const draft = { id: 'railgun', projectileSpecId: 'proj_b' };
+    await openEditorWindow({ ...baseRequest, kind: 'weapon-preview', draftSnapshot: draft });
+    expect(firstWindowCall().focusEvent).toEqual({
+      name: 'editor-preview-draft-updated',
+      data: { sessionId: 's1', modRoot: 'C:/mods/alpha', id: 'XY', draft },
+    });
   });
 
   it('drops an oversized draft snapshot instead of failing to open', async () => {

@@ -89,7 +89,7 @@
               "key": "mode",
               "type": "enum",
               "label": "模式",
-              "options": ["LINKED", "ALTERNATING", "LINKED_GROUP", "ALTERNATING_GROUP"]
+              "options": ["LINKED", "ALTERNATING"]
             },
             {
               "key": "weapons",

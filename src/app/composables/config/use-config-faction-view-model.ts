@@ -102,7 +102,7 @@ export function useConfigFactionViewModel() {
     const nextId = draft.nextId;
     if (!isConfigEntityId(nextId)) {
       feedback.warning(configEntityIdInvalidMessage('势力 ID', nextId), 'config.id_invalid');
-      return previousId;
+      return null;
     }
     const idChanged = nextId !== previousId;
     const saved = await saveIndexedEntityAction(

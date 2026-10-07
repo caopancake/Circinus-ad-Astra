@@ -1,6 +1,7 @@
 import { openManagedWindow } from '@/windows/managed.window';
 import type { AppSettings, EditorWindowKind, ProjectSessionId, RowData } from '@/shared/types';
 import { editorWindowDefinition, editorWindowTitle } from '@/domain/editors/editor-definitions';
+import { WINDOW_EVENTS } from '@/windows/window.events';
 
 // Independent cap for draftSnapshot passed through the URL query: drop the param above
 // the limit so the preview window degrades to the saved bundle instead of failing to open.
@@ -19,9 +20,10 @@ export interface EditorWindowRequest {
 
 export async function openEditorWindow(request: EditorWindowRequest): Promise<void> {
   const definition = editorWindowDefinition(request.kind);
+  const serializedDraft = draftSnapshotParam(request.draftSnapshot);
   await openManagedWindow({
     labelPrefix: `editor-${request.kind}`,
-    singletonKey: JSON.stringify([request.kind, request.modRoot, request.id]),
+    singletonKey: JSON.stringify([request.sessionId, request.kind, request.modRoot, request.id]),
     title: request.title ?? editorWindowTitle(request.kind, request.id),
     urlParams: {
       window: 'editor',
@@ -31,9 +33,16 @@ export async function openEditorWindow(request: EditorWindowRequest): Promise<vo
       id: request.id,
       settings: JSON.stringify(request.settings),
       starsectorRoot: request.starsectorRoot,
-      draftSnapshot: draftSnapshotParam(request.draftSnapshot),
+      draftSnapshot: serializedDraft,
     },
     size: definition.size,
+    focusEvent:
+      request.kind === 'weapon-preview' && serializedDraft
+        ? {
+            name: WINDOW_EVENTS.editorPreviewDraftUpdated,
+            data: { sessionId: request.sessionId, modRoot: request.modRoot, id: request.id, draft: request.draftSnapshot },
+          }
+        : undefined,
   });
 }
 

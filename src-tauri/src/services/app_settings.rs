@@ -10,19 +10,30 @@ use crate::{
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::{
+        Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 const SETTINGS_FILE: &str = "settings.json";
+static ALLOW_CORE_EDITING: AtomicBool = AtomicBool::new(false);
+static SETTINGS_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn load_app_settings(app_handle: tauri::AppHandle) -> AppResult<AppSettings> {
     let app_data = app_paths::app_data_dir(app_handle)?;
-    load_settings(&app_data)
+    let settings = load_settings(&app_data)?;
+    ALLOW_CORE_EDITING.store(settings.allow_core_editing, Ordering::Release);
+    Ok(settings)
 }
 
 pub fn save_app_settings(
     app_handle: tauri::AppHandle,
     mut settings: AppSettings,
 ) -> AppResult<AppSettings> {
+    let _guard = SETTINGS_WRITE_LOCK
+        .lock()
+        .map_err(|_| AppError::message("settings.lock_poisoned", "settings write lock poisoned"))?;
     let app_data = app_paths::app_data_dir(app_handle)?;
     fs::create_dir_all(&app_data).map_err(|error| {
         AppError::context(
@@ -32,7 +43,26 @@ pub fn save_app_settings(
     })?;
     prepare_log_directory(&app_data, &mut settings)?;
     save_settings(&app_data, &settings)?;
+    ALLOW_CORE_EDITING.store(settings.allow_core_editing, Ordering::Release);
     Ok(settings)
+}
+
+pub fn ensure_core_editing_allowed(mod_root: &str) -> AppResult<()> {
+    let boundary = FsRootBoundary::new(Path::new(mod_root), "mod root")?;
+    let is_core = boundary.root().ancestors().any(|root| {
+        root.file_name()
+            .is_some_and(|name| name.eq_ignore_ascii_case("starsector-core"))
+            && root
+                .parent()
+                .is_some_and(|parent| parent.join("mods").is_dir())
+    });
+    if is_core && !ALLOW_CORE_EDITING.load(Ordering::Acquire) {
+        return Err(AppError::message(
+            "core.editing_disabled",
+            "原版内容编辑权限已关闭",
+        ));
+    }
+    Ok(())
 }
 
 pub fn load_settings(app_data_dir: &Path) -> AppResult<AppSettings> {

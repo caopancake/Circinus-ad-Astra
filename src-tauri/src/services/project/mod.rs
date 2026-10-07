@@ -14,6 +14,7 @@ pub(crate) use performance::PerformanceTrace;
 pub use query::{
     query_csv_row_preview, query_csv_source_options, query_csv_table_window, query_entity,
     query_entity_list, query_hull_references, query_resource_data_urls,
+    query_weapon_draft_resources,
 };
 pub use resources::{resolve_mod_relative_path, scan_core_graphics};
 pub(crate) use session::open_project_session_traced;

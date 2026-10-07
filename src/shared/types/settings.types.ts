@@ -17,6 +17,7 @@ export interface AppSettings {
   historyLimit: number;
   editMode: EditMode;
   preserveOriginalJson?: boolean;
+  allowCoreEditing?: boolean;
   starsectorRoot: string | null;
   logDirectory: string | null;
   logLevel: LogLevel;

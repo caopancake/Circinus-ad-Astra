@@ -64,11 +64,6 @@ pub fn invalidate_core_cache(starsector_root: &str) -> AppResult<()> {
     cache::invalidate_core_cache(starsector_root)
 }
 
-/// Upper bound on live sessions; the registry is keyed by monotonic id so the
-/// oldest entry is evicted first, bounding orphaned sessions if a frontend
-/// disappears without closing them.
-const MAX_OPEN_SESSIONS: usize = 32;
-
 pub(crate) fn open_project_session_traced(
     mod_root: &Path,
     starsector_root_override: Option<&Path>,
@@ -77,14 +72,6 @@ pub(crate) fn open_project_session_traced(
     let session = build_project_session(mod_root, starsector_root_override, trace)?;
     let manifest = session.manifest.clone();
     let mut guard = cache::lock_registry()?;
-    while guard.len() >= MAX_OPEN_SESSIONS {
-        let Some(oldest) = guard.keys().next().cloned() else {
-            break;
-        };
-        guard.remove(&oldest);
-        cache::clear_sprite_media_for_session(&oldest);
-        crate::diagnostics::record(format!("session evicted: {oldest}"));
-    }
     guard.insert(manifest.session_id.clone(), Arc::new(Mutex::new(session)));
     drop(guard);
     // Open concentrated cold loads of core assets; persist them once here so
@@ -288,6 +275,7 @@ pub(super) fn build_registered_session_csv_tables() -> BTreeMap<String, SessionC
                         path: definition.spec.rel_path.to_string(),
                         rows: None,
                         next_row_seq: 0,
+                        saved_text: None,
                     },
                 )
             })
@@ -299,13 +287,12 @@ pub(super) fn build_registered_session_csv_tables() -> BTreeMap<String, SessionC
             path: MISSION_LIST_REL_PATH.to_string(),
             rows: None,
             next_row_seq: 0,
+            saved_text: None,
         },
     );
     tables
 }
 
-/// Zero-padded so registry key order equals creation order, which is what
-/// makes oldest-first eviction possible.
 pub(super) fn new_session_id() -> String {
     static SESSION_SEQUENCE: AtomicU64 = AtomicU64::new(0);
     let sequence = SESSION_SEQUENCE.fetch_add(1, Ordering::Relaxed);
@@ -409,6 +396,30 @@ mod tests {
     use super::*;
     use crate::io::write_utf8_no_bom;
     use crate::testutil::temp_dir;
+
+    #[test]
+    fn opened_sessions_remain_registered_until_explicit_close() {
+        let root = temp_dir("session_explicit_close");
+        let manifests = (0..40)
+            .map(|_| {
+                let mut trace = PerformanceTrace::new("project.openSession");
+                open_project_session_traced(&root, None, &mut trace).unwrap()
+            })
+            .collect::<Vec<_>>();
+        for manifest in &manifests {
+            ensure_project_session_mod_root(&manifest.session_id, &manifest.mod_root).unwrap();
+        }
+        let handle = session_handle(&manifests[0].session_id).unwrap();
+        for manifest in &manifests {
+            close_project_session(manifest.session_id.clone()).unwrap();
+            assert!(session_handle(&manifest.session_id).is_err());
+        }
+        assert_eq!(
+            lock_session(&handle).unwrap().manifest.session_id,
+            manifests[0].session_id
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn open_project_session_rejects_variant_missing_required_ids() {

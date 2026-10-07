@@ -58,6 +58,14 @@ describe('createRuntimeCache', () => {
     expect(cache.getPending('a')).toBeUndefined();
   });
 
+  it('iterates pending keys independently from settled values', () => {
+    const cache = createRuntimeCache<string, number>({ capacity: 2 });
+    cache.set('settled', 1);
+    cache.setPending('pending', { ready: true });
+    expect([...cache.keys()]).toEqual(['settled']);
+    expect([...cache.pendingKeys()]).toEqual(['pending']);
+  });
+
   it('reset clears entries, versions and pending state', () => {
     const cache = createRuntimeCache<string, number>({ capacity: 4 });
     cache.set('a', 1);

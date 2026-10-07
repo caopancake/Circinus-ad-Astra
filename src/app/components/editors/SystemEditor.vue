@@ -88,7 +88,7 @@
             </div>
           </n-collapse-item>
 
-          <n-collapse-item v-if="showEngineSection" title="引擎视觉" name="engine">
+          <n-collapse-item title="引擎视觉" name="engine">
             <div class="form-grid">
               <label>光柱长度倍率</label
               ><n-input-number
@@ -153,7 +153,7 @@
             </div>
           </n-collapse-item>
 
-          <n-collapse-item v-if="showPhaseSection" title="相位视觉" name="phase">
+          <n-collapse-item title="效果与相位视觉" name="phase">
             <ColorPicker label="效果颜色 1" v-model="effectColor1" />
             <ColorPicker label="效果颜色 2" v-model="effectColor2" />
             <div class="form-grid">
@@ -164,7 +164,7 @@
             </div>
           </n-collapse-item>
 
-          <n-collapse-item v-if="showShieldSection" title="护盾视觉" name="shield">
+          <n-collapse-item title="护盾视觉" name="shield">
             <ColorPicker label="护盾环颜色" v-model="shieldRingColor" />
             <ColorPicker label="护盾内部颜色" v-model="shieldInnerColor" />
             <div class="form-grid">
@@ -260,7 +260,8 @@ import type { RowData } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
 import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import { normalizeSystemSpec } from '@/domain/editors/lib/normalize';
-import { SYSTEM_STRUCTURED_FIELD_KEYS, TYPE_EXCLUSIVE_FIELDS } from '@/domain/editors/lib/system-fields';
+import { SYSTEM_STRUCTURED_FIELD_KEYS } from '@/domain/editors/lib/system-fields';
+import { SYSTEM_TYPES } from '@/domain/editors/lib/game-spec-enums';
 import { useObjectField } from '@/app/composables/editors/use-object-field';
 import { editorCollapseTheme, toOptions } from '@/domain/editors/lib/editor-constants';
 
@@ -279,8 +280,6 @@ const feedback = useAppFeedback();
 const localSystem = ref<RowData>(normalizeSystemSpec(props.system || { id: props.systemId, type: 'STAT_MOD' }));
 const expandedSections = ref(['basic']);
 const { bindObjectField } = useObjectField(localSystem, { onCommit: commitDraft });
-
-const SYSTEM_TYPES = ['STAT_MOD', 'ENGINE_MOD', 'SHIELD_MOD', 'PHASE_CLOAK', 'DISPLACER', 'WEAPON', 'DRONE_LAUNCHER'] as const;
 
 const AI_TYPES = [
   'BURN_DRIVE',
@@ -305,10 +304,7 @@ const AI_TYPES = [
 
 const systemType = computed(() => str(localSystem.value.type, 'STAT_MOD'));
 const aiType = computed(() => str(localSystem.value.aiType, 'NONE'));
-const showEngineSection = computed(() => systemType.value === 'ENGINE_MOD');
-const showShieldSection = computed(() => systemType.value === 'SHIELD_MOD');
-const showPhaseSection = computed(() => systemType.value === 'PHASE_CLOAK');
-const showDisplacerSection = computed(() => systemType.value === 'DISPLACER');
+const showDisplacerSection = computed(() => systemType.value === 'DISPLACER' || systemType.value === 'TELEPORTER');
 const showWeaponSection = computed(() => systemType.value === 'WEAPON');
 const showDroneSection = computed(() => systemType.value === 'DRONE_LAUNCHER');
 
@@ -390,14 +386,6 @@ function onExtraUpdate(nextExtra: RowData) {
 }
 
 function onTypeChange(newType: string) {
-  const oldType = str(localSystem.value.type, 'STAT_MOD');
-  for (const [typeName, fields] of Object.entries(TYPE_EXCLUSIVE_FIELDS)) {
-    if (typeName === oldType && typeName !== newType) {
-      for (const field of fields) {
-        delete localSystem.value[field];
-      }
-    }
-  }
   localSystem.value.type = newType;
   commitDraft();
 }

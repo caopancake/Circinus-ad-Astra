@@ -74,6 +74,36 @@ describe('resource media service', () => {
     await second;
     expect(mocks.query).toHaveBeenCalledTimes(2);
   });
+
+  it('releases queued requests when their session closes before the flush', async () => {
+    const target = resource(801);
+    const queued = ensureResourceMedia('queued-close', [target], 'test');
+    mocks.invalidationListener?.({ invalidation: null, resources: [], sessionId: 'queued-close', scope: 'session' });
+    await queued;
+    await vi.runAllTimersAsync();
+    expect(mocks.query).not.toHaveBeenCalled();
+    expect(resourceMediaDataUrl('queued-close', target)).toBeUndefined();
+  });
+
+  it('releases in-flight requests and keeps replacement results when the old request arrives', async () => {
+    const target = resource(802);
+    let finishOld!: (value: string[]) => void;
+    mocks.query.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        finishOld = resolve;
+      }),
+    );
+    const old = ensureResourceMedia('inflight-close', [target], 'test');
+    await vi.advanceTimersByTimeAsync(25);
+    mocks.invalidationListener?.({ invalidation: null, resources: [target], sessionId: 'inflight-close', scope: 'resources' });
+    await old;
+    const current = ensureResourceMedia('inflight-close', [target], 'test');
+    await vi.advanceTimersByTimeAsync(25);
+    await current;
+    finishOld(['data:stale']);
+    await vi.runAllTimersAsync();
+    expect(resourceMediaDataUrl('inflight-close', target)).toBe('data:graphics/test/802.png');
+  });
 });
 
 function resource(index: number): ResourceRef {

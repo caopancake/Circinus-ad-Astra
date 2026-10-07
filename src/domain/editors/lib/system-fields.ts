@@ -65,22 +65,3 @@ export const SYSTEM_STRUCTURED_FIELD_KEYS: ReadonlySet<string> = new Set([
   'damageType',
   'aiHints',
 ]);
-
-/// Fields exclusive to one system type; they are stripped from the spec when
-/// the type changes away so stale engine/shield/phase data never survives.
-export const TYPE_EXCLUSIVE_FIELDS: Record<string, readonly string[]> = {
-  ENGINE_MOD: [
-    'engineGlowColor',
-    'engineGlowContrailColor',
-    'engineGlowLengthMult',
-    'engineGlowWidthMult',
-    'engineGlowGlowMult',
-    'flameoutOnImpactChance',
-    'alwaysAccelerate',
-  ],
-  SHIELD_MOD: ['shieldRingColor', 'shieldInnerColor', 'shieldThicknessMult', 'shieldFluctuationMult'],
-  PHASE_CLOAK: ['effectColor1', 'effectColor2', 'phaseHighlight', 'phaseDiffuse', 'shipAlpha'],
-  DISPLACER: ['range', 'randomRange', 'renderCopyDuringTeleport'],
-  WEAPON: ['weaponDataId'],
-  DRONE_LAUNCHER: ['droneVariant', 'allowFreeRoam', 'launchSpeed', 'launchDelay', 'maxDrones', 'droneBehavior'],
-};

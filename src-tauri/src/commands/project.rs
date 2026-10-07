@@ -4,7 +4,7 @@ use crate::{
         CloseProjectSessionPayload, CsvRowPreviewPayload, CsvSourceOptionsPayload,
         CsvTableWindowPayload, HullReferencesPayload, InvalidateCoreCachePayload,
         InvalidateProjectSessionPayload, QueryEntityListPayload, QueryEntityPayload,
-        ResourceDataUrlBatchPayload,
+        ResourceDataUrlBatchPayload, WeaponDraftResourcesPayload,
     },
     models::{
         CsvRowPreview, CsvTableWindow, EntityData, HullReferencesResult,
@@ -57,6 +57,17 @@ pub fn query_entity(payload: QueryEntityPayload) -> Result<Option<EntityData>, A
 #[tauri::command(async)]
 pub fn query_entity_list(payload: QueryEntityListPayload) -> Result<Vec<EntityData>, AppError> {
     services::project::query_entity_list(&payload.session_id, payload.kind)
+}
+
+#[tauri::command(async)]
+pub fn query_weapon_draft_resources(
+    payload: WeaponDraftResourcesPayload,
+) -> Result<std::collections::BTreeMap<String, crate::models::ResourceRef>, AppError> {
+    services::project::query_weapon_draft_resources(
+        &payload.session_id,
+        &payload.id,
+        &payload.draft,
+    )
 }
 
 #[tauri::command(async)]

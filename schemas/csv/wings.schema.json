@@ -9,7 +9,7 @@
     { "key": "rarity", "label": "稀有度", "control": "number", "step": 0.01 },
     { "key": "fleet pts", "label": "舰队点", "control": "number", "step": 1 },
     { "key": "op cost", "label": "装配点", "control": "number", "step": 1 },
-    { "key": "formation", "label": "阵型", "control": "enum", "options": ["CLAW", "V", "BOX", "DIAMOND", "WALL"] },
+    { "key": "formation", "label": "阵型", "control": "enum", "options": ["CLAW", "V", "BOX", "DIAMOND"] },
     { "key": "range", "label": "作战范围", "control": "number", "step": 1 },
     { "key": "attackRunRange", "label": "攻击距离", "control": "number", "step": 1 },
     { "key": "attackPositionOffset", "label": "攻击位置偏移", "control": "number", "step": 1 },

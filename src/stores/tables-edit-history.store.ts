@@ -14,7 +14,7 @@ import {
   setUndoStackLimit,
   type UndoStackState,
 } from '@/domain/edit-session';
-import type { ModTableState, TableKey } from '@/shared/types';
+import type { CsvRowKeyMapping, ModTableState, TableKey } from '@/shared/types';
 import { applyCsvEditRedo, applyCsvEditUndo } from '@/domain/tables/csv-edit-history';
 import type { CsvDraftOperation, CsvEditHistoryEntry } from '@/shared/types';
 
@@ -88,6 +88,30 @@ export const useTablesEditHistoryStore = defineStore('tables-edit-history', () =
     if (tableStates?.size === 0) stateMap.delete(modRoot);
   }
 
+  function applySavedRowKeyMap(modRoot: string, table: TableKey, keyMap: CsvRowKeyMapping[]) {
+    const stack = getStack(modRoot, table);
+    if (!stack) return;
+    const mapped = new Map(keyMap.map((item) => [item.previousKey, item.nextKey]));
+    for (const entry of [...stack.undoStack, ...stack.redoStack]) {
+      entry.operation.rowKey = mapped.get(entry.operation.rowKey) ?? entry.operation.rowKey;
+    }
+  }
+
+  function captureSaveHistory(modRoot: string, table: TableKey) {
+    const stack = getStack(modRoot, table);
+    return {
+      undoIds: new Set(stack?.undoStack.map((entry) => entry.id) ?? []),
+      redoIds: new Set(stack?.redoStack.map((entry) => entry.id) ?? []),
+    };
+  }
+
+  function commitSaveHistory(modRoot: string, table: TableKey, submitted: ReturnType<typeof captureSaveHistory>) {
+    const stack = getStack(modRoot, table);
+    if (!stack) return;
+    stack.undoStack = stack.undoStack.filter((entry) => !submitted.undoIds.has(entry.id));
+    stack.redoStack = stack.redoStack.filter((entry) => !submitted.redoIds.has(entry.id));
+  }
+
   function clearForMod(modRoot: string) {
     stateMap.delete(modRoot);
   }
@@ -101,6 +125,9 @@ export const useTablesEditHistoryStore = defineStore('tables-edit-history', () =
 
   return {
     canRedoCsvEdit,
+    applySavedRowKeyMap,
+    captureSaveHistory,
+    commitSaveHistory,
     canUndoCsvEdit,
     clearCsvEditHistory,
     clearForMod,

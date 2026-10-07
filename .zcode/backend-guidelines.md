@@ -18,7 +18,7 @@
 
 - command 只处理 wire payload、错误转换和 service 调用。分层依据是 wire 形状、领域实现与持久化细节的变更节奏不同，混层无法单点验证。
 - query 必须只读，write 必须执行目标写入且严禁重开 ProjectSession；write 返回实际 changes、结构化 invalidation 与保存结果，无法定位实体 ID 时只扩大到该实体类型的正式全类 scope。
-- session 由 `sessionId + modRoot` 身份约束；注册表只保护句柄表，session 状态各自持锁，跨 session 操作不得互阻。注册表有上限，超限驱逐最旧 session。
+- session 必须由 `sessionId + modRoot` 身份约束；注册表只允许保护句柄表，session 状态必须各自持锁，跨 session 操作严禁互阻。已登记 session 必须保留至显式关闭。
 - 所有外部路径必须重新 canonicalize 并验证属于声明 root；已有父链中的 symlink、junction 与 reparse point 一律拒绝。默认拒绝让边界漂移成为硬失败，而不是依赖人肉 review。
 - 保存、删除、导入与回放必须先构建文件或目录快照，再由 IO 应用可回放 changeset；目录变更必须展开为正式目录事件，保证失效推导精确。
 - 已知 CP1252 智能引号归一化映射唯一 owner 在 models，读取时执行并随保存不可逆写回；parsers 与 io 复用同一份。

@@ -28,6 +28,7 @@
 - well-known 标签资产只允许经后端唯一加载入口编译期内嵌消费，加载时必须校验版本头，严禁在查询逻辑内重建标签表。
 - domain/schema runtime 拥有字段语义、source、归一化与纯转换；组件只渲染与提交字段事件。
 - `csv:` source 目录必须只由 `(sessionId, source)` 标识，并完整返回当前 Mod 非注释唯一值与原版补集，保持 CSV 原始行顺序；实体声明的 source 以实体清单为值域，按 Mod 与原版分组去重，解析归后端实体注册表。
+- `hull:builtInWeaponSlots` 必须以 session 与草稿 baseHullId 标识，经后端舰体引用查询返回继承与覆盖后的内置武器槽 ID；基础舰体变化与舰体引用失效必须重新查询。
 - 引用 source 必须经统一 query/service 返回选项元数据与 ResourceRef；缩略图只在下拉展开或已选值变化时按需合批解析。
 - JSON 形态字段在提交边界校验，解析失败必须 warning 并保留原文；逐键输入期不告警。
 - kv 行与数组条目必须使用结构化稳定 key；严禁按下标 key 后手工重排状态补偿。

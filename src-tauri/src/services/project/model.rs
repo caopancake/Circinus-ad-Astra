@@ -281,9 +281,10 @@ pub(super) struct SessionCsvTable {
     pub header: Vec<String>,
     pub path: String,
     pub rows: Option<Vec<SessionCsvRow>>,
-    /// Sole allocator state for `{table}:row:{seq}` keys; only grows while rows
-    /// stay loaded so deletes can never make a future allocation collide.
+    /// Sole allocator state for `{table}:row:{seq}` keys; survives refresh of
+    /// the table's own save so deletes cannot recycle surviving row identities.
     pub next_row_seq: u64,
+    pub saved_text: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

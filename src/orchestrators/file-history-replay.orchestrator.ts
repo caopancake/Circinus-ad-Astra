@@ -11,6 +11,8 @@ import type { FileChangeRecord, FileChangeReplayDirection, FileSaveHistoryEntry 
 import { AppError } from '@/shared/lib/errors';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
+import { joinRootRelativePath, normalizeFsPath } from '@/shared/lib/paths';
+import { useWriteSyncStore } from '@/stores/write-sync.store';
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
 type TablesStore = ReturnType<typeof useTablesStore>;
@@ -54,10 +56,12 @@ export function createFileReplayPlan(project: ProjectStore, direction: FileHisto
 export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project: ProjectStore, tables: TablesStore): Promise<void> {
   assertReplayPlanStillCurrent(plan, project);
   const result = await replayFileChangeSet(plan.sessionId, plan.modRoot, plan.direction, plan.entry.changes);
-  const invalidatedSessions = await refreshLoadedSessionsAfterWrite(result, plan.modRoot);
-  await notifyOpenFileEditors(plan.sessionId, plan.modRoot, plan.entry.changes, plan.direction);
   commitReplayPlan(plan);
+  const invalidatedSessions = await refreshLoadedSessionsAfterWrite(result, plan.modRoot);
+  const sync = useWriteSyncStore().enqueue(plan.modRoot, plan.sessionId, plan.entry.changes);
+  await notifyOpenFileEditors(plan.sessionId, plan.modRoot, plan.entry.changes, plan.direction);
   refreshActiveTableIfAffected(project, tables, plan.modRoot, invalidatedSessions);
+  syncStoreComplete(sync.id);
   recordLogBestEffort({
     level: 'info',
     code: 'history.replayed',
@@ -73,6 +77,10 @@ export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project
       files: plan.entry.changes.length,
     }),
   });
+}
+
+function syncStoreComplete(id: number): void {
+  useWriteSyncStore().complete(id);
 }
 
 function replayNextFileHistoryEntry(
@@ -169,7 +177,24 @@ async function notifyOpenFileEditors(
   const behavior = replayBehavior(direction);
   await Promise.all(
     changes.map(async (change) => {
-      if (change.kind === 'directory') return;
+      if (change.kind === 'directory') {
+        const targetFiles = direction === 'undo' ? change.beforeFiles : change.afterFiles;
+        const snapshots = new Map(targetFiles.map((file) => [normalizeFsPath(file.relPath), file]));
+        const paths = new Set([...change.beforeFiles, ...change.afterFiles].map((file) => file.relPath));
+        await Promise.all(
+          [...paths].map(async (relPath) => {
+            const snapshot = snapshots.get(normalizeFsPath(relPath));
+            if (snapshot?.dataBase64) return;
+            await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, {
+              modRoot,
+              path: joinRootRelativePath(change.path, relPath),
+              sessionId,
+              text: snapshot?.text ?? '',
+            });
+          }),
+        );
+        return;
+      }
       const text = behavior.textForChange(change);
       if (text === null && behavior.hasBinaryContent(change)) return;
       await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, { modRoot, path: change.path, sessionId, text: text ?? '' });

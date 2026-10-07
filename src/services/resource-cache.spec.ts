@@ -48,6 +48,32 @@ describe('resource data URL cache', () => {
     expect(result).toEqual(['data:graphics/test/900.png']);
     expect(mocks.queryBatch).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps a replacement request when an invalidated request arrives late', async () => {
+    const sessionId = 'resource-cache-late';
+    const target = resource(901);
+    let resolveOld!: (result: ResourceDataUrlBatchResult) => void;
+    mocks.queryBatch.mockReturnValueOnce(
+      new Promise<ResourceDataUrlBatchResult>((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const old = queryResources(sessionId, [target]);
+    resourceCacheService.invalidateResourceCacheForSession(sessionId);
+    await queryResources(sessionId, [target]);
+    resolveOld({ entries: [{ ...target, dataUrl: 'data:stale' }] });
+    await old;
+    expect(await queryResources(sessionId, [target])).toEqual(['data:graphics/test/901.png']);
+    expect(mocks.queryBatch).toHaveBeenCalledTimes(2);
+  });
+
+  it('notifies session invalidation when only media projections retain an entry', () => {
+    const listener = vi.fn();
+    const unsubscribe = resourceCacheService.subscribeResourceInvalidations(listener);
+    resourceCacheService.invalidateResourceCacheForSession('projection-only');
+    expect(listener).toHaveBeenCalledWith({ invalidation: null, resources: [], sessionId: 'projection-only', scope: 'session' });
+    unsubscribe();
+  });
 });
 
 function resource(index: number): ResourceRef {

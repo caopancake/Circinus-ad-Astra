@@ -13,6 +13,8 @@ import { recordWindowEventHandlerError } from '@/orchestrators/window-event-erro
 let started = false;
 let mirrorStarted = false;
 let skipPersistedSnapshot = false;
+let saveQueue = Promise.resolve();
+let logRequestId = 0;
 
 const noopDispose = () => {};
 
@@ -29,7 +31,7 @@ export function startSettingsPersistence(): () => void {
         return;
       }
       syncHistoryLimit(snapshot.historyLimit);
-      void persistSettingsSnapshot(snapshot);
+      void enqueueSettingsSave(() => persistSettingsSnapshot());
     },
     { deep: true },
   );
@@ -38,13 +40,23 @@ export function startSettingsPersistence(): () => void {
 
 export async function saveLogDirectory(directory: string | null): Promise<void> {
   const settings = useSettingsStore();
-  const snapshot: AppSettings = { ...settings.settingsSnapshot(), logDirectory: directory };
-  const savedSettings = await saveSettings(snapshot);
-  if (settings.logDirectory !== savedSettings.logDirectory) {
-    skipPersistedSnapshot = true;
-    settings.replaceSettings(savedSettings);
-  }
-  await broadcastSettingsSnapshot(savedSettings);
+  const requestId = ++logRequestId;
+  await enqueueSettingsSave(async () => {
+    const snapshot: AppSettings = { ...settings.settingsSnapshot(), logDirectory: directory };
+    const saved = await saveSettings(snapshot);
+    settings.confirmSavedSettings(saved);
+    if (requestId === logRequestId && settings.logDirectory !== saved.logDirectory) {
+      skipPersistedSnapshot = true;
+      settings.setLogDirectory(saved.logDirectory);
+    }
+    await broadcastSettingsSnapshot(saved);
+  });
+}
+
+function enqueueSettingsSave(operation: () => Promise<void>): Promise<void> {
+  const pending = saveQueue.then(operation);
+  saveQueue = pending.catch(() => {});
+  return pending;
 }
 
 export function startSettingsMirror(): () => void {
@@ -83,9 +95,13 @@ function syncHistoryLimit(limit: number): void {
   useTablesEditHistoryStore().setHistoryLimit(limit);
 }
 
-async function persistSettingsSnapshot(snapshot: AppSettings): Promise<void> {
+async function persistSettingsSnapshot(): Promise<void> {
+  const settings = useSettingsStore();
+  const snapshot = settings.settingsSnapshot();
   try {
-    await saveSettings(snapshot);
+    const saved = await saveSettings(snapshot);
+    settings.confirmSavedSettings(saved);
+    await broadcastSettingsSnapshot(saved);
   } catch (error) {
     recordLogBestEffort({
       level: 'error',
@@ -98,7 +114,6 @@ async function persistSettingsSnapshot(snapshot: AppSettings): Promise<void> {
     return;
   }
   recordLogBestEffort({ level: 'debug', code: 'settings.saved', message: 'settings saved', path: null, line: null, fields: null });
-  await broadcastSettingsSnapshot(snapshot);
 }
 
 async function broadcastSettingsSnapshot(snapshot: AppSettings): Promise<void> {

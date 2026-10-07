@@ -99,7 +99,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
       if (!isCurrentSave(requestId, key)) return null;
       if (!result) return null;
       if (equals(draftSession.draftValue.value, submittedDraft)) draftSession.commitSaved(result.value);
-      else draftSession.applyExternal(result.value);
+      else draftSession.commitSavedBaseline(result.value);
       options.onSaved?.(target, clone(result.value), result.meta);
       return result;
     } finally {

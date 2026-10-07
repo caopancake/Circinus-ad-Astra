@@ -12,6 +12,7 @@ import {
   readLogLevel,
   readOptionalLogDirectory,
   readPreserveOriginalJson,
+  readAllowCoreEditing,
   readTheme,
   normalizeHex,
   MAX_HISTORY_LIMIT,
@@ -32,6 +33,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const historyLimit = ref(readHistoryLimit(initialSettings.historyLimit));
   const editMode = ref<EditMode>(readEditMode(initialSettings.editMode));
   const preserveOriginalJson = ref(readPreserveOriginalJson(initialSettings.preserveOriginalJson));
+  const allowCoreEditing = ref(readAllowCoreEditing(initialSettings.allowCoreEditing));
+  const savedCoreEditing = ref(allowCoreEditing.value);
+  const canEditCore = computed(() => allowCoreEditing.value && savedCoreEditing.value);
   const starsectorRoot = ref(initialSettings.starsectorRoot);
   const logDirectory = ref(readOptionalLogDirectory(initialSettings.logDirectory));
   const logLevel = ref<LogLevel>(readLogLevel(initialSettings.logLevel));
@@ -78,6 +82,10 @@ export const useSettingsStore = defineStore('settings', () => {
     preserveOriginalJson.value = readPreserveOriginalJson(enabled);
   }
 
+  function setAllowCoreEditing(enabled: boolean) {
+    allowCoreEditing.value = readAllowCoreEditing(enabled);
+  }
+
   function setStarsectorRoot(path: string | null) {
     starsectorRoot.value = path;
   }
@@ -98,6 +106,7 @@ export const useSettingsStore = defineStore('settings', () => {
       historyLimit: historyLimit.value,
       editMode: editMode.value,
       preserveOriginalJson: preserveOriginalJson.value,
+      allowCoreEditing: allowCoreEditing.value,
       starsectorRoot: starsectorRoot.value,
       logDirectory: logDirectory.value,
       logLevel: logLevel.value,
@@ -111,9 +120,15 @@ export const useSettingsStore = defineStore('settings', () => {
     historyLimit.value = readHistoryLimit(settings.historyLimit);
     editMode.value = readEditMode(settings.editMode);
     preserveOriginalJson.value = readPreserveOriginalJson(settings.preserveOriginalJson);
+    allowCoreEditing.value = readAllowCoreEditing(settings.allowCoreEditing);
+    savedCoreEditing.value = allowCoreEditing.value;
     starsectorRoot.value = settings.starsectorRoot;
     logDirectory.value = readOptionalLogDirectory(settings.logDirectory);
     logLevel.value = readLogLevel(settings.logLevel);
+  }
+
+  function confirmSavedSettings(settings: AppSettings) {
+    savedCoreEditing.value = readAllowCoreEditing(settings.allowCoreEditing);
   }
 
   return {
@@ -122,6 +137,9 @@ export const useSettingsStore = defineStore('settings', () => {
     customAccent,
     editMode,
     preserveOriginalJson,
+    allowCoreEditing,
+    canEditCore,
+    confirmSavedSettings,
     historyLimit,
     logDirectory,
     logLevel,
@@ -135,6 +153,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setCustomAccent,
     setEditMode,
     setPreserveOriginalJson,
+    setAllowCoreEditing,
     setHistoryLimit,
     setLogDirectory,
     setLogLevel,

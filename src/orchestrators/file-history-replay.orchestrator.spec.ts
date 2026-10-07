@@ -138,6 +138,21 @@ describe('executeFileReplayPlan', () => {
     });
   });
 
+  it('keeps a pending synchronization record when refresh fails after disk commit', async () => {
+    const root = 'C:/mods/alpha';
+    const entry = pushEntry(root, 'save one', [changeRecord('mod_info.json')]);
+    const project = projectStub(root, 's1');
+    const plan = createFileReplayPlan(project as never, 'undo')!;
+    mocks.replayFileChangeSet.mockResolvedValueOnce(emptyReplay);
+    const { useWriteSyncStore } = await import('@/stores/write-sync.store');
+    useWriteSyncStore().enqueue(root, 's1', entry.changes);
+    mocks.refreshLoadedSessionsAfterWrite.mockRejectedValueOnce(new Error('parse failed'));
+    await expect(executeFileReplayPlan(plan, project as never, tablesStub() as never)).rejects.toThrow('parse failed');
+    expect(useFileHistoryStore().peekSavedWriteUndo(root)).toBeNull();
+    expect(useFileHistoryStore().peekSavedWriteRedo(root)?.id).toBe(entry.id);
+    expect(useWriteSyncStore().pending).toHaveLength(1);
+  });
+
   it('notifies open file editors with restored text for text changes only', async () => {
     const entry = pushEntry('C:/mods/alpha', 'mixed save', [
       changeRecord('data/hulls/text.ship'),

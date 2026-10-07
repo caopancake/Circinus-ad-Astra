@@ -26,7 +26,6 @@ import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import type { RowData } from '@/shared/types';
 import SchemaFormRenderer from '@/app/components/schema/SchemaFormRenderer.vue';
 import { getSchema } from '@/domain/schema/schema-registry';
-import { createSchemaRuntimeContext } from '@/app/composables/use-schema-runtime-context';
 import { useConfigFamilyEditorViewModel } from '@/app/composables/config/use-config-family-editor-view-model';
 import { useSaveCommandStore } from '@/stores/save-command.store';
 import type { ConfigEntityFamilyDefinition, ConfigFamilyFile } from '@/domain/config/config-entity-families';
@@ -47,21 +46,26 @@ const emit = defineEmits<{ saved: [id: string | null] }>();
 const feedback = useAppFeedback();
 
 const schema = computed(() => getSchema(props.family.schemaId));
-const schemaRuntimeContext = computed(() =>
-  props.modRoot && props.sessionId ? createSchemaRuntimeContext(props.modRoot, props.sessionId) : null,
-);
 const files = computed(() => [...props.files]);
-const { draftData, externalUpdateNotice, hasPendingExternalData, loadPendingExternalData, save, saving, selectedFile } =
-  useConfigFamilyEditorViewModel({
-    family: props.family,
-    dataRevision: toRef(props, 'dataRevision'),
-    modRoot: toRef(props, 'modRoot'),
-    onSaved: (id) => emit('saved', id),
-    saveFile: props.saveFile,
-    sessionId: toRef(props, 'sessionId'),
-    selectedId: toRef(props, 'selectedId'),
-    files,
-  });
+const {
+  draftData,
+  externalUpdateNotice,
+  hasPendingExternalData,
+  loadPendingExternalData,
+  save,
+  saving,
+  selectedFile,
+  schemaRuntimeContext,
+} = useConfigFamilyEditorViewModel({
+  family: props.family,
+  dataRevision: toRef(props, 'dataRevision'),
+  modRoot: toRef(props, 'modRoot'),
+  onSaved: (id) => emit('saved', id),
+  saveFile: props.saveFile,
+  sessionId: toRef(props, 'sessionId'),
+  selectedId: toRef(props, 'selectedId'),
+  files,
+});
 
 function fileId(file: ConfigFamilyFile): string {
   return familyFileId(props.family, file);

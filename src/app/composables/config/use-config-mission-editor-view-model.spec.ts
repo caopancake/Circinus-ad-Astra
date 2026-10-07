@@ -22,6 +22,7 @@ vi.mock('@/app/composables/use-app-feedback', () => ({
 import { useConfigMissionEditorViewModel } from './use-config-mission-editor-view-model';
 import { initializeSettingsStore } from '@/stores/settings.store';
 import type { ConfigMissionEditorData, RowData } from '@/shared/types';
+import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 
 const SETTINGS = {
   theme: 'light',
@@ -143,6 +144,17 @@ describe('useConfigMissionEditorViewModel', () => {
     await vi.waitFor(() => expect(vm.loadedMissionId.value).toBe('m1'));
     await vm.save();
     expect(mocks.feedback.error).toHaveBeenCalledWith(expect.anything(), '保存战役失败');
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('keeps invalid or cancelled saves dirty without a saved callback', async () => {
+    const { vm, saveMission, onSaved } = mountEditor();
+    await vi.waitFor(() => expect(vm.loadedMissionId.value).toBe('m1'));
+    vm.draftData.value = { list: { mission: 'bad id' }, descriptor: { title: 'Edited' }, text: { content: 'body' } };
+    saveMission.mockResolvedValue(null);
+    await vm.save();
+    expect(vm.editingMissionId.value).toBe('bad id');
+    expect(useDraftSessionsStore().hasUnsavedWorkForMod('M:/mod')).toBe(true);
     expect(onSaved).not.toHaveBeenCalled();
   });
 

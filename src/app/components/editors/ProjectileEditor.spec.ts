@@ -82,4 +82,53 @@ describe('ProjectileEditor', () => {
     const editor = mountEditor({ id: 'proj1', specClass: 'missile' });
     expect(editor.html()).not.toContain('弹体外观');
   });
+
+  it('adds game-loadable engines with unique ids after deletion', async () => {
+    const editor = mountEditor({
+      id: 'proj1',
+      specClass: 'missile',
+      engineSlots: [
+        { id: 'ES1', loc: [1, 2] },
+        { id: 'ES3', loc: [3, 4] },
+      ],
+    });
+    await editor
+      .findAll('button')
+      .find((button) => button.text() === '添加引擎槽')!
+      .trigger('click');
+    const draft = editor.emitted('draft-changed')!.at(-1)![0] as RowData;
+    const slots = draft.engineSlots as RowData[];
+    expect(slots.map((slot) => slot.id)).toEqual(['ES1', 'ES3', 'ES2']);
+    expect(slots[2]).toMatchObject({ id: 'ES2', loc: [0, 0], angle: 180, width: 8, length: 20, style: 'CUSTOM' });
+    expect(slots[2]!.styleSpec).toMatchObject({
+      mode: 'QUAD_STRIP',
+      engineColor: [255, 145, 75, 255],
+      contrailColor: [100, 100, 100, 150],
+      contrailDuration: 0.5,
+      contrailWidthMult: 2,
+      contrailMaxSpeedMult: 0,
+      contrailAngularVelocityMult: 0.5,
+      type: 'SMOKE',
+    });
+  });
+
+  it('offers the game projectile spawn enum', () => {
+    const editor = mountEditor({ id: 'proj1', specClass: 'projectile' });
+    const options = editor
+      .findAll('select')[1]!
+      .findAll('option')
+      .map((option) => option.text());
+    expect(options).toEqual(['BEAM', 'BALLISTIC_AS_BEAM', 'BALLISTIC', 'PLASMA', 'MISSILE', 'OTHER']);
+  });
+
+  it('offers both phase missile types accepted by the game', () => {
+    const editor = mountEditor({ id: 'proj1', specClass: 'missile' });
+    const options = editor
+      .findAll('select')[1]!
+      .findAll('option')
+      .map((option) => option.text());
+    expect(options).toContain('PHASE_CHARGE');
+    expect(options).toContain('PHASE_MINE');
+    expect(options).toHaveLength(17);
+  });
 });

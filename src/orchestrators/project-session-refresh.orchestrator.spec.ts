@@ -30,8 +30,10 @@ import {
   applyProjectSessionCacheInvalid,
   refreshLoadedSessionsAfterWrite,
   refreshProjectSessionAfterWrite,
+  retryPendingProjectSessionWrites,
 } from './project-session-refresh.orchestrator';
 import { useProjectStore } from '@/stores/project.store';
+import { useWriteSyncStore } from '@/stores/write-sync.store';
 
 function manifestFixture(modRoot: string, sessionId: string): ProjectManifest {
   return {
@@ -43,7 +45,17 @@ function manifestFixture(modRoot: string, sessionId: string): ProjectManifest {
     modInfo: null,
     tableSummaries: {} as ProjectManifest['tableSummaries'],
     tableEntitySummaries: {} as ProjectManifest['tableEntitySummaries'],
-    entitySummaries: { factions: 0, missions: 0, ships: 0, weapons: 0, projectiles: 0, variants: 0, skins: 0, systems: 0, skills: 0 },
+    entitySummaries: {
+      factions: 0,
+      missions: 0,
+      ships: 0,
+      weapons: 0,
+      projectiles: 0,
+      variants: 0,
+      skins: 0,
+      systems: 0,
+      skills: 0,
+    },
     warnings: [],
   };
 }
@@ -51,7 +63,14 @@ function manifestFixture(modRoot: string, sessionId: string): ProjectManifest {
 function refreshResult(modRoot: string, sessionId: string): ProjectSessionInvalidationResult {
   return {
     manifest: manifestFixture(modRoot, sessionId),
-    invalidation: { paths: ['data/hulls/x.ship'], tables: ['ships'], entities: [], resources: [], queryScopes: [], session: false },
+    invalidation: {
+      paths: ['data/hulls/x.ship'],
+      tables: ['ships'],
+      entities: [],
+      resources: [],
+      queryScopes: [],
+      session: false,
+    },
   };
 }
 
@@ -69,7 +88,14 @@ function writeResult(changes: { path: string }[]): WriteResult {
       afterDataBase64: null,
       afterFiles: [],
     })),
-    invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
+    invalidation: {
+      paths: [],
+      tables: [],
+      entities: [],
+      resources: [],
+      queryScopes: [],
+      session: false,
+    },
     keyMap: [],
     refreshedEntity: null,
   };
@@ -99,6 +125,57 @@ describe('refreshProjectSessionAfterWrite', () => {
     await expect(refreshProjectSessionAfterWrite('C:/mods/ghost', writeResult([{ path: 'x' }]))).rejects.toMatchObject({
       action: 'refresh-project-session-after-write',
     });
+  });
+
+  it('returns the result for each of three overlapping writes in one session', async () => {
+    const project = useProjectStore();
+    project.registerProjectManifest(manifestFixture('C:/mods/alpha', 's1'));
+    let releaseFirst!: (result: ProjectSessionInvalidationResult) => void;
+    mocks.requestProjectSessionRefresh.mockImplementationOnce(() => new Promise((resolve) => (releaseFirst = resolve)));
+    mocks.requestProjectSessionRefresh.mockImplementation(async (_session, changes: WriteResult['changes']) => ({
+      ...refreshResult('C:/mods/alpha', 's1'),
+      invalidation: { ...refreshResult('C:/mods/alpha', 's1').invalidation, paths: changes.map((change) => change.path) },
+    }));
+    const writes = ['first', 'second', 'third'].map((name) =>
+      refreshProjectSessionAfterWrite('C:/mods/alpha', writeResult([{ path: `${name}.ship` }]), 's1'),
+    );
+    releaseFirst({
+      ...refreshResult('C:/mods/alpha', 's1'),
+      invalidation: { ...refreshResult('C:/mods/alpha', 's1').invalidation, paths: ['first.ship'] },
+    });
+    const results = await Promise.all(writes);
+    expect(results.map((result) => result.invalidation.paths)).toEqual([['first.ship'], ['second.ship'], ['third.ship']]);
+    expect(mocks.requestProjectSessionRefresh).toHaveBeenCalledTimes(3);
+    expect(useWriteSyncStore().pending).toHaveLength(0);
+  });
+
+  it('retains a failed refresh and retries its exact changes', async () => {
+    const project = useProjectStore();
+    project.registerProjectManifest(manifestFixture('C:/mods/alpha', 's1'));
+    const written = writeResult([{ path: 'data/hulls/x.ship' }]);
+    mocks.requestProjectSessionRefresh.mockRejectedValueOnce(new Error('refresh failed'));
+    await expect(refreshProjectSessionAfterWrite('C:/mods/alpha', written, 's1')).rejects.toThrow('refresh failed');
+    expect(useWriteSyncStore().pending[0]).toMatchObject({ changes: written.changes, refreshed: null });
+    mocks.requestProjectSessionRefresh.mockResolvedValueOnce(refreshResult('C:/mods/alpha', 's1'));
+    await retryPendingProjectSessionWrites(project, 's1');
+    expect(mocks.requestProjectSessionRefresh).toHaveBeenLastCalledWith('s1', written.changes);
+    expect(useWriteSyncStore().pending).toHaveLength(0);
+  });
+
+  it('retries a failed broadcast without repeating a committed refresh', async () => {
+    const project = useProjectStore();
+    project.registerProjectManifest(manifestFixture('C:/mods/alpha', 's1'));
+    const refreshed = refreshResult('C:/mods/alpha', 's1');
+    mocks.requestProjectSessionRefresh.mockResolvedValueOnce(refreshed);
+    mocks.emitWindowEvent.mockRejectedValueOnce(new Error('broadcast failed'));
+    await expect(refreshProjectSessionAfterWrite('C:/mods/alpha', writeResult([{ path: 'data/hulls/x.ship' }]), 's1')).rejects.toThrow(
+      'broadcast failed',
+    );
+    expect(useWriteSyncStore().pending[0]?.refreshed).toEqual(refreshed);
+    await retryPendingProjectSessionWrites(project, 's1');
+    expect(mocks.requestProjectSessionRefresh).toHaveBeenCalledTimes(1);
+    expect(mocks.emitWindowEvent).toHaveBeenLastCalledWith('project-session-invalidated', refreshed);
+    expect(useWriteSyncStore().pending).toHaveLength(0);
   });
 
   it('rejects writes whose session changed', async () => {

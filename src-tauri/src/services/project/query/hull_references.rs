@@ -34,6 +34,7 @@ fn build_hull_references(
             groups: Vec::new(),
             hull_names: resolve_requested_hull_names(session, requested_reference_ids)?,
             sprites: resolve_requested_hull_sprites(session, requested_reference_ids)?,
+            built_in_weapon_slots: resolve_built_in_weapon_slots(session, requested_reference_ids)?,
         });
     }
 
@@ -179,7 +180,78 @@ fn build_hull_references(
         groups,
         hull_names: BTreeMap::new(),
         sprites: BTreeMap::new(),
+        built_in_weapon_slots: BTreeMap::new(),
     })
+}
+
+fn resolve_built_in_weapon_slots(
+    session: &ProjectSession,
+    reference_ids: &[String],
+) -> AppResult<BTreeMap<String, Vec<String>>> {
+    let core_ships = session
+        .manifest
+        .starsector_root
+        .as_ref()
+        .map(|root| load_core_ship_files(root))
+        .transpose()?;
+    let core_skins = session
+        .manifest
+        .starsector_root
+        .as_ref()
+        .map(|root| load_core_skin_files(root))
+        .transpose()?;
+    reference_ids
+        .iter()
+        .map(|id| {
+            let mut chain = Vec::new();
+            let mut current = id.as_str();
+            let mut seen = BTreeSet::new();
+            while let Some(skin) = session
+                .skin_files
+                .iter()
+                .find(|skin| skin.skin_hull_id == current)
+                .or_else(|| {
+                    core_skins
+                        .as_ref()
+                        .and_then(|skins| skins.iter().find(|skin| skin.skin_hull_id == current))
+                })
+            {
+                if !seen.insert(current) {
+                    return Err(crate::errors::AppError::message(
+                        "skin.base_cycle",
+                        format!("循环舰体皮肤引用: {id}"),
+                    ));
+                }
+                chain.push(&skin.data);
+                current = &skin.base_hull_id;
+            }
+            let mut slots: BTreeSet<String> = session
+                .ship_files
+                .get(current)
+                .or_else(|| core_ships.as_ref().and_then(|ships| ships.get(current)))
+                .and_then(|ship| ship.get("builtInWeapons"))
+                .and_then(serde_json::Value::as_object)
+                .map(|weapons| weapons.keys().cloned().collect())
+                .unwrap_or_default();
+            for skin in chain.into_iter().rev() {
+                if let Some(removed) = skin
+                    .get("removeBuiltInWeapons")
+                    .and_then(serde_json::Value::as_array)
+                {
+                    for slot in removed.iter().filter_map(serde_json::Value::as_str) {
+                        slots.remove(slot);
+                    }
+                }
+                if let Some(added) = skin
+                    .get("builtInWeapons")
+                    .and_then(serde_json::Value::as_object)
+                {
+                    slots.extend(added.keys().cloned());
+                }
+            }
+            Ok((id.clone(), slots.into_iter().collect()))
+        })
+        .collect()
 }
 
 fn resolve_requested_hull_names(
@@ -405,7 +477,7 @@ mod tests {
         std::fs::create_dir_all(root.join("starsector-core/data/hulls/skins")).unwrap();
         write_utf8_no_bom(
             &mod_root.join("data/hulls/mod_ship.ship"),
-            r#"{"hullId":"mod_ship","hullName":"Mod Ship","spriteName":"graphics/ships/mod_ship.png"}"#,
+            r#"{"hullId":"mod_ship","hullName":"Mod Ship","spriteName":"graphics/ships/mod_ship.png","builtInWeapons":{"WS001":"weapon_a","WS002":"weapon_a"}}"#,
         )
         .unwrap();
         write_utf8_no_bom(
@@ -415,12 +487,12 @@ mod tests {
         .unwrap();
         write_utf8_no_bom(
             &mod_root.join("data/hulls/skins/mod_skin.skin"),
-            r#"{"skinHullId":"mod_skin","baseHullId":"mod_ship"}"#,
+            r#"{"skinHullId":"mod_skin","baseHullId":"mod_ship","removeBuiltInWeapons":["WS001"],"builtInWeapons":{"WS003":"weapon_b"}}"#,
         )
         .unwrap();
         write_utf8_no_bom(
             &root.join("starsector-core/data/hulls/core_ship.ship"),
-            r#"{"hullId":"core_ship","hullName":"Core Ship","spriteName":"graphics/ships/core_ship.png"}"#,
+            r#"{"hullId":"core_ship","hullName":"Core Ship","spriteName":"graphics/ships/core_ship.png","builtInWeapons":{"CORE_SLOT":"core_weapon"}}"#,
         )
         .unwrap();
         write_utf8_no_bom(
@@ -528,6 +600,19 @@ mod tests {
         );
         assert!(catalog.sprites.is_empty());
         assert!(catalog.hull_names.is_empty());
+        assert!(catalog.built_in_weapon_slots.is_empty());
+        assert_eq!(
+            previews.built_in_weapon_slots["mod_ship"],
+            vec!["WS001", "WS002"]
+        );
+        assert_eq!(
+            previews.built_in_weapon_slots["mod_skin"],
+            vec!["WS002", "WS003"]
+        );
+        assert_eq!(
+            previews.built_in_weapon_slots["core_skin"],
+            vec!["CORE_SLOT"]
+        );
         assert!(previews.groups.is_empty());
         assert_eq!(previews.sprites.len(), 6);
         assert_eq!(

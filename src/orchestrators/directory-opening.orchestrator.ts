@@ -5,27 +5,31 @@ import { useFileHistoryStore } from '@/stores/file-history.store';
 import { useProjectStore } from '@/stores/project.store';
 import { useTablesStore } from '@/stores/tables.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
-import { detectDirectoryTarget, openProject, scanDirectoryGameOverview } from '@/services/session.service';
+import { closeProject, detectDirectoryTarget, openProject, scanDirectoryGameOverview } from '@/services/session.service';
 import { formatLoadWarnings } from '@/domain/project/load-warnings';
 import { measurePerformance } from '@/shared/runtime/performance';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
 import { navigateToModOverview } from '@/orchestrators/workspace-navigation.orchestrator';
-import { removeModRuntimeState } from '@/orchestrators/workspace-lifecycle.orchestrator';
+import { removeLoadedModRuntime } from '@/orchestrators/workspace-lifecycle.orchestrator';
 import { buildModOpeningFailure } from '@/shared/lib/errors';
 
 export type DirectoryOpeningOutcome =
   | { type: 'game-overview'; root: string; availableModCount: number }
   | { type: 'mod-loaded'; modRoot: string; modName: string; warnings: string[] }
   | { type: 'already-loaded'; modRoot: string; modName: string }
+  | { type: 'cancelled'; modRoot: string }
   | { type: 'unknown'; message: string };
 
-type OpenModResult = { alreadyLoaded: true; displayName: string } | { alreadyLoaded: false; displayName: string; warnings: string[] };
+type OpenModResult =
+  { alreadyLoaded: true; displayName: string } | { alreadyLoaded: false; displayName: string; warnings: string[] } | null;
 type AfterOpenView = 'overview' | 'mod';
 
 export async function openDirectoryTarget(path: string, knownStarsectorRoot: string | null): Promise<DirectoryOpeningOutcome> {
-  const detected = await detectDirectoryTarget(path, knownStarsectorRoot);
   const workspace = useWorkspaceStore();
+  const workspaceGeneration = workspace.getWorkspaceGeneration();
+  const detected = await detectDirectoryTarget(path, knownStarsectorRoot);
+  if (workspace.getWorkspaceGeneration() !== workspaceGeneration) return { type: 'cancelled', modRoot: detected.modRoot ?? path };
 
   if (detected.kind === 'game-root' && detected.overview) {
     workspace.clearModOpeningFailures();
@@ -38,6 +42,7 @@ export async function openDirectoryTarget(path: string, knownStarsectorRoot: str
       workspace.setGameOverview(detected.overview);
     }
     const loaded = await openModProject(detected.modRoot, detected.starsectorRoot ?? null, 'overview');
+    if (!loaded) return { type: 'cancelled', modRoot: detected.modRoot };
     return loaded.alreadyLoaded
       ? { type: 'already-loaded', modRoot: detected.modRoot, modName: loaded.displayName }
       : {
@@ -50,6 +55,7 @@ export async function openDirectoryTarget(path: string, knownStarsectorRoot: str
 
   if (detected.kind === 'external-mod' && detected.modRoot) {
     const loaded = await openModProject(detected.modRoot, detected.starsectorRoot ?? null, 'mod');
+    if (!loaded) return { type: 'cancelled', modRoot: detected.modRoot };
     return loaded.alreadyLoaded
       ? { type: 'already-loaded', modRoot: detected.modRoot, modName: loaded.displayName }
       : {
@@ -67,6 +73,7 @@ export async function openModFromOverview(modRoot: string): Promise<DirectoryOpe
   const workspace = useWorkspaceStore();
   const starsectorRoot = workspace.gameOverview?.starsectorRoot ?? null;
   const loaded = await openModProject(modRoot, starsectorRoot, 'mod');
+  if (!loaded) return { type: 'cancelled', modRoot };
   return loaded.alreadyLoaded
     ? { type: 'already-loaded', modRoot, modName: loaded.displayName }
     : { type: 'mod-loaded', modRoot, modName: loaded.displayName, warnings: loaded.warnings };
@@ -74,14 +81,17 @@ export async function openModFromOverview(modRoot: string): Promise<DirectoryOpe
 
 export async function openCreatedModTarget(created: CreatedMod): Promise<DirectoryOpeningOutcome> {
   const workspace = useWorkspaceStore();
+  const workspaceGeneration = workspace.getWorkspaceGeneration();
   const afterOpenView: AfterOpenView = created.starsectorRoot ? 'overview' : 'mod';
 
   if (created.starsectorRoot) {
     const overview = await scanDirectoryGameOverview(created.starsectorRoot);
+    if (workspace.getWorkspaceGeneration() !== workspaceGeneration) return { type: 'cancelled', modRoot: created.modRoot };
     workspace.setGameOverview(overview);
   }
 
   const loaded = await openModProject(created.modRoot, created.starsectorRoot, afterOpenView);
+  if (!loaded) return { type: 'cancelled', modRoot: created.modRoot };
   return loaded.alreadyLoaded
     ? { type: 'already-loaded', modRoot: created.modRoot, modName: loaded.displayName }
     : { type: 'mod-loaded', modRoot: created.modRoot, modName: loaded.displayName, warnings: loaded.warnings };
@@ -99,11 +109,12 @@ async function openModProject(modRoot: string, starsectorRoot: string | null, af
     return { alreadyLoaded: true, displayName: entry?.displayName ?? modFolderDisplayName(modRoot) };
   }
 
-  workspace.registerMod(createLoadingEntry(modRoot));
+  const generation = workspace.registerMod(createLoadingEntry(modRoot));
   workspace.activateModOverview(modRoot);
 
   try {
-    const loaded = await openModProjectManifest(modRoot, starsectorRoot);
+    const loaded = await openModProjectManifest(modRoot, starsectorRoot, generation);
+    if (!loaded || workspace.getModGeneration(modRoot) !== generation) return null;
     const displayName = updateLoadedEntry(modRoot, loaded);
     const stillActive = workspace.activeModRoot === modRoot;
     measurePerformance('frontend.hydrateDirectoryOpenedModRuntime', { modRoot, activate: stillActive }, () =>
@@ -112,15 +123,33 @@ async function openModProject(modRoot: string, starsectorRoot: string | null, af
     if (afterOpenView === 'overview') workspace.showOverview();
     return { alreadyLoaded: false, displayName, warnings: formatLoadWarnings(loaded) };
   } catch (error) {
-    rollbackFailedModOpening(modRoot);
-    workspace.setModOpeningFailure(buildModOpeningFailure(modRoot, error));
+    if (workspace.getModGeneration(modRoot) === generation) {
+      workspace.setModOpeningFailure(buildModOpeningFailure(modRoot, error));
+      await rollbackFailedModOpening(modRoot);
+    }
     throw error;
   }
 }
 
-export async function openModProjectManifest(modRoot: string, starsectorRoot: string | null): Promise<ProjectManifest> {
+export async function openModProjectManifest(
+  modRoot: string,
+  starsectorRoot: string | null,
+  generation: number,
+): Promise<ProjectManifest | null> {
+  const workspace = useWorkspaceStore();
   const project = useProjectStore();
-  const loaded = await openProject(modRoot, starsectorRoot);
+  if (workspace.getModGeneration(modRoot) !== generation) return null;
+  let loaded: ProjectManifest;
+  try {
+    loaded = await openProject(modRoot, starsectorRoot);
+  } catch (error) {
+    if (workspace.getModGeneration(modRoot) !== generation) return null;
+    throw error;
+  }
+  if (workspace.getModGeneration(modRoot) !== generation) {
+    await closeProject(loaded.sessionId);
+    return null;
+  }
   measurePerformance('frontend.project.registerProjectManifest', { modRoot }, () => project.registerProjectManifest(loaded));
   recordLogBestEffort({
     level: 'info',
@@ -161,10 +190,10 @@ function updateLoadedEntry(modRoot: string, loaded: ProjectManifest): string {
   return displayName;
 }
 
-function rollbackFailedModOpening(modRoot: string) {
+async function rollbackFailedModOpening(modRoot: string) {
   const workspace = useWorkspaceStore();
-  removeModRuntimeState(modRoot);
   workspace.showOverview();
+  await removeLoadedModRuntime(modRoot);
 }
 
 function mergeOpeningWarnings(detectedWarnings: { message: string }[], manifestWarnings: string[]): string[] {

@@ -6,6 +6,7 @@ import {
   type ResourceCacheInvalidationEvent,
 } from '@/services/resource-cache.service';
 import { recordPerformance } from '@/shared/runtime/performance';
+import { mediaBudgetBytes, registerMediaBudgetEntry, removeMediaBudgetEntry, touchMediaBudgetEntry } from '@/shared/runtime/media-budget';
 import type { ProjectSessionId, ResourceRef } from '@/shared/types';
 
 export const RESOURCE_MEDIA_CACHE_CAPACITY = 512;
@@ -26,7 +27,6 @@ interface PendingMedia {
   done: Promise<void>;
   resolve: () => void;
   reject: (error: unknown) => void;
-  version: number;
 }
 
 type ResourceMediaInvalidationListener = (event: ResourceCacheInvalidationEvent) => void;
@@ -35,7 +35,6 @@ const media = reactive(new Map<string, string | null>());
 const accessOrder = new Map<string, true>();
 const pending = new Map<string, PendingMedia>();
 const inFlight = new Map<string, PendingMedia>();
-const keyVersions = new Map<string, number>();
 const invalidationListeners = new Set<ResourceMediaInvalidationListener>();
 let flushHandle: number | null = null;
 
@@ -47,6 +46,7 @@ export function resourceMediaDataUrl(
   const key = resourceCacheKey(sessionId, resource);
   if (!media.has(key)) return undefined;
   touchMedia(key);
+  touchMediaBudgetEntry(`media:${key}`);
   return media.get(key) ?? undefined;
 }
 
@@ -65,6 +65,7 @@ export async function ensureResourceMedia(
     if (media.has(key)) {
       cacheHits += 1;
       touchMedia(key);
+      touchMediaBudgetEntry(`media:${key}`);
       continue;
     }
     const existing = pending.get(key) ?? inFlight.get(key);
@@ -78,7 +79,7 @@ export async function ensureResourceMedia(
       resolve = doneResolve;
       reject = doneReject;
     });
-    pending.set(key, { sessionId, resource, done, resolve, reject, version: keyVersions.get(key) ?? 0 });
+    pending.set(key, { sessionId, resource, done, resolve, reject });
     waitFor.push(done);
     requested += 1;
   }
@@ -146,7 +147,7 @@ async function flushPendingMedia(): Promise<void> {
           group.map(([, item]) => item.resource),
         );
         group.forEach(([key, item], index) => {
-          if ((keyVersions.get(key) ?? 0) === item.version) storeMedia(key, dataUrls[index] ?? null);
+          if (inFlight.get(key) === item) storeMedia(key, dataUrls[index] ?? null);
           item.resolve();
         });
       } catch (error) {
@@ -164,17 +165,24 @@ async function flushPendingMedia(): Promise<void> {
 function storeMedia(key: string, dataUrl: string | null): void {
   media.set(key, dataUrl);
   touchMedia(key);
+  registerMediaBudgetEntry(`media:${key}`, mediaBudgetBytes(dataUrl), () => removeMediaKey(key));
   while (accessOrder.size > RESOURCE_MEDIA_CACHE_CAPACITY) {
     const oldestKey = accessOrder.keys().next().value as string | undefined;
     if (oldestKey === undefined) return;
     accessOrder.delete(oldestKey);
-    media.delete(oldestKey);
+    removeMediaKey(oldestKey);
   }
 }
 
 function touchMedia(key: string): void {
   accessOrder.delete(key);
   accessOrder.set(key, true);
+}
+
+function removeMediaKey(key: string): void {
+  media.delete(key);
+  accessOrder.delete(key);
+  removeMediaBudgetEntry(`media:${key}`);
 }
 
 subscribeResourceInvalidations((event) => {
@@ -190,16 +198,17 @@ subscribeResourceInvalidations((event) => {
       const key = resourceCacheKey(event.sessionId, resource);
       invalidateMediaKey(key);
     }
+    for (const scope of event.invalidation?.resources ?? []) {
+      invalidateMediaKey(resourceCacheKey(event.sessionId, scope));
+    }
   }
   for (const listener of invalidationListeners) listener(event);
 });
 
 function invalidateMediaKey(key: string): void {
-  const version = (keyVersions.get(key) ?? 0) + 1;
-  keyVersions.set(key, version);
-  media.delete(key);
-  accessOrder.delete(key);
-  const queued = pending.get(key);
-  if (queued) queued.version = version;
+  removeMediaKey(key);
+  pending.get(key)?.resolve();
+  pending.delete(key);
+  inFlight.get(key)?.resolve();
   inFlight.delete(key);
 }

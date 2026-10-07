@@ -252,6 +252,7 @@ describe('useConfigFamilyViewModel saving', () => {
       'v9',
       expect.objectContaining({ variantId: 'v9' }),
       'v1',
+      'data/variants/v1.variant',
       mocks.feedback,
     );
     expect(vm.selectedId.value).toBe('v9');

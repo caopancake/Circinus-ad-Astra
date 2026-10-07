@@ -9,6 +9,7 @@
 
 export interface RuntimeCacheOptions {
   capacity: number;
+  onEvict?: (key: string) => void;
 }
 
 export interface RuntimeCache<TKey extends string, TValue> {
@@ -19,6 +20,7 @@ export interface RuntimeCache<TKey extends string, TValue> {
   set(key: TKey, value: TValue): void;
   delete(key: TKey): void;
   keys(): IterableIterator<TKey>;
+  pendingKeys(): IterableIterator<TKey>;
   versionOf(key: TKey): number;
   bumpVersion(key: TKey): void;
   deleteVersion(key: TKey): void;
@@ -31,6 +33,7 @@ export interface RuntimeCache<TKey extends string, TValue> {
 
 export function createRuntimeCache<TKey extends string, TValue>(options: RuntimeCacheOptions): RuntimeCache<TKey, TValue> {
   const { capacity } = options;
+  const onEvict = options.onEvict;
   const cache = new Map<TKey, TValue>();
   const versions = new Map<TKey, number>();
   const pending = new Map<TKey, unknown>();
@@ -48,6 +51,7 @@ export function createRuntimeCache<TKey extends string, TValue>(options: Runtime
       if (oldest === undefined) return;
       cache.delete(oldest);
       versions.delete(oldest);
+      onEvict?.(oldest);
     }
   }
 
@@ -77,6 +81,9 @@ export function createRuntimeCache<TKey extends string, TValue>(options: Runtime
     },
     keys() {
       return cache.keys();
+    },
+    pendingKeys() {
+      return pending.keys();
     },
     versionOf(key) {
       return versions.get(key) ?? 0;

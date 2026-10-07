@@ -5,12 +5,20 @@ import type { EditorSpecKind } from '@/shared/types';
 
 export const WINDOW_EVENTS = {
   editorSpecSaved: 'editor-spec-saved',
+  editorPreviewDraftUpdated: 'editor-preview-draft-updated',
   fileEditorFocusLine: 'file-editor-focus-line',
   fileEditorSaved: 'file-editor-saved',
   fileEditorTextApplied: 'file-editor-text-applied',
   projectSessionInvalidated: 'project-session-invalidated',
   appSettingsChanged: 'app-settings-changed',
 } as const;
+
+export interface EditorPreviewDraftUpdatedEvent {
+  sessionId: string;
+  modRoot: string;
+  id: string;
+  draft: RowData;
+}
 
 export interface EditorSpecSavedEvent {
   kind: EditorSpecKind;

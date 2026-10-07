@@ -1,20 +1,34 @@
 use crate::{
     errors::{AppError, AppResult},
-    io::{FsRootBoundary, build_text_change, read_text_bytes_no_bom, read_utf8_no_bom},
+    io::{
+        FsRootBoundary, RootWriteLock, acquire_root_write_lock, build_text_change,
+        read_text_bytes_no_bom, read_utf8_no_bom,
+    },
     models::{EditableFileData, FileChangeReplayDirection, WriteResult},
-    services::file_changes::apply_file_change_set,
+    services::file_changes::apply_file_change_set_with_lock,
 };
 use std::path::Path;
 
 pub fn save_text_file(mod_root: &str, path: &str, text: String) -> AppResult<WriteResult> {
+    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
+    save_text_file_with_lock(mod_root, path, text, write_lock)
+}
+
+fn save_text_file_with_lock(
+    mod_root: &str,
+    path: &str,
+    text: String,
+    write_lock: RootWriteLock,
+) -> AppResult<WriteResult> {
     let path = Path::new(path);
     let boundary = FsRootBoundary::new(Path::new(mod_root), "mod root")?;
     let path = boundary.resolve_absolute(path, "file path")?;
     let change = build_text_change(&path, Some(text))?;
-    apply_file_change_set(
+    apply_file_change_set_with_lock(
         mod_root,
         FileChangeReplayDirection::Redo,
         vec![change.clone()],
+        write_lock,
     )?;
     Ok(WriteResult::from_changes(vec![change]))
 }
@@ -38,6 +52,7 @@ pub fn transcode_file_to_utf8(
     path: &str,
     encoding: &str,
 ) -> AppResult<WriteResult> {
+    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
     let target = Path::new(path);
     let boundary = FsRootBoundary::new(Path::new(mod_root), "mod root")?;
     let target = boundary.resolve_absolute(target, "file path")?;
@@ -65,7 +80,7 @@ pub fn transcode_file_to_utf8(
             ),
         ));
     }
-    save_text_file(mod_root, path, text.into_owned())
+    save_text_file_with_lock(mod_root, path, text.into_owned(), write_lock)
 }
 
 #[cfg(test)]

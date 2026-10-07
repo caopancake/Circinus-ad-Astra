@@ -2,6 +2,7 @@ import { WINDOW_EVENTS, type ProjectSessionInvalidatedEvent } from '@/windows/wi
 import { emitWindowEvent, listenWindowEvent, type WindowEventHandler } from '@/windows/tauri.events';
 import { recordWindowEventHandlerError } from '@/orchestrators/window-event-errors.orchestrator';
 import { useProjectStore } from '@/stores/project.store';
+import { useWriteSyncStore } from '@/stores/write-sync.store';
 import { requestProjectSessionRefresh } from '@/services/session.service';
 import { invalidateQueryCacheByProject } from '@/services/query-cache.service';
 import { invalidateResourceCacheByProject } from '@/services/resource-cache.service';
@@ -54,15 +55,54 @@ export async function refreshLoadedSessionsAfterWrite(result: WriteResult, relat
   return events;
 }
 
+type PendingWriteEvent = { id: number; event: ProjectSessionInvalidatedEvent };
+
 async function refreshProjectSessionByChanges(
   project: ReturnType<typeof useProjectStore>,
   manifest: ProjectManifest,
   changes: WriteResult['changes'],
 ): Promise<ProjectSessionInvalidatedEvent> {
-  const result = await requestProjectSessionRefresh(manifest.sessionId, changes);
-  project.replaceProjectManifest(result.manifest);
-  const event = { manifest: result.manifest, invalidation: result.invalidation };
-  applyProjectSessionCacheInvalid(event);
-  await emitProjectSessionInvalidated(event);
-  return event;
+  const sync = useWriteSyncStore();
+  const entry = sync.enqueue(manifest.modRoot, manifest.sessionId, changes);
+  const events = await retryPendingProjectSessionWrites(project, manifest.sessionId);
+  return events.find((event) => event.id === entry.id)!.event;
+}
+
+const syncExecutions = new Map<string, Promise<PendingWriteEvent[]>>();
+
+export async function retryPendingProjectSessionWrites(
+  project: ReturnType<typeof useProjectStore>,
+  sessionId: string,
+): Promise<PendingWriteEvent[]> {
+  const running = syncExecutions.get(sessionId);
+  if (running) {
+    const completed = await running;
+    const remaining: PendingWriteEvent[] = await retryPendingProjectSessionWrites(project, sessionId);
+    return [...completed, ...remaining];
+  }
+  const execution = synchronizePendingWrites(project, sessionId);
+  syncExecutions.set(sessionId, execution);
+  try {
+    return await execution;
+  } finally {
+    syncExecutions.delete(sessionId);
+  }
+}
+
+async function synchronizePendingWrites(project: ReturnType<typeof useProjectStore>, sessionId: string): Promise<PendingWriteEvent[]> {
+  const sync = useWriteSyncStore();
+  const events: PendingWriteEvent[] = [];
+  for (const entry of sync.pending.filter((entry) => entry.sessionId === sessionId)) {
+    if (!entry.refreshed) {
+      const refreshed = await requestProjectSessionRefresh(entry.sessionId, entry.changes);
+      project.replaceProjectManifest(refreshed.manifest);
+      applyProjectSessionCacheInvalid(refreshed);
+      sync.markRefreshed(entry.id, refreshed);
+    }
+    const refreshed = sync.pending.find((pending) => pending.id === entry.id)!.refreshed!;
+    await emitProjectSessionInvalidated(refreshed);
+    sync.complete(entry.id);
+    events.push({ id: entry.id, event: refreshed });
+  }
+  return events;
 }

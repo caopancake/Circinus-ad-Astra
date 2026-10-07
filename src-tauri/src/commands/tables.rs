@@ -1,4 +1,4 @@
-use super::ensure_session_mod_scope;
+use super::ensure_write_scope;
 use crate::{
     errors::AppError,
     models::{WriteResult, command_payloads::SaveCsvPatchPayload},
@@ -7,7 +7,7 @@ use crate::{
 
 #[tauri::command(async)]
 pub fn save_csv_patch(payload: SaveCsvPatchPayload) -> Result<WriteResult, AppError> {
-    ensure_session_mod_scope(&payload)?;
+    ensure_write_scope(&payload)?;
     services::project::save_csv_patch_with_json_options(
         &payload.session_id,
         payload.table,

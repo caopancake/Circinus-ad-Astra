@@ -10,8 +10,11 @@
 `src/app/components/editors/ProjectileEditor.vue`：弹体编辑器组件 owner，拥有 projectile/missile 分支表单。
 `src/app/components/editors/WeaponFirePreview.vue`：发射预览组件 owner，拥有弹道模拟、光束与播放控制。
 `src/domain/editors/lib/weapon-sprite-fields.ts`：武器贴图字段、键映射与 origin 比例 owner。
+`src/domain/editors/lib/game-spec-enums.ts`：游戏 spec 正式枚举 owner。
+`src/domain/editors/lib/projectile-fields.ts`：弹体引擎槽完整默认值 owner。
 `src/app/composables/editors/use-editor-window-view-model.ts`：窗口 ViewModel owner，维护目标 Draft Session、弹体 bundle 与资源。
 `src/windows/editor.window.ts`：编辑器窗口请求 owner，承载武器、弹体与预览三种窗口类型。
+`src-tauri/src/services/project/query/entities.rs`：草稿武器资源引用 query owner。
 `src-tauri/src/services/editor_config/spec_entities.rs` 同层的编辑器写链路：武器与弹体保存。
 `scripts/architecture/rules/editor-module-boundary.mjs`：编辑器组件边界规则 owner。
 
@@ -45,9 +48,11 @@
 ### 发射预览
 
 1. 武器编辑器以当前草稿快照（或已保存 bundle）打开预览窗口。
-2. 预览按炮塔或固定视图构造发射点、模拟弹道与光束阶段。
-3. 播放控制支持开火、停火、暂停与倍速。
-4. 弹体缺失属于错误状态，严禁构造默认弹体。
+2. bundle 查询按草稿 projectileSpecId 读取弹体，后端 query 按草稿贴图字段返回资源引用。
+3. 资源缓存批量解析贴图并交给预览。
+4. 预览按炮塔或固定视图构造发射点、模拟弹道与光束阶段。
+5. 播放控制支持开火、停火、暂停与倍速。
+6. 已存在窗口消费再次打开动作的草稿快照事件并重载 bundle。
 
 ## 规范
 
@@ -55,8 +60,12 @@
 - 画布镜像模式按空格开关，仅作用于当前视图的发射点数组；配对只按坐标对称实时计算，检查器数值输入不参与镜像联动。
 - 弹体引用变更必须经 `projectileSpecId` 正式字段，严禁按显示名或下标关联。
 - 预览窗口的轨道构造必须来自武器与弹体的正式字段，资源失效时按依赖刷新。
+- 发射预览的草稿快照必须同时决定武器贴图资源与 `projectileSpecId` 对应的弹体 bundle。
+- 已存在的预览窗口再次打开时必须接收最新草稿快照并刷新依赖 bundle。
+- 草稿资源引用必须由后端 query 返回，只允许通过正式资源缓存解析。
 - 发射点坐标必须使用吸附步长；角度偏移必须整数化。
 - 弹体编辑的引擎槽位只允许在 missile 分支编辑。
+- 弹体引擎新增必须产生唯一 id、loc、角度、宽高与完整 CUSTOM styleSpec；弹体和导弹选项必须来自游戏正式枚举。
 
 ## 陷阱
 

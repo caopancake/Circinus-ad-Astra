@@ -4,6 +4,9 @@ import { useConfigEditorDraftSession } from '@/app/composables/config/use-config
 import type { ConfigEntityFamilyDefinition, ConfigFamilyFile } from '@/domain/config/config-entity-families';
 import { familyFileId } from '@/domain/config/config-entity-families';
 import type { RowData } from '@/shared/types';
+import { createSchemaRuntimeContext } from '@/app/composables/use-schema-runtime-context';
+import { queryBuiltInWeaponSlotOptions } from '@/services/config-resource.service';
+import { hasQueryInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 
 export function useConfigFamilyEditorViewModel(params: {
   family: ConfigEntityFamilyDefinition;
@@ -67,6 +70,32 @@ export function useConfigFamilyEditorViewModel(params: {
     }
   }
 
+  const schemaRuntimeContext = computed(() => {
+    const root = params.modRoot.value;
+    const session = params.sessionId.value;
+    if (!root || !session) return null;
+    const context = createSchemaRuntimeContext(root, session);
+    const baseHullId = draftSession.draftValue.value.baseHullId;
+    if (family.id !== 'skin') return context;
+    const hullId = typeof baseHullId === 'string' ? baseHullId : '';
+    return {
+      ...context,
+      sourceContextKey: hullId,
+      querySourceOptions: (source: string) =>
+        source === 'hull:builtInWeaponSlots'
+          ? hullId
+            ? queryBuiltInWeaponSlotOptions(session, hullId)
+            : Promise.resolve([])
+          : context.querySourceOptions!(source),
+      subscribeSourceOptionInvalidation: (source: string, resources: () => import('@/shared/types').ResourceRef[], listener: () => void) =>
+        source === 'hull:builtInWeaponSlots'
+          ? subscribeQueryInvalidations((event) => {
+              if (event.sessionId === session && hasQueryInvalidation(event, 'hull-references')) listener();
+            })
+          : context.subscribeSourceOptionInvalidation!(source, resources, listener),
+    };
+  });
+
   return {
     draftData: draftSession.draftValue,
     externalUpdateNotice: draftSession.externalUpdateNotice,
@@ -75,5 +104,6 @@ export function useConfigFamilyEditorViewModel(params: {
     save,
     saving: draftSession.saving,
     selectedFile,
+    schemaRuntimeContext,
   };
 }

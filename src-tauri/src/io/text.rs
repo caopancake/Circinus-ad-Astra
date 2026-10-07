@@ -1,7 +1,7 @@
 use crate::{
     errors::{AppError, AppResult},
     io::paths::validate_walk_entry,
-    models::known_cp1252_char,
+    models::decode_starsector_text,
 };
 use std::fs::OpenOptions;
 use std::{fs, path::Path};
@@ -23,18 +23,12 @@ pub fn ensure_file_appendable(path: &Path) -> AppResult<()> {
 
 pub fn read_utf8_no_bom(path: &Path) -> AppResult<String> {
     let bytes = read_text_bytes_no_bom(path)?;
-    match String::from_utf8(bytes) {
-        Ok(text) => Ok(text),
-        Err(error) => {
-            let bytes = normalize_known_cp1252_bytes(error.into_bytes());
-            String::from_utf8(bytes).map_err(|error| {
-                AppError::message(
-                    "text.invalid_utf8",
-                    format!("{} is not valid UTF-8: {error}", path.display()),
-                )
-            })
-        }
-    }
+    decode_starsector_text(&bytes).map_err(|offset| {
+        AppError::message(
+            "text.invalid_utf8",
+            format!("{} is not valid UTF-8 at byte {offset}", path.display()),
+        )
+    })
 }
 
 pub fn read_text_bytes_no_bom(path: &Path) -> AppResult<Vec<u8>> {
@@ -66,17 +60,6 @@ pub fn write_utf8_no_bom(path: &Path, text: &str) -> AppResult<()> {
         )
     })?;
     Ok(())
-}
-
-fn normalize_known_cp1252_bytes(mut bytes: Vec<u8>) -> Vec<u8> {
-    let mut normalized = Vec::with_capacity(bytes.len());
-    for byte in bytes.drain(..) {
-        match known_cp1252_char(byte) {
-            Some(ch) => normalized.push(ch as u8),
-            None => normalized.push(byte),
-        }
-    }
-    normalized
 }
 
 #[cfg(test)]

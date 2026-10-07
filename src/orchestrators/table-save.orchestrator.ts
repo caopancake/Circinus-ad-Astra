@@ -11,6 +11,7 @@ import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-ca
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
+import { commitCsvTableSaveDraft } from '@/domain/tables/csv-table-draft';
 
 export type TableSaveResult = 'saved' | 'noop' | 'cancelled';
 
@@ -50,6 +51,7 @@ export async function saveCapturedTableChanges(
     if (Object.keys(state.dirty[table]).length === 0) return 'noop';
 
     const csvEditHistory = useTablesEditHistoryStore();
+    const submittedHistory = csvEditHistory.captureSaveHistory(modRoot, table);
     const patches = buildCurrentTablePatches(state, table);
     const result = await runConfirmedJsonWrite(feedback, (options) =>
       writeCsvPatch(manifest.sessionId, modRoot, table, patches, associatedSpecs, options),
@@ -74,12 +76,10 @@ export async function saveCapturedTableChanges(
     if (result.changes.length > 0) {
       await completeSavedWrite({ modRoot, result, label: `保存 ${table} CSV`, sessionId: manifest.sessionId }, useProjectStore());
       if (!isTableSaveTargetCurrent(target)) return 'saved';
-      tables.applySavedRowKeyMapForMod(modRoot, table, result.keyMap);
-      tables.markTableSavedForMod(modRoot, table);
-      csvEditHistory.clearCsvEditHistory(modRoot, table);
-    } else {
-      tables.applySavedRowKeyMapForMod(modRoot, table, result.keyMap);
-      tables.markTableSavedForMod(modRoot, table);
+      commitCsvTableSaveDraft(state, table, patches, result.keyMap);
+      csvEditHistory.applySavedRowKeyMap(modRoot, table, result.keyMap);
+      csvEditHistory.commitSaveHistory(modRoot, table, submittedHistory);
+      if (Object.keys(state.dirty[table]).length === 0) csvEditHistory.clearCsvEditHistory(modRoot, table);
     }
     return 'saved';
   } finally {

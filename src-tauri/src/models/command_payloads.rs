@@ -114,6 +114,14 @@ pub struct QueryEntityListPayload {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct WeaponDraftResourcesPayload {
+    pub session_id: ProjectSessionId,
+    pub id: String,
+    pub draft: Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ResourceDataUrlBatchPayload {
     pub session_id: ProjectSessionId,
     pub resources: Vec<ResourceRef>,
@@ -190,6 +198,8 @@ pub struct ConfigFileEntityPayload {
     pub previous_id: Option<String>,
     pub next_id: String,
     pub data: Value,
+    #[serde(deserialize_with = "required_nullable")]
+    pub rel_path: Option<String>,
     #[serde(default)]
     pub json_write: JsonWriteOptions,
     #[serde(default)]
@@ -509,6 +519,21 @@ mod tests {
         }));
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn config_file_entity_payload_requires_explicit_nullable_rel_path() {
+        let result = serde_json::from_value::<ConfigFileEntityPayload>(json!({
+            "sessionId":"session-1", "modRoot":"D:/mods/demo", "previousId":null,
+            "nextId":"demo", "data":{"id":"demo"}
+        }));
+        assert!(result.is_err());
+        let payload = serde_json::from_value::<ConfigFileEntityPayload>(json!({
+            "sessionId":"session-1", "modRoot":"D:/mods/demo", "previousId":null,
+            "nextId":"demo", "relPath":null, "data":{"id":"demo"}
+        }))
+        .unwrap();
+        assert!(payload.rel_path.is_none());
     }
 
     #[test]

@@ -179,7 +179,7 @@
           "key": "removeBuiltInWeapons",
           "type": "string-array",
           "label": "移除内置武器",
-          "source": "csv:weapons.id"
+          "source": "hull:builtInWeaponSlots"
         },
         {
           "key": "removeWeaponSlots",
@@ -207,6 +207,7 @@
                   "UNIVERSAL",
                   "SYNERGY",
                   "COMPOSITE",
+                  "BUILT_IN",
                   "DECORATIVE",
                   "SYSTEM",
                   "STATION_MODULE",
@@ -280,8 +281,14 @@
       "fields": [
         {
           "key": "removeEngineSlots",
-          "type": "string-array",
-          "label": "移除引擎槽"
+          "type": "array",
+          "label": "移除引擎槽",
+          "item": {
+            "key": "engineSlotIndex",
+            "type": "integer",
+            "label": "引擎槽索引",
+            "min": 0
+          }
         },
         {
           "key": "engineSlotChanges",

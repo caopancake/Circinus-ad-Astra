@@ -46,6 +46,10 @@ fn write_record_line<'a>(out: &mut String, cells: impl Iterator<Item = &'a str>)
 }
 
 fn write_cell(out: &mut String, cell: &str) {
+    if !cell.is_empty() && cell.chars().all(|character| character == '"') {
+        out.push_str(&cell.replace('"', "\"\""));
+        return;
+    }
     if cell.contains([',', '"', '\n', '\r']) {
         out.push('"');
         out.push_str(&cell.replace('"', "\"\""));
@@ -70,34 +74,14 @@ pub fn value_to_cell(value: &Value) -> AppResult<String> {
 // Decodes bytes to chars; the CP1252 smart-quote mapping owner lives in
 // models and is shared with text reading.
 fn decode_csv_chars(path_label: &str, bytes: &[u8]) -> AppResult<Vec<char>> {
-    let mut chars = Vec::with_capacity(bytes.len());
-    let mut index = 0usize;
-    while index < bytes.len() {
-        let byte = bytes[index];
-        if let Some(ch) = crate::models::known_cp1252_char(byte) {
-            index += 1;
-            chars.push(ch);
-        } else if byte <= 0x7f {
-            index += 1;
-            chars.push(byte as char);
-        } else {
-            let text = std::str::from_utf8(&bytes[index..]).map_err(|error| {
-                AppError::message(
-                    "text.invalid_utf8",
-                    format!("{path_label} is not valid UTF-8: {error}"),
-                )
-            })?;
-            let ch = text.chars().next().ok_or_else(|| {
-                AppError::message(
-                    "text.invalid_utf8",
-                    format!("{path_label} is not valid UTF-8: empty sequence"),
-                )
-            })?;
-            index += ch.len_utf8();
-            chars.push(ch);
-        }
-    }
-    Ok(chars)
+    crate::models::decode_starsector_text(bytes)
+        .map(|text| text.chars().collect())
+        .map_err(|offset| {
+            AppError::message(
+                "text.invalid_utf8",
+                format!("{path_label} is not valid UTF-8 at byte {offset}"),
+            )
+        })
 }
 
 // Plain comma split (quotes invisible, like the game's header handling); with
@@ -497,6 +481,28 @@ mod tests {
         let out = render_csv_text(&header, &[&row]).unwrap();
         assert!(out.lines().next().is_some_and(|line| line == "id,name"));
         assert!(out.contains("x,X"));
+    }
+
+    #[test]
+    fn render_parse_round_trip_preserves_a_quote_only_cell() {
+        let header = vec!["id".to_string(), "text".to_string()];
+        let mut row = Map::new();
+        row.insert("id".to_string(), Value::String("a".to_string()));
+        row.insert("text".to_string(), Value::String("\"".to_string()));
+        let rendered = render_csv_text(&header, &[&row]).unwrap();
+        let parsed = parse_csv_bytes("csv_quote_only.csv", rendered.as_bytes()).unwrap();
+        assert_eq!(parsed.rows[0]["text"], "\"");
+        assert_eq!(
+            render_csv_text(&parsed.header, &parsed.rows.iter().collect::<Vec<_>>()).unwrap(),
+            rendered
+        );
+    }
+
+    #[test]
+    fn utf8_characters_are_decoded_before_cp1252_fallback() {
+        let text = "id,name\na,铜\n";
+        let table = parse_csv_bytes("csv_utf8_multibyte.csv", text.as_bytes()).unwrap();
+        assert_eq!(table.rows[0]["name"], "铜");
     }
 
     fn row_of(pairs: [(&str, &str); 4]) -> Map<String, Value> {

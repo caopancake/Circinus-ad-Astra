@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "vue-tsc --noEmit && vue-tsc -p tsconfig.node.json --noEmit",
-    "lint": "eslint . && node scripts/check-architecture.mjs && node scripts/check-identifier-length.mjs",
+    "lint": "eslint . && node --test scripts/architecture/frontend-layer-boundary.check.mjs && node scripts/check-architecture.mjs && node scripts/check-identifier-length.mjs",
     "encoding:check": "node scripts/check-encoding.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

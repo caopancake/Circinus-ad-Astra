@@ -14,10 +14,9 @@ export function useSchemaSourceOptions(args: {
   let requestId = 0;
   let stopInvalidation: (() => void) | null = null;
 
-  // The catalog only depends on (sessionId, source): current values are ghost-echoed by the
-  // renderer via includeCurrentSelectOptions and never participate in the catalog query.
+  // Context identity tracks entity-dependent catalogs; selected values remain ghost options.
   watch(
-    () => [args.runtimeContext()?.sessionId ?? null, args.field().source ?? null] as const,
+    () => [args.runtimeContext()?.sessionId ?? null, args.runtimeContext()?.sourceContextKey ?? null, args.field().source ?? null] as const,
     () => {
       void reloadSourceOptions();
     },
@@ -25,7 +24,7 @@ export function useSchemaSourceOptions(args: {
   );
 
   watch(
-    () => [args.runtimeContext()?.sessionId ?? null, args.field().source ?? ''] as const,
+    () => [args.runtimeContext()?.sessionId ?? null, args.runtimeContext()?.sourceContextKey ?? null, args.field().source ?? ''] as const,
     () => {
       stopInvalidation?.();
       const context = args.runtimeContext();
@@ -45,7 +44,7 @@ export function useSchemaSourceOptions(args: {
     const context = args.runtimeContext();
     const sessionId = context?.sessionId ?? null;
     const source = args.field().source ?? null;
-    if (!sessionId || !source || !isCsvSource(source)) {
+    if (!sessionId || !source || (!isCsvSource(source) && source !== 'hull:builtInWeaponSlots')) {
       loadedOptions.value = [];
       return;
     }

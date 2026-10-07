@@ -6,7 +6,10 @@ use super::super::definitions::entity_definitions::associated_spec_definition;
 use super::super::model::SessionCsvRow;
 use crate::{
     errors::{AppError, AppResult},
-    io::{FileChangeSetBuilder, JsonWriteBatch, read_json_file, strip_internal_fields},
+    io::{
+        FileChangeSetBuilder, JsonWriteBatch, acquire_root_write_lock, read_json_file,
+        strip_internal_fields,
+    },
     models::{
         AssociatedSpecChange, AssociatedSpecChangeAction, CsvRowKeyMapping, CsvRowPatch,
         CsvRowPatchAction, CsvTableKey, WriteResult,
@@ -40,6 +43,9 @@ pub fn save_csv_patch_with_json_options(
     options: crate::models::JsonWriteOptions,
 ) -> AppResult<WriteResult> {
     let handle = session_handle(session_id)?;
+    let root = lock_session(&handle)?.manifest.mod_root.clone();
+    // Acquire the root before retaining session state throughout the write.
+    let write_lock = acquire_root_write_lock(Path::new(&root))?;
     let mut session = lock_session(&handle)?;
     ensure_registered_table_rows(&mut session, table)?;
     let (mod_root, rel_path, header, mut rows, mut next_row_seq) = {
@@ -55,9 +61,9 @@ pub fn save_csv_patch_with_json_options(
     let key_map = apply_csv_row_patches(table, &mut rows, &mut next_row_seq, patches)?;
     let row_values: Vec<&Map<String, Value>> = rows.iter().map(|row| &row.row).collect();
     let csv_text = render_csv_text(&header, &row_values)?;
-    let mut builder = FileChangeSetBuilder::new(Path::new(&mod_root))?;
+    let mut builder = FileChangeSetBuilder::new_with_lock(Path::new(&mod_root), write_lock)?;
     let mut json = JsonWriteBatch::new(options);
-    builder.text_file(&rel_path, Some(csv_text))?;
+    builder.text_file(&rel_path, Some(csv_text.clone()))?;
     for spec in &associated_specs {
         add_associated_spec_change(&mut builder, table, spec, &mut json)?;
     }
@@ -68,6 +74,7 @@ pub fn save_csv_patch_with_json_options(
         table_data.rows = Some(rows);
         table_data.header = header;
         table_data.next_row_seq = next_row_seq;
+        table_data.saved_text = Some(csv_text);
     }
     let write_result: WriteResult<()> = WriteResult::new(changes, key_map, None);
     debug_assert!(
@@ -270,6 +277,103 @@ mod tests {
         assert_eq!(result.key_map[0].previous_key, "ships:new:1");
         assert!(csv.contains("new_ship,New Ship"));
         assert!(spec.contains("\"hullId\": \"new_ship\""));
+    }
+
+    #[test]
+    fn save_refresh_preserves_surviving_and_new_row_keys_across_followup_saves() {
+        let root = temp_dir("csv_save_refresh_row_keys");
+        std::fs::create_dir_all(root.join("data/hulls")).unwrap();
+        write_utf8_no_bom(
+            &root.join("data/hulls/ship_data.csv"),
+            "id,name\na,A\nb,B\nc,C\n#note,Keep\n,No ID\nb,Duplicate\n",
+        )
+        .unwrap();
+        let mut trace =
+            crate::services::project::performance::PerformanceTrace::new("project.openSession");
+        let manifest = open_project_session_traced(&root, None, &mut trace).unwrap();
+        let window = query_csv_table_window(
+            &manifest.session_id,
+            CsvTableKey::Ships,
+            0,
+            20,
+            None,
+            CsvFactionFilter::All,
+        )
+        .unwrap();
+        let survivor_key = window.rows[1].row_key.clone();
+        let comment_key = window.rows[3].row_key.clone();
+        let empty_id_key = window.rows[4].row_key.clone();
+        let duplicate_key = window.rows[5].row_key.clone();
+        let result = save_csv_patch(
+            &manifest.session_id,
+            CsvTableKey::Ships,
+            vec![
+                CsvRowPatch {
+                    row_key: window.rows[0].row_key.clone(),
+                    action: CsvRowPatchAction::Delete,
+                    row: Map::new(),
+                },
+                CsvRowPatch {
+                    row_key: "ships:new:0".to_string(),
+                    action: CsvRowPatchAction::Upsert,
+                    row: row_with_id("id", "d"),
+                },
+            ],
+            Vec::new(),
+        )
+        .unwrap();
+        let new_key = result.key_map[0].next_key.clone();
+        crate::services::project::session::invalidate_project_session(
+            &manifest.session_id,
+            result.changes,
+        )
+        .unwrap();
+        let window = query_csv_table_window(
+            &manifest.session_id,
+            CsvTableKey::Ships,
+            0,
+            20,
+            None,
+            CsvFactionFilter::All,
+        )
+        .unwrap();
+        assert_eq!(window.rows[0].row_key, survivor_key);
+        assert_eq!(window.rows[2].row_key, comment_key);
+        assert_eq!(window.rows[3].row_key, empty_id_key);
+        assert_eq!(window.rows[4].row_key, duplicate_key);
+        assert_eq!(window.rows[5].row_key, new_key);
+        let result = save_csv_patch(
+            &manifest.session_id,
+            CsvTableKey::Ships,
+            vec![CsvRowPatch {
+                row_key: survivor_key,
+                action: CsvRowPatchAction::Upsert,
+                row: row_with_id("id", "b2"),
+            }],
+            Vec::new(),
+        )
+        .unwrap();
+        crate::services::project::session::invalidate_project_session(
+            &manifest.session_id,
+            result.changes,
+        )
+        .unwrap();
+        let window = query_csv_table_window(
+            &manifest.session_id,
+            CsvTableKey::Ships,
+            0,
+            20,
+            None,
+            CsvFactionFilter::All,
+        )
+        .unwrap();
+        assert_eq!(window.rows[0].row["id"], "b2");
+        assert_eq!(window.rows[1].row["id"], "c");
+        assert_eq!(window.rows[4].row["id"], "b");
+        assert_eq!(window.rows[4].row_key, duplicate_key);
+        assert_eq!(window.rows[5].row_key, new_key);
+        close_project_session(manifest.session_id).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

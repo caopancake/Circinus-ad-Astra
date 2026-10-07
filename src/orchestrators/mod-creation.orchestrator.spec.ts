@@ -39,6 +39,10 @@ describe('createModProject', () => {
 });
 
 describe('openCreatedModProject', () => {
+  it('returns cancellation after the created Mod is removed during opening', async () => {
+    mocks.openCreatedModTarget.mockResolvedValue({ type: 'cancelled', modRoot: createdFixture.modRoot });
+    await expect(openCreatedModProject(createdFixture)).resolves.toBeNull();
+  });
   it('returns the opened mod name and warnings', async () => {
     mocks.openCreatedModTarget.mockResolvedValue({ type: 'mod-loaded', modName: 'New Mod', warnings: ['warn a'] });
     await expect(openCreatedModProject(createdFixture)).resolves.toEqual({ modName: 'New Mod', warnings: ['warn a'] });

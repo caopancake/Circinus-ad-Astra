@@ -65,14 +65,16 @@ export async function restorePersistedWorkspace(options: RestoreWorkspaceOptions
   if (persisted.mods.length === 0 && !persisted.starsectorRoot) return;
 
   workspace.applyPersistedWorkspaceSnapshot(persisted);
+  const restoreTargets = persisted.mods.map((mod) => ({ mod, generation: workspace.getModGeneration(mod.modRoot)! }));
   if (persisted.starsectorRoot) {
     const overview = await scanDirectoryGameOverview(persisted.starsectorRoot);
-    workspace.setGameOverview(overview);
+    if (workspace.gameOverview?.starsectorRoot === persisted.starsectorRoot) workspace.setGameOverview(overview);
   }
 
-  for (const mod of persisted.mods) {
+  for (const { mod, generation } of restoreTargets) {
     try {
-      const loaded = await restorePersistedModProject(mod, persisted.starsectorRoot ?? options.knownStarsectorRoot);
+      const loaded = await restorePersistedModProject(mod, persisted.starsectorRoot ?? options.knownStarsectorRoot, generation);
+      if (!loaded || workspace.getModGeneration(mod.modRoot) !== generation) continue;
       const name = cell(loaded.modInfo?.name) || mod.displayName;
       const version = formatModVersion(loaded.modInfo?.version) || mod.version;
       workspace.updateModInfo(mod.modRoot, name, version);
@@ -92,8 +94,13 @@ export async function restorePersistedWorkspace(options: RestoreWorkspaceOptions
 
 export type WorkspacePersistenceWatcher = ReturnType<typeof watchWorkspacePersistence>;
 
-async function restorePersistedModProject(mod: PersistedMod, starsectorRoot: string | null): Promise<ProjectManifest> {
-  const loaded = await openModProjectManifest(mod.modRoot, starsectorRoot);
+async function restorePersistedModProject(
+  mod: PersistedMod,
+  starsectorRoot: string | null,
+  generation: number,
+): Promise<ProjectManifest | null> {
+  const loaded = await openModProjectManifest(mod.modRoot, starsectorRoot, generation);
+  if (!loaded || useWorkspaceStore().getModGeneration(mod.modRoot) !== generation) return null;
   measurePerformance('frontend.hydrateDirectoryOpenedModRuntime', { modRoot: mod.modRoot, activate: false }, () =>
     hydrateOpenedModRuntime(mod.modRoot, loaded, false),
   );

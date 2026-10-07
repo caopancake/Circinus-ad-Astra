@@ -1,4 +1,4 @@
-use super::ensure_session_mod_scope;
+use super::ensure_write_scope;
 use crate::{
     errors::AppError,
     models::WriteResult,
@@ -10,13 +10,13 @@ use crate::{
 
 #[tauri::command(async)]
 pub fn save_mod_files(payload: SaveModFilesPayload) -> Result<WriteResult, AppError> {
-    ensure_session_mod_scope(&payload)?;
+    ensure_write_scope(&payload)?;
     services::file_changes::save_mod_files(&payload.mod_root, payload.files)
 }
 
 #[tauri::command(async)]
 pub fn save_mod_info(payload: SaveModInfoPayload) -> Result<WriteResult, AppError> {
-    ensure_session_mod_scope(&payload)?;
+    ensure_write_scope(&payload)?;
     services::file_changes::save_mod_info(
         &payload.mod_root,
         payload.data,
@@ -27,7 +27,7 @@ pub fn save_mod_info(payload: SaveModInfoPayload) -> Result<WriteResult, AppErro
 
 #[tauri::command(async)]
 pub fn apply_file_change_set(payload: ApplyFileChangeSetPayload) -> Result<WriteResult, AppError> {
-    ensure_session_mod_scope(&payload)?;
+    ensure_write_scope(&payload)?;
     services::file_changes::apply_file_change_set(
         &payload.mod_root,
         payload.direction,

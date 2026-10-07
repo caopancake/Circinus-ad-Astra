@@ -21,8 +21,8 @@
 - 后端 query 把资源标为 `ResourceRef`；前端通用媒体服务批量 query，组件只消费 ResourceRef 与缓存结果。
 - 资源查找按 Mod 优先、符合规则时 Core fallback；编辑器贴图为纯引用，后端校验所选路径位于 Mod 根内并返回正斜杠相对路径。
 - 舰体引用空请求只返回创建表单所需目录；带 ID 请求只解析名称与引用元数据；目录选项严禁批量转 data URL。
-- 前端 data URL 缓存使用全局 512 项 LRU；后端资源指纹缓存使用全局 512 项容量，命中必须刷新访问顺序。
-- 通用媒体服务保持 25ms 合批、single-flight、session 隔离、路径标准化与资源失效。
+- 前端 resource cache 与 media projection 在每个 WebView 共用 64 MiB data URL 预算；两层均按访问顺序逐出，resource cache 与后端资源指纹缓存各自保持 512 项容量。
+- 通用媒体服务保持 25ms 合批、single-flight、session 隔离、路径标准化与资源失效；失效或关闭时 pending 与 in-flight 投影请求立即释放，迟到结果不得重新写入。
 - Core 派生索引只按 canonical 游戏根持久化，只缓存已请求类型，读取前必须以源内容指纹校验，Mod 投射物优先覆盖 Core。
 
 ## 链路
@@ -67,5 +67,6 @@
 - 在前端按路径规则拼出 ResourceRef 会让资源身份脱离后端授权。
 - 逐项 IPC 读图会让列表滚动产生请求风暴。
 - 缓存命中不刷新访问顺序会让 LRU 逐出策略失真。
+- resource cache 与 media projection 分别计算预算会让同一 WebView 的 data URL 占用失控。
 - Core fallback 允许写盘会让只读边界被突破。
 - 指纹校验跳过会让过期派生索引冒充当前 Core 内容。

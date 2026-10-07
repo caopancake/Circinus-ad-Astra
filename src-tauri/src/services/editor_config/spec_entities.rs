@@ -2,28 +2,21 @@ use crate::{
     domain::config::validate_config_id,
     domain::editor_config_definitions::{EntitySpecDefinition, entity_spec_definition},
     errors::{AppError, AppResult},
-    io::{FileChangeSetBuilder, JsonWriteBatch, read_json_file, strip_internal_fields},
+    io::{
+        FileChangeSetBuilder, FsRootBoundary, JsonWriteBatch, acquire_root_write_lock,
+        read_json_file, strip_internal_fields,
+    },
     models::{EntityKind, JsonWriteOptions, WriteResult},
 };
 use serde_json::Value;
 use std::path::Path;
 
-pub fn save_spec_entity(
-    mod_root: &str,
-    kind: EntityKind,
-    previous_id: Option<&str>,
-    next_id: &str,
-    data: Value,
-) -> AppResult<WriteResult<Value>> {
-    save_spec_entity_with_json_options(
-        mod_root,
-        kind,
-        previous_id,
-        next_id,
-        data,
-        JsonWriteOptions::default(),
-        None,
-    )
+pub struct SpecSaveInput<'a> {
+    pub source_rel_path: Option<&'a str>,
+    pub target_exists_in_index: bool,
+    pub data: Value,
+    pub json_write: JsonWriteOptions,
+    pub ordered_json: Option<&'a str>,
 }
 
 pub fn save_spec_entity_with_json_options(
@@ -31,10 +24,16 @@ pub fn save_spec_entity_with_json_options(
     kind: EntityKind,
     previous_id: Option<&str>,
     next_id: &str,
-    data: Value,
-    options: JsonWriteOptions,
-    ordered_json: Option<&str>,
+    input: SpecSaveInput<'_>,
 ) -> AppResult<WriteResult<Value>> {
+    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
+    let SpecSaveInput {
+        source_rel_path,
+        target_exists_in_index,
+        data,
+        json_write,
+        ordered_json,
+    } = input;
     let definition = spec_entity_definition(kind)?;
     let next_id = validate_config_id(next_id, definition.invalid_id_message)?.to_string();
     let mod_root = Path::new(mod_root);
@@ -42,10 +41,28 @@ pub fn save_spec_entity_with_json_options(
         .filter(|value| !value.trim().is_empty())
         .map(|value| validate_config_id(value, definition.invalid_id_message).map(str::to_string))
         .transpose()?;
-    let next_rel_path = definition.default_rel_path(&next_id);
     let renamed = previous_id.as_deref().is_some_and(|id| id != next_id);
+    let next_rel_path = if let Some(source) = source_rel_path {
+        let source_id = previous_id.as_deref().unwrap_or(&next_id);
+        require_spec_file_target(mod_root, definition, kind, source_id, source)?;
+        if renamed {
+            crate::io::forward_slash_path(
+                &Path::new(source).with_file_name(format!("{next_id}{}", definition.extension)),
+            )
+        } else {
+            source.to_string()
+        }
+    } else {
+        if previous_id.is_some() {
+            return Err(AppError::message(
+                "spec.source_path_required",
+                "编辑实体缺少选中文件路径",
+            ));
+        }
+        definition.default_rel_path(&next_id)
+    };
     let target = mod_root.join(&next_rel_path);
-    if renamed && target.exists() {
+    if (renamed || source_rel_path.is_none()) && (target.exists() || target_exists_in_index) {
         return Err(AppError::message(
             "spec.target_exists",
             format!("{}目标已存在: {next_rel_path}", definition.display_name),
@@ -64,14 +81,11 @@ pub fn save_spec_entity_with_json_options(
         ));
     }
 
-    let source_rel_path = previous_id
-        .as_deref()
-        .filter(|previous| *previous != next_id)
-        .map(|previous| definition.default_rel_path(previous))
-        .unwrap_or_else(|| next_rel_path.clone());
-    let source_path = mod_root.join(&source_rel_path);
-    let preserve_original_json = options.preserve_original_json;
-    let mut json = JsonWriteBatch::new(options);
+    let source_rel_path = source_rel_path.unwrap_or(&next_rel_path);
+    let boundary = FsRootBoundary::new(mod_root, "mod root")?;
+    let source_path = boundary.resolve_relative(source_rel_path, "实体源路径")?;
+    let preserve_original_json = json_write.preserve_original_json;
+    let mut json = JsonWriteBatch::new(json_write);
     let rendered = json.render(&source_path, &clean, ordered_json)?;
     json.finish()?;
     if preserve_original_json
@@ -81,14 +95,9 @@ pub fn save_spec_entity_with_json_options(
     {
         return Ok(WriteResult::from_refreshed_entity(Vec::new(), refreshed));
     }
-    let mut builder = FileChangeSetBuilder::new(mod_root)?;
-    if let Some(previous_id) = previous_id
-        .as_deref()
-        .filter(|previous| *previous != next_id)
-    {
-        let previous = definition.default_rel_path(previous_id);
-        require_spec_file_target(mod_root, definition, kind, previous_id, &previous)?;
-        builder.text_file(previous, None)?;
+    let mut builder = FileChangeSetBuilder::new_with_lock(mod_root, write_lock)?;
+    if renamed {
+        builder.text_file(source_rel_path, None)?;
     }
     builder.text_file(&next_rel_path, Some(rendered))?;
     let changes = builder.apply()?;
@@ -101,8 +110,21 @@ pub fn create_spec_entity(
     kind: EntityKind,
     next_id: &str,
     data: Value,
+    target_exists_in_index: bool,
 ) -> AppResult<WriteResult<Value>> {
-    save_spec_entity(mod_root, kind, None, next_id, data)
+    save_spec_entity_with_json_options(
+        mod_root,
+        kind,
+        None,
+        next_id,
+        SpecSaveInput {
+            source_rel_path: None,
+            target_exists_in_index,
+            data,
+            json_write: JsonWriteOptions::default(),
+            ordered_json: None,
+        },
+    )
 }
 
 pub fn delete_spec_entity(
@@ -111,10 +133,11 @@ pub fn delete_spec_entity(
     id: &str,
     rel_path: &str,
 ) -> AppResult<WriteResult> {
+    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
     let definition = spec_entity_definition(kind)?;
     validate_config_id(id, definition.invalid_id_message)?;
     require_spec_file_target(Path::new(mod_root), definition, kind, id, rel_path)?;
-    let mut builder = FileChangeSetBuilder::new(Path::new(mod_root))?;
+    let mut builder = FileChangeSetBuilder::new_with_lock(Path::new(mod_root), write_lock)?;
     builder.text_file(rel_path, None)?;
     let changes = builder.apply()?;
     Ok(WriteResult::from_changes(changes))
@@ -141,7 +164,8 @@ fn require_spec_file_target(
     rel_path: &str,
 ) -> AppResult<()> {
     definition.validate_rel_path(rel_path, &format!("{}路径无效", definition.display_name))?;
-    let data = read_json_file(&mod_root.join(rel_path))?;
+    let boundary = FsRootBoundary::new(mod_root, "mod root")?;
+    let data = read_json_file(&boundary.resolve_relative(rel_path, "实体源路径")?)?;
     let (entity_id, _) = build_spec_file(kind, mod_root, rel_path, &data)?;
     if entity_id != id {
         return Err(AppError::message(
@@ -193,6 +217,16 @@ mod tests {
     use serde_json::json;
     use std::fs;
 
+    fn save_input<'a>(rel_path: Option<&'a str>, data: Value) -> SpecSaveInput<'a> {
+        SpecSaveInput {
+            source_rel_path: rel_path,
+            target_exists_in_index: false,
+            data,
+            json_write: JsonWriteOptions::default(),
+            ordered_json: None,
+        }
+    }
+
     #[test]
     fn variant_rename_preserves_old_file_comments_and_key_order() {
         let root = temp_dir("variant_rename_preserves_json");
@@ -208,12 +242,16 @@ mod tests {
             EntityKind::Variant,
             Some("old"),
             "new",
-            json!({"hullId":"demo","variantId":"new"}),
-            JsonWriteOptions {
-                preserve_original_json: true,
-                confirmed_sources: Vec::new(),
+            SpecSaveInput {
+                source_rel_path: Some("data/variants/old.variant"),
+                target_exists_in_index: false,
+                data: json!({"hullId":"demo","variantId":"new"}),
+                json_write: JsonWriteOptions {
+                    preserve_original_json: true,
+                    confirmed_sources: Vec::new(),
+                },
+                ordered_json: Some(r#"{"hullId":"demo","variantId":"new"}"#),
             },
-            Some(r#"{"hullId":"demo","variantId":"new"}"#),
         )
         .unwrap();
         let text = read_utf8_no_bom(&root.join("data/variants/new.variant")).unwrap();
@@ -221,6 +259,29 @@ mod tests {
         assert!(!old.exists());
         assert!(text.contains("# author note"));
         assert!(text.find("hullId").unwrap() < text.find("variantId").unwrap());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn variant_save_rename_keeps_the_selected_source_directory() {
+        let root = temp_dir("variant_nested_source_directory");
+        fs::create_dir_all(root.join("data/variants/nested")).unwrap();
+        let old = root.join("data/variants/nested/old.variant");
+        write_utf8_no_bom(&old, r#"{"hullId":"demo","variantId":"old"}"#).unwrap();
+        let result = save_spec_entity_with_json_options(
+            &root.to_string_lossy(),
+            EntityKind::Variant,
+            Some("old"),
+            "new",
+            save_input(
+                Some("data/variants/nested/old.variant"),
+                json!({"hullId":"demo","variantId":"new"}),
+            ),
+        )
+        .unwrap();
+        assert!(root.join("data/variants/nested/new.variant").exists());
+        assert!(!root.join("data/variants/new.variant").exists());
+        assert_eq!(result.changes.len(), 2);
         let _ = fs::remove_dir_all(root);
     }
 
@@ -278,8 +339,15 @@ mod tests {
             EntityKind::Skin => data["builtInWeapons"] = json!({"WS 001": "demo_weapon"}),
             _ => unreachable!(),
         }
-        let result =
-            save_spec_entity(&root.to_string_lossy(), case.kind, Some("old"), "new", data).unwrap();
+        let source = format!("{}/old.{}", case.dir, case.ext);
+        let result = save_spec_entity_with_json_options(
+            &root.to_string_lossy(),
+            case.kind,
+            Some("old"),
+            "new",
+            save_input(Some(&source), data),
+        )
+        .unwrap();
         let refreshed = result.refreshed_entity.clone().unwrap();
 
         assert!(
@@ -399,13 +467,12 @@ mod tests {
 
     fn save_requires_data_id_to_match_target_id(case: &SpecCase) {
         let root = temp_dir(&format!("spec_entity_{}_mismatched_data_id", case.ext));
-
-        let result = save_spec_entity(
+        let result = save_spec_entity_with_json_options(
             &root.to_string_lossy(),
             case.kind,
             None,
             "new",
-            entity_json(case, "other"),
+            save_input(None, entity_json(case, "other")),
         );
 
         let target_exists = root
@@ -414,6 +481,154 @@ mod tests {
         let _ = fs::remove_dir_all(root);
         assert!(result.is_err());
         assert!(!target_exists);
+    }
+
+    #[test]
+    fn spec_edits_preserve_selected_filename_and_rename_with_replay() {
+        for case in [&VARIANT_CASE, &SKIN_CASE] {
+            let root = temp_dir(&format!("spec_selected_path_{}", case.ext));
+            let source = format!("{}/nested/filename.{}", case.dir, case.ext);
+            fs::create_dir_all(root.join(case.dir).join("nested")).unwrap();
+            let original = format!(
+                "{{\n# author\n{}: 'old',\n{}: '{}'\n}}\n",
+                case.id_field, case.companion_field, case.companion_value
+            );
+            write_utf8_no_bom(&root.join(&source), &original).unwrap();
+            let save = save_spec_entity_with_json_options(
+                &root.to_string_lossy(),
+                case.kind,
+                None,
+                "old",
+                SpecSaveInput {
+                    json_write: JsonWriteOptions {
+                        preserve_original_json: true,
+                        confirmed_sources: Vec::new(),
+                    },
+                    ..save_input(Some(&source), entity_json(case, "old"))
+                },
+            )
+            .unwrap();
+            assert!(save.changes.is_empty());
+            assert_eq!(save.refreshed_entity.unwrap()["relPath"], source);
+            assert_eq!(read_utf8_no_bom(&root.join(&source)).unwrap(), original);
+            let renamed = format!("{}/nested/new.{}", case.dir, case.ext);
+            let result = save_spec_entity_with_json_options(
+                &root.to_string_lossy(),
+                case.kind,
+                Some("old"),
+                "new",
+                SpecSaveInput {
+                    json_write: JsonWriteOptions {
+                        preserve_original_json: true,
+                        confirmed_sources: Vec::new(),
+                    },
+                    ..save_input(Some(&source), entity_json(case, "new"))
+                },
+            )
+            .unwrap();
+            assert_eq!(result.changes.len(), 2);
+            assert_eq!(
+                Path::new(
+                    result.refreshed_entity.as_ref().unwrap()["relPath"]
+                        .as_str()
+                        .unwrap()
+                ),
+                Path::new(&renamed)
+            );
+            assert!(!root.join(&source).exists());
+            assert!(
+                read_utf8_no_bom(&root.join(&renamed))
+                    .unwrap()
+                    .contains("# author")
+            );
+            apply_file_change_set(
+                &root.to_string_lossy(),
+                FileChangeReplayDirection::Undo,
+                result.changes.clone(),
+            )
+            .unwrap();
+            assert_eq!(read_utf8_no_bom(&root.join(&source)).unwrap(), original);
+            assert!(!root.join(&renamed).exists());
+            apply_file_change_set(
+                &root.to_string_lossy(),
+                FileChangeReplayDirection::Redo,
+                result.changes,
+            )
+            .unwrap();
+            assert!(!root.join(&source).exists());
+            assert_eq!(
+                read_json_file(&root.join(&renamed)).unwrap()[case.id_field],
+                "new"
+            );
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn spec_save_validates_disk_id_without_previous_id() {
+        for case in [&VARIANT_CASE, &SKIN_CASE] {
+            let root = temp_dir(&format!("spec_source_owner_{}", case.ext));
+            fs::create_dir_all(root.join(case.dir)).unwrap();
+            let source = format!("{}/filename.{}", case.dir, case.ext);
+            write_utf8_no_bom(&root.join(&source), &entity_file_json(case, "old")).unwrap();
+            let outside_index = format!("{}/unindexed.{}", case.dir, case.ext);
+            write_utf8_no_bom(&root.join(&outside_index), &entity_file_json(case, "old")).unwrap();
+            write_utf8_no_bom(&root.join(&source), &entity_file_json(case, "other")).unwrap();
+            let result = save_spec_entity_with_json_options(
+                &root.to_string_lossy(),
+                case.kind,
+                None,
+                "old",
+                save_input(Some(&source), entity_json(case, "old")),
+            );
+            assert!(matches!(result, Err(AppError::Message { .. })));
+            assert_eq!(
+                read_json_file(&root.join(&source)).unwrap()[case.id_field],
+                "other"
+            );
+            assert_eq!(
+                read_json_file(&root.join(&outside_index)).unwrap()[case.id_field],
+                "old"
+            );
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn spec_create_rejects_existing_id_in_another_filename() {
+        for case in [&VARIANT_CASE, &SKIN_CASE] {
+            let root = temp_dir(&format!("spec_create_conflict_{}", case.ext));
+            fs::create_dir_all(root.join(case.dir)).unwrap();
+            let source = format!("{}/filename.{}", case.dir, case.ext);
+            write_utf8_no_bom(&root.join(&source), &entity_file_json(case, "old")).unwrap();
+            assert!(
+                create_spec_entity(
+                    &root.to_string_lossy(),
+                    case.kind,
+                    "old",
+                    entity_json(case, "old"),
+                    true,
+                )
+                .is_err()
+            );
+            let created = create_spec_entity(
+                &root.to_string_lossy(),
+                case.kind,
+                "new",
+                entity_json(case, "new"),
+                false,
+            )
+            .unwrap();
+            assert_eq!(
+                created.refreshed_entity.unwrap()["relPath"],
+                format!("{}/new.{}", case.dir, case.ext)
+            );
+            assert_eq!(
+                read_json_file(&root.join(&source)).unwrap()[case.id_field],
+                "old"
+            );
+            fs::remove_dir_all(root).unwrap();
+        }
     }
 
     #[test]

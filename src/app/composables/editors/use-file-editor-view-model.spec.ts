@@ -4,6 +4,10 @@ const mocks = vi.hoisted(() => ({
   loadEditableFileData: vi.fn(),
   writeEditableFileText: vi.fn(),
   emitFileEditorSaved: vi.fn(async () => {}),
+  listenFileEditorProjectInvalidated: vi.fn(async (...args: unknown[]) => {
+    void args;
+    return async () => {};
+  }),
   listenFileEditorFocusLine: vi.fn(async (...args: unknown[]) => {
     void args;
     return async () => {};
@@ -32,6 +36,7 @@ vi.mock('@/orchestrators/file-editor-window.orchestrator', () => ({
   emitFileEditorSaved: mocks.emitFileEditorSaved,
   listenFileEditorFocusLine: mocks.listenFileEditorFocusLine,
   listenFileEditorTextApplied: mocks.listenFileEditorTextApplied,
+  listenFileEditorProjectInvalidated: mocks.listenFileEditorProjectInvalidated,
 }));
 
 vi.mock('@/app/composables/use-app-feedback', () => ({
@@ -39,6 +44,7 @@ vi.mock('@/app/composables/use-app-feedback', () => ({
 }));
 
 import { useFileEditorViewModel, type FileEditorViewModelParams } from './use-file-editor-view-model';
+import type { ProjectSessionInvalidatedEvent } from '@/windows/window.events';
 
 function paramsFixture(overrides: Partial<FileEditorViewModelParams> = {}): FileEditorViewModelParams {
   return {
@@ -159,6 +165,31 @@ describe('useFileEditorViewModel editing', () => {
 });
 
 describe('useFileEditorViewModel external text', () => {
+  it.each(['data/hulls/test.file', 'data/hulls', 'C:/mods/alpha/data/hulls/test.file'])(
+    'stages a dirty file version from the invalidation path %s',
+    async (path) => {
+      mocks.loadEditableFileData.mockResolvedValueOnce({ path: 'x', text: 'base' });
+      let invalidated!: (event: ProjectSessionInvalidatedEvent) => Promise<void>;
+      mocks.listenFileEditorProjectInvalidated.mockImplementationOnce(async (handler: unknown) => {
+        invalidated = handler as typeof invalidated;
+        return async () => {};
+      });
+      const viewModel = await initializeViewModel(paramsFixture({ filePath: 'C:/mods/alpha/data/hulls/test.file' }));
+      viewModel.updateText('local');
+      mocks.loadEditableFileData.mockResolvedValueOnce({ path: 'x', text: 'external' });
+      await invalidated({
+        manifest: { sessionId: 's1', modRoot: 'C:/mods/alpha' },
+        invalidation: { paths: [path] },
+      } as ProjectSessionInvalidatedEvent);
+      expect(mocks.loadEditableFileData).toHaveBeenLastCalledWith('s1', 'C:/mods/alpha', 'C:/mods/alpha/data/hulls/test.file');
+      expect(viewModel.text.value).toBe('local');
+      expect(viewModel.hasPendingExternalText.value).toBe(true);
+      viewModel.loadPendingExternalText();
+      expect(viewModel.text.value).toBe('external');
+      viewModel.dispose();
+    },
+  );
+
   it('stages external text while dirty and shows the notice', async () => {
     mocks.loadEditableFileData.mockResolvedValue({ path: 'x', text: 'base' });
     let textApplied: ((event: { sessionId: string; modRoot: string; path: string; text: string }) => void) | null = null;

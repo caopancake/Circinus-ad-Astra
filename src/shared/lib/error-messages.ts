@@ -67,6 +67,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   'spec.kind_unknown': '未知的编辑器 spec 种类',
   'spec.not_single_file': '该实体种类不是单文件 spec',
   'spec.path_id_mismatch': 'spec 文件路径与实体 ID 不匹配',
+  'spec.source_path_required': '编辑实体必须提供源文件路径',
   'spec.rename_missing_previous_id': '重命名缺少旧 ID',
   'spec.target_exists': '目标 spec 文件已存在',
   'system_open.failed': '打开路径失败',

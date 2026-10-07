@@ -16,8 +16,12 @@ const mocks = vi.hoisted(() => ({
     confirmWarning: vi.fn(),
     choose: vi.fn(async () => null),
   },
-  subscribeQueryInvalidations: vi.fn(() => () => {}),
+  subscribeQueryInvalidations: vi.fn((handler: unknown) => {
+    void handler;
+    return () => {};
+  }),
   subscribeResourceInvalidations: vi.fn(() => () => {}),
+  hasTableInvalidation: vi.fn(() => false),
 }));
 
 vi.mock('@/services/csv-table.service', () => ({
@@ -28,7 +32,7 @@ vi.mock('@/services/csv-table.service', () => ({
 
 vi.mock('@/services/query-cache.service', () => ({
   hasSourceInvalidation: vi.fn(() => false),
-  hasTableInvalidation: vi.fn(() => false),
+  hasTableInvalidation: mocks.hasTableInvalidation,
   subscribeQueryInvalidations: mocks.subscribeQueryInvalidations,
 }));
 
@@ -83,6 +87,9 @@ vi.mock('@/stores/tables.store', () => ({
     },
     get tableRowKey() {
       return (row: RowData) => `key-${String(row.id)}`;
+    },
+    get saving() {
+      return Boolean(tablesState.saving);
     },
     hasTableDirtyChanges: vi.fn(() => false),
     markTableExternalUpdate: vi.fn(),
@@ -181,5 +188,18 @@ describe('useCsvTableViewModel', () => {
     await expect(vm.querySelectedRowPreview({ sessionId: 'sess-1', table: 'ships', rowKey: 'key-0' })).resolves.toBe(
       'data:image/png;base64,x',
     );
+  });
+
+  it('preserves the draft on its save invalidation even after returning to the old baseline', async () => {
+    mocks.queryTableWindow.mockResolvedValue(windowFixture(2));
+    const vm = mountViewModel();
+    await vi.waitFor(() => expect(mocks.queryTableWindow).toHaveBeenCalled());
+    const queryCount = mocks.queryTableWindow.mock.calls.length;
+    tablesState.saving = true;
+    mocks.hasTableInvalidation.mockReturnValueOnce(true);
+    const onInvalidation = mocks.subscribeQueryInvalidations.mock.calls[0]![0] as (event: { sessionId: string }) => void;
+    onInvalidation({ sessionId: 'sess-1' });
+    expect(mocks.queryTableWindow).toHaveBeenCalledTimes(queryCount);
+    expect(vm.tables.markTableExternalUpdate).toHaveBeenCalledWith('ships');
   });
 });

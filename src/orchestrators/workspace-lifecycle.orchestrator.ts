@@ -8,6 +8,7 @@ import { invalidateQueryCacheForSession } from '@/services/query-cache.service';
 import { invalidateResourceCacheForSession } from '@/services/resource-cache.service';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
+import { useWriteSyncStore } from '@/stores/write-sync.store';
 
 export interface WorkspaceCloseTarget {
   gameOverviewRoot: string | null;
@@ -38,10 +39,12 @@ export function removeModRuntimeState(modRoot: string) {
   const tables = useTablesStore();
   const fileHistory = useFileHistoryStore();
   const csvEditHistory = useTablesEditHistoryStore();
+  const writeSync = useWriteSyncStore();
   workspace.removeLoadedModEntry(modRoot);
   tables.removeModState(modRoot);
   fileHistory.removeModState(modRoot);
   csvEditHistory.clearForMod(modRoot);
+  writeSync.removeModState(modRoot);
   project.removeProjectManifest(modRoot);
 }
 
@@ -70,6 +73,7 @@ export async function removeLoadedModRuntime(modRoot: string) {
 
 export async function closeWorkspaceRuntime(target: WorkspaceCloseTarget) {
   const workspace = useWorkspaceStore();
+  workspace.revokeWorkspaceGeneration();
   for (const modRoot of target.modRoots) {
     await removeLoadedModRuntime(modRoot);
   }

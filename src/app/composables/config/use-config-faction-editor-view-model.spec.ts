@@ -22,6 +22,7 @@ vi.mock('@/app/composables/use-app-feedback', () => ({
 import { useConfigFactionEditorViewModel } from './use-config-faction-editor-view-model';
 import { initializeSettingsStore } from '@/stores/settings.store';
 import type { RowData } from '@/shared/types';
+import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 
 const SETTINGS = {
   theme: 'light',
@@ -109,6 +110,17 @@ describe('useConfigFactionEditorViewModel', () => {
     await vi.waitFor(() => expect(vm.draftData.value).not.toEqual({}));
     await vm.save();
     expect(mocks.feedback.error).toHaveBeenCalledWith(expect.anything(), '保存势力失败');
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('keeps invalid or cancelled saves dirty without a saved callback', async () => {
+    const { vm, saveFaction, onSaved } = mountEditor();
+    await vi.waitFor(() => expect(vm.draftData.value).not.toEqual({}));
+    vm.draftData.value = { file: { id: 'bad id', displayName: 'Edited' } };
+    saveFaction.mockResolvedValue(null);
+    await vm.save();
+    expect(vm.draftData.value.file).toEqual({ id: 'bad id', displayName: 'Edited' });
+    expect(useDraftSessionsStore().hasUnsavedWorkForMod('M:/mod')).toBe(true);
     expect(onSaved).not.toHaveBeenCalled();
   });
 

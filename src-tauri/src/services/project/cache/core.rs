@@ -141,6 +141,7 @@ pub(crate) fn load_core_csv_table(
         path: rel.to_string(),
         rows: Some(rows),
         next_row_seq,
+        saved_text: None,
     });
     let mut updated = CoreCache::clone(&cache);
     updated

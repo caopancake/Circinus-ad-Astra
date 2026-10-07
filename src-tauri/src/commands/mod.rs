@@ -33,3 +33,8 @@ pub(crate) fn ensure_session_mod_scope<T: SessionModScope>(payload: &T) -> AppRe
     }
     Ok(())
 }
+
+pub(crate) fn ensure_write_scope<T: SessionModScope>(payload: &T) -> AppResult<()> {
+    ensure_session_mod_scope(payload)?;
+    services::app_settings::ensure_core_editing_allowed(payload.mod_root())
+}

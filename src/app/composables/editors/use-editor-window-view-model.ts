@@ -10,7 +10,7 @@ import {
 import type { EditorSpecKind, EditorWindowKind, EntityKind, RowData } from '@/shared/types';
 import { deepClone } from '@/shared/lib/starsector';
 import { formatError } from '@/shared/lib/errors';
-import { emitEditorSpecSaved, listenEditorSpecSaved } from '@/orchestrators/editor-window.orchestrator';
+import { emitEditorSpecSaved, listenEditorPreviewDraftUpdated, listenEditorSpecSaved } from '@/orchestrators/editor-window.orchestrator';
 import { applyProjectSessionCacheInvalid, listenProjectSessionInvalidated } from '@/orchestrators/project-session-refresh.orchestrator';
 import { saveEditorSpecByKind } from '@/services/editor.service';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
@@ -24,7 +24,7 @@ import { pickEditorSpecFile } from '@/shared/runtime/dialog.runtime';
 import { closeCurrentWindow } from '@/windows/current.window';
 import type { QueryCacheInvalidationEvent } from '@/services/query-cache.service';
 import type { ResourceCacheInvalidationEvent } from '@/services/resource-cache.service';
-import type { EditorSpecSavedEvent, ProjectSessionInvalidatedEvent } from '@/windows/window.events';
+import type { EditorPreviewDraftUpdatedEvent, EditorSpecSavedEvent, ProjectSessionInvalidatedEvent } from '@/windows/window.events';
 
 interface EditorWindowTarget {
   id: string;
@@ -43,12 +43,13 @@ export function useEditorWindowViewModel(params: {
   kind: EditorWindowKind;
   draftSnapshot?: RowData | null;
 }) {
+  let previewDraftSnapshot = params.draftSnapshot ?? null;
   const editorData = ref<EditorEntityBundle | null>(null);
   const feedback = useAppFeedback();
   const draftSession = useEditTargetDraftSession<RowData, EditorWindowTarget, EditorEntityBundle>({
     emptyValue: {},
     load: async (target) => {
-      const data = await queryEditorEntityBundle(target.sessionId, target.kind, target.id);
+      const data = await queryEditorEntityBundle(target.sessionId, target.kind, target.id, previewDraftSnapshot ?? undefined);
       return {
         meta: data,
         value: isEditableWindowKind(target.kind) ? primarySpecForBundle(data, target.kind, target.id) : {},
@@ -76,12 +77,12 @@ export function useEditorWindowViewModel(params: {
   const loading = ref(true);
   const errorText = ref('');
   let unlistenEditorSpecSaved: UnlistenFn | null = null;
+  let unlistenPreviewDraftUpdated: UnlistenFn | null = null;
   let stopSessionInvalidated: UnlistenFn | null = null;
   let stopQueryInvalidation: (() => void) | null = null;
   let stopResourceInvalidation: (() => void) | null = null;
   let editorDataRequestId = 0;
   let derivedDataRequestId = 0;
-  let previewDraftSnapshotApplied = false;
 
   const shipEditorData = computed(() => (editorData.value?.kind === 'ship' ? editorData.value : null));
   const weaponEditorData = computed(() => (editorData.value?.kind === 'weapon' ? editorData.value : null));
@@ -128,7 +129,10 @@ export function useEditorWindowViewModel(params: {
           ? options.promptForMissing
             ? await draftSession.loadTarget(target)
             : await draftSession.refreshTarget(target)
-          : { meta: await queryEditorEntityBundle(target.sessionId, params.kind, target.id), value: {} };
+          : {
+              meta: await queryEditorEntityBundle(target.sessionId, params.kind, target.id, previewDraftSnapshot ?? undefined),
+              value: {},
+            };
       if (requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
       if (!snapshot?.meta) return;
       const data = snapshot.meta;
@@ -178,10 +182,8 @@ export function useEditorWindowViewModel(params: {
   function applyImportedSpec(kind: EditorWindowKind, id: string, data: RowData) {
     if (!editorData.value) return;
     const spec = deepClone(data);
-    const target = editorWindowTarget();
-    if (target) draftSession.loadBaseForTarget(target, spec);
+    draftSession.setDraft(spec);
     editorData.value = applySavedSpecToBundle(editorData.value, kind as EditorSpecKind, id, spec);
-    if ('isNew' in editorData.value) editorData.value = { ...editorData.value, isNew: false } as EditorEntityBundle;
   }
 
   async function saveEditorData(kind: EditorSpecKind, data?: RowData): Promise<void> {
@@ -216,6 +218,7 @@ export function useEditorWindowViewModel(params: {
   }
 
   async function initializeEditorWindow() {
+    unlistenPreviewDraftUpdated = await listenEditorPreviewDraftUpdated(handlePreviewDraftUpdated);
     unlistenEditorSpecSaved = await listenEditorSpecSaved(handleEditorSpecSaved);
     stopSessionInvalidated = await listenProjectSessionInvalidated(onProjectSessionInvalidated);
     stopQueryInvalidation = subscribeQueryInvalidations(handleQueryCacheInvalidated);
@@ -224,6 +227,8 @@ export function useEditorWindowViewModel(params: {
   }
 
   function disposeEditorWindow() {
+    unlistenPreviewDraftUpdated?.();
+    unlistenPreviewDraftUpdated = null;
     unlistenEditorSpecSaved?.();
     unlistenEditorSpecSaved = null;
     stopSessionInvalidated?.();
@@ -235,10 +240,25 @@ export function useEditorWindowViewModel(params: {
     draftSession.dispose();
   }
 
+  function handlePreviewDraftUpdated(event: EditorPreviewDraftUpdatedEvent) {
+    const target = editorWindowTarget();
+    if (
+      !target ||
+      params.kind !== 'weapon-preview' ||
+      event.sessionId !== target.sessionId ||
+      event.modRoot !== target.modRoot ||
+      event.id !== target.id
+    )
+      return;
+    previewDraftSnapshot = deepClone(event.draft);
+    void queryEditorData({ promptForMissing: false, showLoading: false });
+  }
+
   function handleEditorSpecSaved(event: EditorSpecSavedEvent) {
     const target = editorWindowTarget();
     if (!target || event.sessionId !== target.sessionId || event.modRoot !== target.modRoot || !editorData.value) return;
     if (!shouldApplySavedSpec(editorData.value, target, event)) return;
+    if (params.kind === 'weapon-preview' && previewDraftSnapshot && event.kind === 'weapon') return;
     if (isPrimaryEditableKind(params.kind, event.kind) && event.id === target.id) {
       receiveExternalPrimarySpec(event.kind, event.id, event.spec);
       return;
@@ -337,18 +357,11 @@ export function useEditorWindowViewModel(params: {
   function applyLoadedEditorData(data: EditorEntityBundle): void {
     const target = editorWindowTarget();
     if (!target || !isEditableWindowKind(params.kind)) {
-      editorData.value = applyPreviewDraftSnapshotOnce(data);
+      editorData.value = data;
       draftSession.clearTarget();
       return;
     }
     editorData.value = applySavedSpecToBundle(data, params.kind, target.id, draftSession.draftValue.value);
-  }
-
-  function applyPreviewDraftSnapshotOnce(data: EditorEntityBundle): EditorEntityBundle {
-    if (params.kind !== 'weapon-preview' || !params.draftSnapshot || previewDraftSnapshotApplied) return data;
-    if (data.kind !== 'weapon-preview') return data;
-    previewDraftSnapshotApplied = true;
-    return { ...data, weapon: deepClone(params.draftSnapshot) };
   }
 
   function commitSavedSpecToBundle(kind: EditorSpecKind, id: string, data: RowData): void {

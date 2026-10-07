@@ -89,6 +89,7 @@ export async function saveVariantAction(
   variantId: string,
   data: RowData,
   previousId: string | null,
+  relPath: string,
   feedback?: AppFeedback,
 ): Promise<VariantFile | null> {
   const write = {
@@ -97,6 +98,7 @@ export async function saveVariantAction(
     previousId,
     nextId: variantId,
     data,
+    relPath,
   };
   const result = await runConfirmedJsonWrite(feedback, (options) => writeVariantEntity(write, options));
   if (!result) return null;
@@ -110,6 +112,7 @@ export async function createVariantAction(sessionId: string, modRoot: string, hu
     sessionId,
     modRoot,
     previousId: null,
+    relPath: null,
     nextId: variantId,
     data: createDefaultVariant(hullId, variantId),
   });
@@ -130,6 +133,7 @@ export async function saveSkinAction(
   skinHullId: string,
   data: RowData,
   previousId: string | null,
+  relPath: string,
   feedback?: AppFeedback,
 ): Promise<SkinFile | null> {
   const write = {
@@ -138,6 +142,7 @@ export async function saveSkinAction(
     previousId,
     nextId: skinHullId,
     data,
+    relPath,
   };
   const result = await runConfirmedJsonWrite(feedback, (options) => writeSkinEntity(write, options));
   if (!result) return null;
@@ -151,6 +156,7 @@ export async function createSkinAction(sessionId: string, modRoot: string, baseH
     sessionId,
     modRoot,
     previousId: null,
+    relPath: null,
     nextId: skinHullId,
     data: createDefaultSkin(baseHullId, skinHullId),
   });

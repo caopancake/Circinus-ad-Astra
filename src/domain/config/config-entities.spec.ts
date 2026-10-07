@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { configEntityIdInvalidMessage } from '@/domain/config/config-entities';
+import { configEntityIdInvalidMessage, createDefaultFaction } from '@/domain/config/config-entities';
+
+describe('new faction game contract', () => {
+  it('contains the required loader fields and a core faction logo', () => {
+    const faction = createDefaultFaction('new_faction');
+    expect(faction).toMatchObject({
+      id: 'new_faction',
+      displayName: 'new_faction',
+      displayNameWithArticle: 'new_faction',
+      logo: 'graphics/factions/neutral_traders.png',
+      names: { modern: 1 },
+      portraits: {},
+      color: [128, 128, 128, 255],
+      baseUIColor: [128, 128, 128, 255],
+      darkUIColor: [64, 64, 64, 255],
+    });
+    faction.names = {};
+    expect(createDefaultFaction('other').names).toEqual({ modern: 1 });
+  });
+});
 
 describe('config entity id invalid message', () => {
   it('appends the offending value when present', () => {

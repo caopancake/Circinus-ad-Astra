@@ -67,6 +67,21 @@ describe('createEditSessionValue', () => {
     expect(session.draft).toBe(5);
   });
 
+  it('commits the persisted baseline while preserving subsequent edits', () => {
+    const session = createNumberSession(1);
+    session.setDraft(3);
+    session.commitSavedBaseline(2);
+    expect(session.baseline).toBe(2);
+    expect(session.draft).toBe(3);
+    expect(session.dirty).toBe(true);
+    expect(session.pendingExternal).toBe(2);
+    session.setDraft(1);
+    expect(session.dirty).toBe(true);
+    session.resetDraft();
+    expect(session.draft).toBe(2);
+    expect(session.dirty).toBe(false);
+  });
+
   it('loadBaseline replaces baseline and draft and bumps revision only when the draft changed', () => {
     const session = createNumberSession(1);
     session.loadBaseline(3);

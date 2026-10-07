@@ -28,7 +28,7 @@ export async function createModProject(request: CreateModRequest): Promise<Creat
   return created;
 }
 
-export async function openCreatedModProject(created: CreatedMod): Promise<CreatedModProject> {
+export async function openCreatedModProject(created: CreatedMod): Promise<CreatedModProject | null> {
   const outcome = await measurePerformanceAsync(
     'frontend.openCreatedModProject',
     { modRoot: created.modRoot, hasStarsectorRoot: Boolean(created.starsectorRoot) },
@@ -37,7 +37,8 @@ export async function openCreatedModProject(created: CreatedMod): Promise<Create
   return openedCreatedMod(outcome);
 }
 
-function openedCreatedMod(outcome: DirectoryOpeningOutcome): CreatedModProject {
+function openedCreatedMod(outcome: DirectoryOpeningOutcome): CreatedModProject | null {
+  if (outcome.type === 'cancelled') return null;
   if (outcome.type === 'mod-loaded') {
     return { modName: outcome.modName, warnings: outcome.warnings };
   }

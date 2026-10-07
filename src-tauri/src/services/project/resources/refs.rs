@@ -1,4 +1,4 @@
-use super::super::cache::{lock_session, media, session_handle};
+use super::super::cache::{lock_registry, lock_session, media, session_handle};
 use super::super::model::string_field;
 use super::sprites;
 use crate::errors::{AppError, AppResult};
@@ -66,14 +66,17 @@ pub(in crate::services::project) fn sprite_resource_bytes(
     };
     let data_url = loaded.as_ref().map(|bytes| bytes.data_url.clone());
     if let Some(bytes) = loaded {
-        media::insert_entry(
-            &context.session_id,
-            &cache_key,
-            bytes.resolved_path,
-            bytes.modified,
-            bytes.length,
-            bytes.data_url,
-        );
+        let registry = lock_registry()?;
+        if registry.contains_key(&context.session_id) {
+            media::insert_entry(
+                &context.session_id,
+                &cache_key,
+                bytes.resolved_path,
+                bytes.modified,
+                bytes.length,
+                bytes.data_url,
+            );
+        }
     }
     Ok(SpriteResourceBytes { data_url })
 }

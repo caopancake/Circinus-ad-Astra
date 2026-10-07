@@ -28,6 +28,8 @@
 - Faction、Mission、Skin、Variant 列表必须保留实体 query 返回的 ResourceRef。
 - 对象选择在当前草稿 dirty 时必须先经统一确认放弃。
 - 新建对话框的必填校验、ID 非法与冲突校验归各 ViewModel，组件只触发不捕获。
+- 势力创建模板必须包含游戏加载所需的 logo、displayNameWithArticle、names、portraits 与 RGBA color，并使用正式 UI 颜色字段。
+- 原版编辑权限由 `AppSettings.allowCoreEditing` 持久化，缺省为关闭；设置镜像必须同步该字段。
 
 ## 链路
 
@@ -61,12 +63,14 @@
 ## 规范
 
 - `mod_info` 必须使用目标 Draft Session；Skin 与 Variant 的单文件目标、扩展名与 ID 以后端定义为准。
-- 保存必须提交发起保存时的独立快照；请求期间的新编辑保持 dirty，写盘版本只作为外部版本暂存。
+- 保存必须提交发起保存时的独立快照；请求期间的新编辑必须保留，base 必须更新为实际写盘版本，dirty 必须按该 base 与当前 draft 比较。
+- 表单双向绑定必须经统一 Draft Session setter 提交；校验拒绝与保存取消必须返回 null，严禁提交成功基线或触发保存成功回调。
 - 列表图片必须在上下各一个容器高度的预读区内按需解析，资源失效后可见图片必须重新解析。
 - 内部字段与前端运行时字段严禁写入实体文件。
 - 结构化 JSON 保存必须使用设置快照选择原样更新或规范化写入；原样更新无法安全完成时必须在写入前确认影响文件。
 - 重命名必须同时更新索引行、实体文件与文件名，并保持 history 可回放。
 - 各实体的打开入口必须命中对应后端实体定义的目录与扩展名。
+- Skin 与 Variant 保存 payload 必须显式提供 nullable relPath；编辑必须使用选中实体路径，创建必须提供 null。
 
 ## 陷阱
 

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   refreshBundleProjectiles: vi.fn(),
   refreshBundleResources: vi.fn(),
   emitEditorSpecSaved: vi.fn(async () => {}),
+  previewDraftHandler: { current: null as ((event: Record<string, unknown>) => void) | null },
   pickEditorSpecFile: vi.fn(async () => null as string | null),
   closeCurrentWindow: vi.fn(async () => {}),
   feedback: {
@@ -35,6 +36,10 @@ vi.mock('@/orchestrators/editor-window.orchestrator', () => ({
   emitEditorSpecSaved: mocks.emitEditorSpecSaved,
   listenEditorSpecSaved: vi.fn(async (handler: never) => {
     mocks.specSavedHandler.current = handler as never;
+    return async () => {};
+  }),
+  listenEditorPreviewDraftUpdated: vi.fn(async (handler: never) => {
+    mocks.previewDraftHandler.current = handler as never;
     return async () => {};
   }),
 }));
@@ -112,6 +117,7 @@ describe('useEditorWindowViewModel save gating', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.specSavedHandler.current = null;
+    mocks.previewDraftHandler.current = null;
     mocks.feedback.choose.mockResolvedValue(null);
   });
 
@@ -141,6 +147,33 @@ describe('useEditorWindowViewModel save gating', () => {
     viewModel.disposeEditorWindow();
   });
 
+  it('reloads a reused preview window with the latest draft snapshot', async () => {
+    mocks.queryEditorEntityBundle.mockResolvedValue({
+      kind: 'weapon-preview',
+      weapon: { id: 'XY', projectileSpecId: 'proj_a' },
+      weaponCsvRow: {},
+      projectileSpecs: { proj_a: { id: 'proj_a' } },
+      resourceRefs: [],
+      weaponSpriteData: {},
+      isNew: false,
+    });
+    const viewModel = createViewModel('weapon-preview', { id: 'XY', projectileSpecId: 'proj_a' });
+    await viewModel.initializeEditorWindow();
+    await mocks.previewDraftHandler.current!({
+      sessionId: 's1',
+      modRoot: 'M:/mod',
+      id: 'XY',
+      draft: { id: 'XY', projectileSpecId: 'proj_b' },
+    });
+    await vi.waitFor(() =>
+      expect(mocks.queryEditorEntityBundle).toHaveBeenLastCalledWith('s1', 'weapon-preview', 'XY', {
+        id: 'XY',
+        projectileSpecId: 'proj_b',
+      }),
+    );
+    viewModel.disposeEditorWindow();
+  });
+
   it('enables the save for new specs even before edits', async () => {
     const viewModel = await initializedViewModel('ship', shipBundleFixture(true));
     expect(viewModel.canSaveSpec.value).toBe(true);
@@ -151,6 +184,7 @@ describe('useEditorWindowViewModel saving', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.specSavedHandler.current = null;
+    mocks.previewDraftHandler.current = null;
     mocks.feedback.choose.mockResolvedValue(null);
   });
 
@@ -209,6 +243,7 @@ describe('useEditorWindowViewModel missing specs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.specSavedHandler.current = null;
+    mocks.previewDraftHandler.current = null;
   });
 
   it('closes the window when the user cancels the missing-spec prompt', async () => {
@@ -228,7 +263,20 @@ describe('useEditorWindowViewModel missing specs', () => {
     const viewModel = createViewModel();
     await viewModel.initializeEditorWindow();
     await vi.waitFor(() => expect(viewModel.shipEditorData.value?.ship).toEqual({ hullId: 'XY', hullName: 'Imported' }));
-    expect(viewModel.canSaveSpec.value).toBe(false);
+    expect(viewModel.canSaveSpec.value).toBe(true);
+    expect(viewModel.draftDirty.value).toBe(true);
+    mocks.saveEditorSpecByKind.mockResolvedValue(writeResultFixture());
+    await viewModel.saveEditorData('ship');
+    expect(mocks.saveEditorSpecByKind).toHaveBeenCalledWith(
+      's1',
+      'M:/mod',
+      'ship',
+      'XY',
+      { hullId: 'XY', hullName: 'Imported' },
+      { preserveOriginalJson: true, confirmedSources: [] },
+    );
+    expect(viewModel.draftDirty.value).toBe(false);
+    expect(viewModel.shipEditorData.value?.isNew).toBe(false);
     expect(mocks.closeCurrentWindow).not.toHaveBeenCalled();
     viewModel.disposeEditorWindow();
   });

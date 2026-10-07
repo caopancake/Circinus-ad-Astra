@@ -68,7 +68,11 @@ describe('restorePersistedWorkspace', () => {
     const onError = vi.fn();
 
     await restorePersistedWorkspace({ knownStarsectorRoot: null, onModRestoreError: onError, onModRestoreWarnings: onWarnings });
-    expect(mocks.openModProjectManifest).toHaveBeenCalledWith('C:/mods/alpha', 'D:/games/starsector');
+    expect(mocks.openModProjectManifest).toHaveBeenCalledWith(
+      'C:/mods/alpha',
+      'D:/games/starsector',
+      workspace.getModGeneration('C:/mods/alpha'),
+    );
     expect(mocks.hydrateOpenedModRuntime).toHaveBeenCalledWith('C:/mods/alpha', expect.anything(), false);
     expect(onWarnings).toHaveBeenCalledWith('Alpha', ['scan warning（data/x.csv）']);
     expect(onError).not.toHaveBeenCalled();
@@ -90,6 +94,18 @@ describe('restorePersistedWorkspace', () => {
     await restorePersistedWorkspace({ knownStarsectorRoot: null, onModRestoreError: onError });
     expect(onError).toHaveBeenCalledWith('C:/mods/broken', 'Broken', expect.anything());
     expect(workspace.mods.get('C:/mods/broken')?.status).not.toBe('ready');
+  });
+
+  it('keeps a cancelled restore target out of runtime hydration', async () => {
+    mocks.loadPersistedWorkspace.mockResolvedValue({
+      mods: [{ modRoot: 'C:/mods/alpha', displayName: 'Alpha', version: '' }],
+      starsectorRoot: null,
+    });
+    mocks.openModProjectManifest.mockResolvedValue(null);
+    const onError = vi.fn();
+    await restorePersistedWorkspace({ knownStarsectorRoot: null, onModRestoreError: onError });
+    expect(mocks.hydrateOpenedModRuntime).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
   });
 });
 

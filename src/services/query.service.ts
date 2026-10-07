@@ -5,6 +5,7 @@ import {
   queryEntity,
   queryEntityList,
   queryHullReferences,
+  queryWeaponDraftResources,
 } from '@/shared/api/query-api';
 import { queryCached } from '@/services/query-cache.service';
 import type {
@@ -17,6 +18,8 @@ import type {
   ProjectSessionId,
   SourceOptionGroup,
   TableKey,
+  RowData,
+  ResourceRef,
 } from '@/shared/types';
 
 export function querySessionTableWindow(
@@ -50,4 +53,12 @@ export function querySessionEntity(sessionId: ProjectSessionId, kind: EntityKind
 
 export function querySessionEntityList(sessionId: ProjectSessionId, kind: EntityKind): Promise<EntityData[]> {
   return queryCached(sessionId, 'entity-list', { kind }, () => queryEntityList(sessionId, kind));
+}
+
+export function querySessionWeaponDraftResources(
+  sessionId: ProjectSessionId,
+  id: string,
+  draft: RowData,
+): Promise<Record<string, ResourceRef>> {
+  return queryWeaponDraftResources(sessionId, id, draft);
 }

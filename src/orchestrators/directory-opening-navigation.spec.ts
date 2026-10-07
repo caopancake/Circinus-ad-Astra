@@ -11,11 +11,14 @@ const mocks = vi.hoisted(() => {
     clearModOpeningFailures: ReturnType<typeof vi.fn>;
     isModImported: ReturnType<typeof vi.fn>;
     registerMod: ReturnType<typeof vi.fn>;
+    getModGeneration: ReturnType<typeof vi.fn>;
+    getWorkspaceGeneration: ReturnType<typeof vi.fn>;
     removeLoadedModEntry: ReturnType<typeof vi.fn>;
     setModOpeningFailure: ReturnType<typeof vi.fn>;
     showOverview: ReturnType<typeof vi.fn>;
     updateModInfo: ReturnType<typeof vi.fn>;
     updateModStatus: ReturnType<typeof vi.fn>;
+    revokeWorkspaceGeneration: ReturnType<typeof vi.fn>;
   }
 
   const workspaceStore: MockWorkspaceStore = {
@@ -30,7 +33,12 @@ const mocks = vi.hoisted(() => {
     clearModOpeningFailure: vi.fn(),
     clearModOpeningFailures: vi.fn(),
     isModImported: vi.fn(() => false),
-    registerMod: vi.fn((entry: { modRoot: string }) => workspaceStore.mods.set(entry.modRoot, entry)),
+    registerMod: vi.fn((entry: { modRoot: string }) => {
+      workspaceStore.mods.set(entry.modRoot, entry);
+      return 1;
+    }),
+    getModGeneration: vi.fn((modRoot: string) => (workspaceStore.mods.has(modRoot) ? 1 : null)),
+    getWorkspaceGeneration: vi.fn(() => 0),
     removeLoadedModEntry: vi.fn(),
     setModOpeningFailure: vi.fn(),
     showOverview: vi.fn(() => {
@@ -38,11 +46,13 @@ const mocks = vi.hoisted(() => {
     }),
     updateModInfo: vi.fn(),
     updateModStatus: vi.fn(),
+    revokeWorkspaceGeneration: vi.fn(),
   };
   return {
     workspaceStore,
     project: {
       registerProjectManifest: vi.fn(),
+      getSessionId: vi.fn(() => null),
       removeProjectManifest: vi.fn(),
       setActiveModRoot: vi.fn(),
       setLoading: vi.fn(),
@@ -50,7 +60,9 @@ const mocks = vi.hoisted(() => {
     tables: { hydrate: vi.fn(), hydrateWithoutActivate: vi.fn(), removeModState: vi.fn() },
     fileHistory: { activateFor: vi.fn(), removeModState: vi.fn() },
     csvHistory: { clearForMod: vi.fn() },
+    writeSync: { removeModState: vi.fn() },
     openProject: vi.fn(),
+    closeProject: vi.fn(async () => {}),
   };
 });
 
@@ -59,9 +71,11 @@ vi.mock('@/stores/project.store', () => ({ useProjectStore: () => mocks.project 
 vi.mock('@/stores/tables.store', () => ({ useTablesStore: () => mocks.tables }));
 vi.mock('@/stores/file-history.store', () => ({ useFileHistoryStore: () => mocks.fileHistory }));
 vi.mock('@/stores/tables-edit-history.store', () => ({ useTablesEditHistoryStore: () => mocks.csvHistory }));
+vi.mock('@/stores/write-sync.store', () => ({ useWriteSyncStore: () => mocks.writeSync }));
 vi.mock('@/services/session.service', () => ({
   detectDirectoryTarget: vi.fn(),
   openProject: mocks.openProject,
+  closeProject: mocks.closeProject,
   scanDirectoryGameOverview: vi.fn(),
 }));
 vi.mock('@/domain/project/load-warnings', () => ({ formatLoadWarnings: () => [] }));

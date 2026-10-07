@@ -104,22 +104,24 @@ pub(crate) fn ensure_session_table_rows(
     if CsvTableKey::from_key(table).is_some_and(|key| csv_table_spec(key).supports_faction_filter) {
         annotate_faction_rows(&mut csv.rows, &session.tag_map);
     }
+    let row_sequence = session_table(session, table)?.next_row_seq;
     let rows: Vec<SessionCsvRow> = csv
         .rows
         .into_iter()
         .enumerate()
         .map(|(index, row)| SessionCsvRow {
-            row_key: format!("{table}:row:{index}"),
+            row_key: format!("{table}:row:{}", row_sequence + index as u64),
             row,
         })
         .collect();
-    let next_row_seq = rows.len() as u64;
+    let next_row_seq = row_sequence + rows.len() as u64;
     let table_state = session_table_mut(session, table)?;
     if table_state.header.is_empty() {
         table_state.header = csv.header;
     }
     table_state.rows = Some(rows);
     table_state.next_row_seq = next_row_seq;
+    table_state.saved_text = None;
     Ok(())
 }
 
@@ -253,6 +255,7 @@ mod tests {
                         path: "data/hulls/ship_data.csv".to_string(),
                         rows: None,
                         next_row_seq: 0,
+                        saved_text: None,
                     },
                 ),
                 (
@@ -262,6 +265,7 @@ mod tests {
                         path: "data/characters/skills/skill_data.csv".to_string(),
                         rows: None,
                         next_row_seq: 0,
+                        saved_text: None,
                     },
                 ),
             ]),

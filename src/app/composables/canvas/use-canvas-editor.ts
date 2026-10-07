@@ -331,23 +331,25 @@ export function useCanvasEditor<TPreview>(options: {
     hooks.draw();
   }
 
-  function onUp() {
+  function finishPointerAction() {
+    const wasDragging = state.dragKind.value !== null;
     state.dragKind.value = null;
     panning.value = false;
     state.mirrorPair.value = null;
     state.clearPreview();
-    commitDraft();
+    if (wasDragging) commitDraft();
+  }
+
+  function onUp() {
+    finishPointerAction();
     hooks.draw();
   }
 
   function onLeave() {
-    state.dragKind.value = null;
-    panning.value = false;
+    finishPointerAction();
     pointerInside.value = false;
     state.hovered.value = null;
     state.activeTarget.value = null;
-    state.mirrorPair.value = null;
-    state.clearPreview();
     hooks.draw();
   }
 

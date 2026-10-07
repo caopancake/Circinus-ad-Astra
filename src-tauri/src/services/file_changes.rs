@@ -1,8 +1,8 @@
 use crate::{
     errors::AppResult,
     io::{
-        ChangeDirection, FileChangeSetBuilder, FsRootBoundary, JsonWriteBatch, apply_changes,
-        validate_safe_relative_path,
+        ChangeDirection, FileChangeSetBuilder, FsRootBoundary, JsonWriteBatch, RootWriteLock,
+        acquire_root_write_lock, apply_changes, validate_safe_relative_path,
     },
     models::{
         AssociatedFileChange, FileChangeRecord, FileChangeReplayDirection, JsonWriteOptions,
@@ -42,6 +42,16 @@ pub fn apply_file_change_set(
     mod_root: &str,
     direction: FileChangeReplayDirection,
     changes: Vec<FileChangeRecord>,
+) -> AppResult<WriteResult> {
+    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
+    apply_file_change_set_with_lock(mod_root, direction, changes, write_lock)
+}
+
+pub(crate) fn apply_file_change_set_with_lock(
+    mod_root: &str,
+    direction: FileChangeReplayDirection,
+    changes: Vec<FileChangeRecord>,
+    _write_lock: RootWriteLock,
 ) -> AppResult<WriteResult> {
     validate_changeset_paths(mod_root, &changes)?;
     apply_changes(&changes, change_direction(direction))?;

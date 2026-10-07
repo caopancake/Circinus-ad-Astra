@@ -2,7 +2,10 @@ use crate::domain::editor_config_definitions::FACTION_SPEC_DEFINITION;
 use crate::{
     domain::config::validate_config_id,
     errors::{AppError, AppResult},
-    io::{FileChangeSetBuilder, JsonWriteBatch, read_csv_data, strip_internal_fields},
+    io::{
+        FileChangeSetBuilder, JsonWriteBatch, acquire_root_write_lock, read_csv_data,
+        strip_internal_fields,
+    },
     models::{IndexedConfigKind, IndexedEntityRefresh, JsonWriteOptions, WriteResult},
     parsers::render_csv_text,
 };
@@ -51,6 +54,7 @@ pub fn save_indexed_config_with_json(
     next_id: &str,
     input: IndexedSaveInput<'_>,
 ) -> AppResult<WriteResult<Value>> {
+    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
     let IndexedSaveInput {
         index_row,
         entity_data,
@@ -96,7 +100,7 @@ pub fn save_indexed_config_with_json(
     let index_row = definition.normalize_index_row(index_row, &next_id);
     upsert_index_row(&mut header, &mut rows, definition, index_row, &next_id);
 
-    let mut builder = FileChangeSetBuilder::new(mod_root)?;
+    let mut builder = FileChangeSetBuilder::new_with_lock(mod_root, write_lock)?;
     if delete_previous_target
         && definition.rename_strategy == RenameStrategy::CopyDirectoryBeforeWrite
         && let Some(previous) = previous_id
@@ -159,6 +163,7 @@ pub fn delete_indexed_config_entity(
     id: &str,
     delete_target: bool,
 ) -> AppResult<WriteResult<Value>> {
+    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
     let id = validate_config_id(id, kind.invalid_id_message())?.to_string();
     let definition = indexed_config_definition(kind)?;
     let mod_root = Path::new(mod_root);
@@ -171,7 +176,7 @@ pub fn delete_indexed_config_entity(
         ));
     }
 
-    let mut builder = FileChangeSetBuilder::new(mod_root)?;
+    let mut builder = FileChangeSetBuilder::new_with_lock(mod_root, write_lock)?;
     builder.root_text_file(
         definition.index_rel_path(),
         Some(render_csv_text(&header, &rows.iter().collect::<Vec<_>>())?),

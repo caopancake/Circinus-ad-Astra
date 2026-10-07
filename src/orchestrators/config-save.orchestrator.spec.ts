@@ -201,7 +201,7 @@ describe('config-save orchestrator', () => {
       }),
     );
 
-    await saveVariantAction(SESSION_ID, MOD_ROOT, 'variant_b', { variantId: 'variant_b' }, 'variant_a');
+    await saveVariantAction(SESSION_ID, MOD_ROOT, 'variant_b', { variantId: 'variant_b' }, 'variant_a', 'data/variants/variant_a.variant');
 
     expect(mocks.writeVariantEntity).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION_ID, modRoot: MOD_ROOT, previousId: 'variant_a', nextId: 'variant_b' }),
@@ -260,7 +260,7 @@ describe('config-save orchestrator', () => {
       }),
     );
 
-    await saveSkinAction(SESSION_ID, MOD_ROOT, 'skin_b', { skinHullId: 'skin_b' }, 'skin_a');
+    await saveSkinAction(SESSION_ID, MOD_ROOT, 'skin_b', { skinHullId: 'skin_b' }, 'skin_a', 'data/hulls/skins/skin_a.skin');
 
     expect(mocks.writeSkinEntity).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: SESSION_ID, modRoot: MOD_ROOT, previousId: 'skin_a', nextId: 'skin_b' }),

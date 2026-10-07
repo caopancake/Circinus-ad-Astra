@@ -86,7 +86,15 @@
         <span>原样保存</span>
         <n-switch class="tool-switch" :value="settings.preserveOriginalJson" @update:value="settings.setPreserveOriginalJson" />
       </div>
-      <div class="settings-hint">开启时尽量保留结构化 JSON 文件的注释与字段顺序；无法保留时会在写入前请求确认。</div>
+      <div class="settings-hint">尽量保留结构化 JSON 文件的注释与字段顺序；无法保留时会在写入前请求确认。</div>
+    </section>
+    <section class="settings-section">
+      <h3>原版内容</h3>
+      <div class="settings-row">
+        <span>允许编辑原版</span>
+        <n-switch class="tool-switch" :value="settings.allowCoreEditing" @update:value="settings.setAllowCoreEditing" />
+      </div>
+      <div class="settings-hint">允许写入 Starsector 原版内容。</div>
     </section>
     <section class="settings-section">
       <h3>配置文件</h3>

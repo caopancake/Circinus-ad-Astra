@@ -2,7 +2,7 @@ import { querySessionHullReferences } from '@/services/query.service';
 import { queryResourceDataUrls } from '@/services/resource-cache.service';
 import { measurePerformanceAsync } from '@/shared/runtime/performance';
 import { isResourceRef } from '@/shared/lib/resource-ref';
-import type { EntityData, ProjectSessionId, ResourceRef } from '@/shared/types';
+import type { EntityData, ProjectSessionId, ResourceRef, SourceOptionGroup } from '@/shared/types';
 import type { SelectOption } from '@/domain/schema/schema-options';
 
 export async function hydrateFactionPreviewImages(
@@ -49,4 +49,20 @@ export async function queryHullReferenceOptions(sessionId: ProjectSessionId, ref
 export async function queryHullPreviewMetadata(sessionId: ProjectSessionId, hullIds: string[]): Promise<Record<string, string>> {
   const result = await querySessionHullReferences(sessionId, hullIds);
   return result.hullNames;
+}
+
+export async function queryBuiltInWeaponSlotOptions(sessionId: ProjectSessionId, hullId: string): Promise<SourceOptionGroup[]> {
+  const result = await querySessionHullReferences(sessionId, [hullId]);
+  return [
+    {
+      origin: 'mod',
+      options: (result.builtInWeaponSlots[hullId] ?? []).map((slot) => ({
+        value: slot,
+        label: slot,
+        origin: 'mod',
+        description: null,
+        resourceRef: null,
+      })),
+    },
+  ];
 }

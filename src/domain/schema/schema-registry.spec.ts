@@ -6,6 +6,42 @@ import { TABLE_KEYS } from '@/shared/types';
 const SPEC_IDS = ['mod-info', 'faction', 'mission', 'skin', 'variant'];
 
 describe('schema registry', () => {
+  it('offers only game weapon group modes in variant editing', () => {
+    const weaponGroups = getSchema('variant')!
+      .sections!.flatMap((section) => section.fields)
+      .find((field) => field.key === 'weaponGroups')!;
+    expect(weaponGroups.nested!.find((field) => field.key === 'mode')!.options).toEqual(['LINKED', 'ALTERNATING']);
+  });
+  it('offers only game fighter formations in wing editing', () => {
+    const wings = getCsvColumnSchemas('wings').find((column) => column.key === 'formation');
+    expect(wings?.options).toEqual(['CLAW', 'V', 'BOX', 'DIAMOND']);
+  });
+  it('offers every game weapon slot type in skin editing', () => {
+    const weaponSlotChanges = getSchema('skin')!
+      .sections!.flatMap((section) => section.fields)
+      .find((field) => field.key === 'weaponSlotChanges')!;
+    expect(weaponSlotChanges.valueSchema!.nested!.find((field) => field.key === 'type')!.options).toEqual([
+      'BALLISTIC',
+      'ENERGY',
+      'MISSILE',
+      'HYBRID',
+      'UNIVERSAL',
+      'SYNERGY',
+      'COMPOSITE',
+      'BUILT_IN',
+      'DECORATIVE',
+      'SYSTEM',
+      'STATION_MODULE',
+      'LAUNCH_BAY',
+    ]);
+  });
+  it('models skin engine-slot removals as non-negative indices', () => {
+    const removeEngineSlots = getSchema('skin')!
+      .sections!.flatMap((section) => section.fields)
+      .find((field) => field.key === 'removeEngineSlots')!;
+    expect(removeEngineSlots.type).toBe('array');
+    expect(removeEngineSlots.item).toMatchObject({ type: 'integer', min: 0 });
+  });
   it('loads every bundled spec schema in the unified field-schema/v1 shape', () => {
     for (const id of SPEC_IDS) {
       const schema = getSchema(id);

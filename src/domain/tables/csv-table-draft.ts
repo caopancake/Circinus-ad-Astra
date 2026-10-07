@@ -1,4 +1,4 @@
-import type { CsvDraftOperation, CsvRowKeyMapping, CsvTableWindow, ModTableState, RowData, TableKey } from '@/shared/types';
+import type { CsvDraftOperation, CsvRowKeyMapping, CsvRowPatch, CsvTableWindow, ModTableState, RowData, TableKey } from '@/shared/types';
 import { CSV_FACTION_FIELD } from '@/shared/types';
 import { cell, deepClone, rowDisplayId } from '@/shared/lib/starsector';
 import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
@@ -181,6 +181,27 @@ export function markCsvTableSavedDraft(state: ModTableState, tab: TableKey): voi
   state.pendingExternalTableUpdates[tab] = false;
 }
 
+export function commitCsvTableSaveDraft(state: ModTableState, tab: TableKey, patches: CsvRowPatch[], keyMap: CsvRowKeyMapping[]): void {
+  applySavedCsvRowKeyMapDraft(state, tab, keyMap);
+  const original = state.originalTables[tab];
+  const mapped = new Map(keyMap.map((item) => [item.previousKey, item.nextKey]));
+  for (const patch of patches) {
+    const rowKey = mapped.get(patch.rowKey) ?? patch.rowKey;
+    const index = original.findIndex(
+      (candidate, rowIndex) => isLoadedCsvTableRow(candidate) && csvTableRowKey(tab, candidate, rowIndex) === rowKey,
+    );
+    if (patch.action === 'delete') {
+      if (index >= 0) original.splice(index, 1);
+      continue;
+    }
+    const savedRow = { ...deepClone(patch.row), [TABLE_ROW_KEY_FIELD]: rowKey };
+    if (index >= 0) original[index] = savedRow;
+    else original.push(savedRow);
+  }
+  rebuildCsvDirty(state, tab);
+  state.pendingExternalTableUpdates[tab] = hasCsvTableDraftChanges(state, tab);
+}
+
 export function replaceCsvTableDraft(state: ModTableState, tab: TableKey, rows: RowData[]): void {
   state.tables[tab] = deepClone(rows);
   state.originalTables[tab] = deepClone(state.tables[tab]);
@@ -195,6 +216,9 @@ export function applySavedCsvRowKeyMapDraft(state: ModTableState, tab: TableKey,
   for (const row of state.originalTables[tab]) applySavedRowKey(row, mapped);
   if (state.selectedRowKey) {
     state.selectedRowKey = mapped.get(state.selectedRowKey) ?? state.selectedRowKey;
+  }
+  if (state.editing?.tab === tab) {
+    state.editing.rowKey = mapped.get(state.editing.rowKey) ?? state.editing.rowKey;
   }
 }
 
@@ -248,6 +272,31 @@ function refreshCsvCellDirty(state: ModTableState, tab: TableKey, rowKey: string
   if (!cells) return;
   delete cells[col];
   if (!hasCsvDirtyCells(state.dirty[tab][rowKey])) delete state.dirty[tab][rowKey];
+}
+
+function rebuildCsvDirty(state: ModTableState, tab: TableKey): void {
+  state.dirty[tab] = {};
+  const dirty = state.dirty[tab];
+  const originalByKey = new Map(
+    state.originalTables[tab].flatMap((row, index) => (isLoadedCsvTableRow(row) ? [[csvTableRowKey(tab, row, index), row] as const] : [])),
+  );
+  const currentKeys = new Set<string>();
+  for (const row of state.tables[tab]) {
+    if (!isLoadedCsvTableRow(row)) continue;
+    const rowKey = cell(row[TABLE_ROW_KEY_FIELD]);
+    currentKeys.add(rowKey);
+    const original = originalByKey.get(rowKey);
+    for (const [key, value] of Object.entries(row)) {
+      if (isInternalJsonFieldKey(key)) continue;
+      if (!original || cell(value) !== cell(original[key])) {
+        ensureCsvDirtyCells(state, tab, rowKey)[key] = cell(value);
+      }
+    }
+    if (!original && !dirty[rowKey]) dirty[rowKey] = createCsvDirtyCells();
+  }
+  for (const rowKey of originalByKey.keys()) {
+    if (!currentKeys.has(rowKey)) dirty[rowKey] = createCsvDeletedRow();
+  }
 }
 
 function markCsvRowDirty(state: ModTableState, tab: TableKey, rowKey: string, row: RowData): void {

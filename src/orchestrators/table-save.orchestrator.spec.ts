@@ -13,6 +13,7 @@ import { useProjectStore } from '@/stores/project.store';
 import { useTablesStore } from '@/stores/tables.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { captureActiveTableSaveTarget, saveCapturedTableChanges } from '@/orchestrators/table-save.orchestrator';
+import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
 
 const MOD_ROOT = 'M:\\test-mod';
 const SESSION_ID = 'sess-1';
@@ -165,5 +166,73 @@ describe('table-save orchestrator', () => {
     expect(await saveCapturedTableChanges(target, [])).toBe('noop');
     expect(writeCsvPatch).not.toHaveBeenCalled();
     expect(state.dirty.ships['ships:r1']).toBeDefined();
+  });
+
+  it('keeps edits made during writing dirty against the persisted snapshot', async () => {
+    const project = useProjectStore();
+    project.manifests.set(MOD_ROOT, buildManifest());
+    const state = hydrateActiveTable();
+    state.originalTables.ships = [{ ...state.tables.ships[0] }];
+    const tables = useTablesStore();
+    tables.updateCellValueByKey('ships:r1', 'hullName', 'B');
+    let resolveWrite!: (result: WriteResult) => void;
+    writeCsvPatch.mockImplementationOnce(() => new Promise<WriteResult>((resolve) => (resolveWrite = resolve)));
+    const pending = saveCapturedTableChanges(captureActiveTableSaveTarget(project.getManifest(MOD_ROOT)), []);
+    tables.updateCellValueByKey('ships:r1', 'hullName', 'C');
+    resolveWrite(writeResult());
+    await pending;
+    expect(state.originalTables.ships[0]?.hullName).toBe('B');
+    expect(state.tables.ships[0]?.hullName).toBe('C');
+    expect(state.dirty.ships['ships:r1']).toEqual({ action: 'upsert', cells: { hullName: 'C' } });
+    expect(tables.undoCurrentTableEdit()).toBeTruthy();
+    expect(state.tables.ships[0]?.hullName).toBe('B');
+    expect(state.dirty.ships['ships:r1']).toBeUndefined();
+    expect(useTablesEditHistoryStore().canUndoCsvEdit(MOD_ROOT, 'ships')).toBe(false);
+  });
+
+  it('keeps a return to the old baseline dirty when the submitted version was written', async () => {
+    const project = useProjectStore();
+    project.manifests.set(MOD_ROOT, buildManifest());
+    const state = hydrateActiveTable();
+    state.originalTables.ships = [{ ...state.tables.ships[0] }];
+    const tables = useTablesStore();
+    tables.updateCellValueByKey('ships:r1', 'hullName', 'B');
+    completeSavedWrite.mockImplementationOnce(async () => tables.updateCellValueByKey('ships:r1', 'hullName', 'A'));
+    writeCsvPatch.mockResolvedValueOnce(writeResult());
+    await saveCapturedTableChanges(captureActiveTableSaveTarget(project.getManifest(MOD_ROOT)), []);
+    expect(state.originalTables.ships[0]?.hullName).toBe('B');
+    expect(state.dirty.ships['ships:r1']).toEqual({ action: 'upsert', cells: { hullName: 'A' } });
+  });
+
+  it('maps a newly saved row and keeps its later deletion replayable', async () => {
+    const project = useProjectStore();
+    project.manifests.set(MOD_ROOT, buildManifest());
+    const state = hydrateActiveTable();
+    state.headers.ships = ['id', 'hullName'];
+    const tables = useTablesStore();
+    const created = tables.addNewRow()!;
+    let resolveWrite!: (result: WriteResult) => void;
+    writeCsvPatch.mockImplementationOnce(() => new Promise<WriteResult>((resolve) => (resolveWrite = resolve)));
+    const pending = saveCapturedTableChanges(captureActiveTableSaveTarget(project.getManifest(MOD_ROOT)), []);
+    tables.deleteSelected();
+    resolveWrite(writeResult({ keyMap: [{ previousKey: created.rowKey, nextKey: 'ships:row:2' }] }));
+    await pending;
+    expect(state.dirty.ships['ships:row:2']).toEqual({ action: 'delete' });
+    expect(useTablesEditHistoryStore().canUndoCsvEdit(MOD_ROOT, 'ships')).toBe(true);
+    tables.undoCurrentTableEdit();
+    expect(state.tables.ships.some((row) => row?._rowKey === 'ships:row:2')).toBe(true);
+    expect(state.dirty.ships['ships:row:2']).toBeUndefined();
+  });
+
+  it('preserves drafts and history when the backend returns no file changes', async () => {
+    const project = useProjectStore();
+    project.manifests.set(MOD_ROOT, buildManifest());
+    const state = hydrateActiveTable();
+    const tables = useTablesStore();
+    tables.updateCellValueByKey('ships:r1', 'hullName', 'B');
+    writeCsvPatch.mockResolvedValueOnce(writeResult({ changes: [] }));
+    await saveCapturedTableChanges(captureActiveTableSaveTarget(project.getManifest(MOD_ROOT)), []);
+    expect(state.dirty.ships['ships:r1']).toBeDefined();
+    expect(useTablesEditHistoryStore().canUndoCsvEdit(MOD_ROOT, 'ships')).toBe(true);
   });
 });

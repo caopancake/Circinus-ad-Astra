@@ -3,11 +3,11 @@ use crate::{
     domain::config::validate_config_id,
     errors::{AppError, AppResult},
     io::{
-        JsonWriteBatch, build_text_change, read_json_file, strip_internal_fields,
-        validate_safe_absolute_path, validate_walk_entry,
+        JsonWriteBatch, acquire_root_write_lock, build_text_change, read_json_file,
+        strip_internal_fields, validate_safe_absolute_path, validate_walk_entry,
     },
     models::{EditorSpecKind, FileChangeReplayDirection, JsonWriteOptions, WriteResult},
-    services::file_changes::apply_file_change_set,
+    services::file_changes::apply_file_change_set_with_lock,
 };
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -30,6 +30,7 @@ pub fn save_editor_spec_with_json_options(
     options: JsonWriteOptions,
     ordered_json: Option<&str>,
 ) -> AppResult<WriteResult> {
+    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
     let id = validate_config_id(id, editor_spec_definition(kind)?.invalid_id_message)?;
     let target = find_editor_spec_target(Path::new(mod_root), kind, id)?;
     let clean = strip_internal_fields(&data);
@@ -41,10 +42,11 @@ pub fn save_editor_spec_with_json_options(
         return Ok(WriteResult::from_changes(Vec::new()));
     }
     let change = build_text_change(&target, Some(text))?;
-    apply_file_change_set(
+    apply_file_change_set_with_lock(
         mod_root,
         FileChangeReplayDirection::Redo,
         vec![change.clone()],
+        write_lock,
     )?;
     Ok(WriteResult::from_changes(vec![change]))
 }

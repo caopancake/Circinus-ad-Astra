@@ -163,7 +163,7 @@ impl Tokener {
     fn is_word_delimiter(c: char) -> bool {
         matches!(
             c,
-            ',' | ':' | '}' | ']' | '/' | '"' | '[' | '{' | ';' | '=' | '#'
+            ',' | ':' | '}' | ']' | '/' | '\\' | '"' | '[' | '{' | ';' | '=' | '#'
         )
     }
 
@@ -281,12 +281,35 @@ impl Tokener {
                                 None => return Err(self.syntax("Illegal escape.")),
                             }
                         }
-                        match u32::from_str_radix(&hex, 16) {
-                            Ok(code) => match char::from_u32(code) {
-                                Some(decoded) => out.push(decoded),
-                                None => return Err(self.syntax("Illegal escape.")),
-                            },
-                            Err(_) => return Err(self.syntax("Illegal escape.")),
+                        let code = u32::from_str_radix(&hex, 16)
+                            .map_err(|_| self.syntax("Illegal escape."))?;
+                        if (0xD800..=0xDBFF).contains(&code) {
+                            if self.next() != Some('\\') || self.next() != Some('u') {
+                                return Err(self.syntax("Illegal escape."));
+                            }
+                            let mut low_hex = String::new();
+                            for _ in 0..4 {
+                                low_hex.push(
+                                    self.next().ok_or_else(|| self.syntax("Illegal escape."))?,
+                                );
+                            }
+                            let low = u32::from_str_radix(&low_hex, 16)
+                                .map_err(|_| self.syntax("Illegal escape."))?;
+                            if !(0xDC00..=0xDFFF).contains(&low) {
+                                return Err(self.syntax("Illegal escape."));
+                            }
+                            let combined = 0x1_0000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                            out.push(
+                                char::from_u32(combined)
+                                    .ok_or_else(|| self.syntax("Illegal escape."))?,
+                            );
+                        } else if (0xDC00..=0xDFFF).contains(&code) {
+                            return Err(self.syntax("Illegal escape."));
+                        } else {
+                            out.push(
+                                char::from_u32(code)
+                                    .ok_or_else(|| self.syntax("Illegal escape."))?,
+                            );
                         }
                     }
                     Some(_) => return Err(self.syntax("Illegal escape.")),
@@ -566,6 +589,18 @@ mod tests {
     fn unicode_escapes() {
         let parsed = parse_starsector_json("{\"a\": \"\\u0041\\u00e9\"}").unwrap();
         assert_eq!(parsed["a"], "Aé");
+    }
+
+    #[test]
+    fn unicode_surrogate_pairs_match_game_json() {
+        let parsed = parse_starsector_json(r#"{"name":"\uD83D\uDE80"}"#).unwrap();
+        assert_eq!(parsed["name"], "🚀");
+    }
+
+    #[test]
+    fn backslash_terminates_unquoted_words() {
+        let error = parse_starsector_json(r#"{"a":foo\bar}"#).unwrap_err();
+        assert_eq!(error.code(), "parse.json_syntax");
     }
 
     #[test]

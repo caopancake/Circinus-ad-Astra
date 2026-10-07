@@ -6,6 +6,7 @@ export interface ConfigFileEntityWrite {
   previousId: string | null;
   nextId: string;
   data: RowData;
+  relPath: string | null;
 }
 
 export type IndexedConfigKind = 'faction' | 'mission';

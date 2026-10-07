@@ -11,6 +11,7 @@ import type {
   SourceOptionGroup,
   CsvFactionFilter,
   TableKey,
+  RowData,
 } from '@/shared/types';
 
 export function queryCsvTableWindow(
@@ -42,6 +43,10 @@ export function queryEntity(sessionId: ProjectSessionId, kind: EntityKind, id: s
 
 export function queryEntityList(sessionId: ProjectSessionId, kind: EntityKind): Promise<EntityData[]> {
   return invoke('query_entity_list', { payload: { sessionId, kind } });
+}
+
+export function queryWeaponDraftResources(sessionId: ProjectSessionId, id: string, draft: RowData): Promise<Record<string, ResourceRef>> {
+  return invoke('query_weapon_draft_resources', { payload: { sessionId, id, draft } });
 }
 
 export function queryResourceDataUrlBatch(sessionId: ProjectSessionId, resources: ResourceRef[]): Promise<ResourceDataUrlBatchResult> {

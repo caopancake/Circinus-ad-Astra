@@ -160,8 +160,17 @@ describe('useConfigMissionViewModel', () => {
     const schema = MISSION_SCHEMA;
     const localMission = { list: { mission: '  ' }, descriptor: { title: 'One' }, text: 'body' };
     const nextId = await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, schema);
-    expect(nextId).toBe('m1');
+    expect(nextId).toBeNull();
     expect(mocks.feedback.warning).toHaveBeenCalledWith('mission 不能为空');
+    expect(mocks.saveIndexedEntityAction).not.toHaveBeenCalled();
+  });
+
+  it('returns no saved id when the mission id is invalid or the session changed', async () => {
+    activateProject();
+    const vm = mountViewModel();
+    const localMission = { list: { mission: 'bad id' }, descriptor: { title: 'One' }, text: 'body' };
+    expect(await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, MISSION_SCHEMA)).toBeNull();
+    expect(await vm.saveMission('sess-2', 'M:/mod', 'm1', localMission, MISSION_SCHEMA)).toBeNull();
     expect(mocks.saveIndexedEntityAction).not.toHaveBeenCalled();
   });
 

@@ -18,6 +18,7 @@ export interface DraftSession<T> {
   applyExternal: (value: T) => void;
   clear: (value: T) => void;
   commitSaved: (value?: T) => void;
+  commitSavedBaseline: (value: T) => void;
   loadBase: (value: T) => void;
   loadPendingExternal: () => void;
   resetDraft: () => void;
@@ -32,7 +33,11 @@ export function useDraftSession<T>(initialValue: T, options: DraftSessionOptions
   // projection kept in sync at the single dispatch boundary. Computeds must not read the
   // session getters directly: plain getters never invalidate, so the value would be cached.
   const baseValue = ref<T>(session.baseline) as Ref<T>;
-  const draftValue = ref<T>(session.draft) as Ref<T>;
+  const draftProjection = ref<T>(session.draft) as Ref<T>;
+  const draftValue = computed({
+    get: () => draftProjection.value,
+    set: (value: T) => dispatch(() => session.setDraft(value)),
+  });
   const pendingExternalValue = ref<T | null>(session.pendingExternal) as Ref<T | null>;
   const revision = ref(session.revision);
   const dirty = ref(session.dirty);
@@ -41,7 +46,7 @@ export function useDraftSession<T>(initialValue: T, options: DraftSessionOptions
   function dispatch(action: () => void): void {
     action();
     baseValue.value = session.baseline;
-    draftValue.value = session.draft;
+    draftProjection.value = session.draft;
     pendingExternalValue.value = session.pendingExternal;
     revision.value = session.revision;
     dirty.value = session.dirty;
@@ -61,6 +66,7 @@ export function useDraftSession<T>(initialValue: T, options: DraftSessionOptions
     applyExternal: (value) => dispatch(() => session.applyExternal(value)),
     clear: (value) => dispatch(() => session.clear(value)),
     commitSaved: (value) => dispatch(() => session.commitSaved(value)),
+    commitSavedBaseline: (value) => dispatch(() => session.commitSavedBaseline(value)),
     loadBase: (value) => dispatch(() => session.loadBaseline(value)),
     loadPendingExternal: () => dispatch(() => session.loadPendingExternal()),
     resetDraft: () => dispatch(() => session.resetDraft()),

@@ -47,6 +47,27 @@ pub(crate) fn invalidate_session_changes(
     if affected_kinds.contains(&EntityKind::Faction) {
         tables.extend(faction_annotated_tables());
     }
+    let mut saved_tables = BTreeMap::new();
+    for table in &tables {
+        let state = session
+            .csv_tables
+            .get_mut(table.as_str())
+            .expect("registered CSV table");
+        if state.rows.is_some()
+            && state.saved_text.is_some()
+            && files
+                .iter()
+                .any(|file| file.path == state.path && file.after_text == state.saved_text)
+        {
+            saved_tables.insert(
+                *table,
+                (
+                    state.rows.take().expect("saved CSV rows are loaded"),
+                    state.next_row_seq,
+                ),
+            );
+        }
+    }
     for table in &tables {
         if let Some(state) = session.csv_tables.get_mut(table.as_str()) {
             state.rows = None;
@@ -63,6 +84,14 @@ pub(crate) fn invalidate_session_changes(
         if let Some(table) = definition.csv_table {
             refresh_table_entity_summary(session, table.as_str())?;
         }
+    }
+    for (table, (rows, next_row_seq)) in saved_tables {
+        let state = session
+            .csv_tables
+            .get_mut(table.as_str())
+            .expect("registered CSV table");
+        state.rows = Some(rows);
+        state.next_row_seq = next_row_seq;
     }
     let resources = impacts
         .iter()
@@ -368,6 +397,17 @@ fn query_scopes_for_invalidation(
     resources: &[InvalidatedResourceScope],
 ) -> AppResult<Vec<InvalidatedQueryScope>> {
     let mut scopes = Vec::new();
+    if tables.contains(&CsvTableKey::SpecialItems)
+        || entities
+            .iter()
+            .any(|entity| entity.kind == EntityKind::Faction)
+    {
+        for definition in table_definitions::csv_table_definitions() {
+            let source = format!("{}.tags", definition.spec.key.as_str());
+            push_source_option_query_scope(&mut scopes, source.clone());
+            push_source_option_query_scope(&mut scopes, format!("csv:{source}"));
+        }
+    }
     for table in tables {
         push_query_scope(
             &mut scopes,
@@ -519,6 +559,33 @@ fn refresh_table_entity_summary(session: &mut ProjectSession, table_key: &str) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blueprint_metadata_invalidates_tags_for_every_registered_table_and_source_origin() {
+        for (tables, entities) in [
+            (vec![CsvTableKey::SpecialItems], Vec::new()),
+            (
+                Vec::new(),
+                vec![invalidated_entity(
+                    EntityKind::Faction,
+                    Some("demo".to_string()),
+                )],
+            ),
+        ] {
+            let scopes = query_scopes_for_invalidation(&tables, &entities, &[]).unwrap();
+            for definition in table_definitions::csv_table_definitions() {
+                let source = format!("{}.tags", definition.spec.key.as_str());
+                for source in [source.clone(), format!("csv:{source}")] {
+                    assert!(
+                        scopes
+                            .iter()
+                            .any(|scope| scope.kind == InvalidatedQueryKind::CsvSourceOptions
+                                && scope.source.as_ref() == Some(&source))
+                    );
+                }
+            }
+        }
+    }
     use crate::testutil::temp_dir;
     use crate::{
         io::write_utf8_no_bom,

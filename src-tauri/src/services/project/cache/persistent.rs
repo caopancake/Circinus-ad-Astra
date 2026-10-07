@@ -247,6 +247,7 @@ fn session_source_files(root: &Path) -> AppResult<Vec<(String, PathBuf)>> {
     collect_extension_files(root, "data/world", &["faction"], &mut files)?;
     collect_extension_files(root, "data/hulls", &["ship", "skin"], &mut files)?;
     collect_extension_files(root, "data/weapons", &["wpn"], &mut files)?;
+    collect_extension_files(root, "data/weapons/proj", &["proj"], &mut files)?;
     collect_extension_files(root, "data/variants", &["variant"], &mut files)?;
     collect_extension_files(root, "data/shipsystems", &["system"], &mut files)?;
     collect_extension_files(root, "data/characters/skills", &["skill"], &mut files)?;

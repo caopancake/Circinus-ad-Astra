@@ -48,6 +48,7 @@ pub fn run() {
             commands::query_hull_references,
             commands::query_entity,
             commands::query_entity_list,
+            commands::query_weapon_draft_resources,
             commands::query_resource_data_urls,
             commands::invalidate_project_session,
             commands::invalidate_core_cache,
