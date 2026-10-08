@@ -26,7 +26,7 @@ Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，目标�
 
 - `src/app/`：承载窗口根、页面、组件、检查器与 ViewModel/composable；应用级装配在这里收口，不承载领域规则与后端能力。
 - `src/domain/`：承载纯规则与转换（编辑会话原语、schema 加载、主题令牌、表格与画布规则）；严禁依赖 app、services 或 stores。
-- `src/services/`：包装单一后端能力；service 之间默认禁止依赖，仅架构规则白名单内的基础设施边例外。
+- `src/services/`：包装单一后端能力；横向依赖必须满足声明的能力依赖矩阵，公开操作按导入符号及正式 owner 授权。
 - `src/orchestrators/`：编排跨模块用户动作（保存、打开、历史、刷新）；依赖图必须单向无环。
 - `src/stores/`：保存内存运行态；严禁 IO、确认框或跨模块编排。
 - `src/windows/`：管理窗口身份、生命周期与事件。
@@ -62,3 +62,4 @@ Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，目标�
 - workspace、settings、日志和派生索引只写工具私有目录；Mod 内容与工具私有状态由独立 owner 管理。
 - 保存、删除、导入和 undo/redo 必须经所属模块的 changeset 链路；字段编辑服从全局 edit mode。
 - 架构边界由 `scripts/architecture` 规则强制（`node scripts/check-architecture.mjs`）；可静态证明的边界不允许只写入文档。
+- 依赖规则必须消费同一份实际节点、类型与运行时边及符号来源；层级、模块与能力事实必须具有唯一检查 owner。

@@ -23,7 +23,7 @@
 ## 边界
 
 - 组件只允许经反馈 hook 获取 `AppFeedback`；非组件代码只允许接收注入的 `AppFeedback` 或使用日志 service。
-- 反馈工厂只允许被反馈 hook 消费，由架构规则锚定；工厂内错误文件的 store 读取与窗口打开维持现状。
+- 反馈工厂、message/dialog 和 discrete 运行时能力只允许被反馈 hook 消费；具名导入、namespace、转导出和动态导入必须共同接受正式能力授权。
 - error 与 warning 反馈必记录应用日志；info 与 debug 条目由业务链路显式记录，全部按设置的级别阈值落盘（默认 INFO 阈值丢弃 debug，详细档 DEBUG 全量保留）；日志失败不改变主业务语义。
 - 日志条目采用稳定码+参数制：全级别必须携带稳定码（前端 `域.动作` 风格，后端 AppError 稳定码）；message 仅允许英文短语或原始诊断文本（wire 错误的完整 message 链），弹窗用户文案严禁落日志；结构化上下文写入 `fields`（键值均为字符串，渲染为 `key=value` 后缀，空值丢弃）。
 - Mod session 生命周期日志归属前端：`mod.session_opened` 在 `openModProjectManifest` 成功后记录（覆盖目录打开、总览打开、新建 Mod 打开与工作区恢复），`mod.session_closed` 在 `removeLoadedModRuntime` 记录，均携带 `modRoot + sessionId`；后端不记录 session 生命周期。

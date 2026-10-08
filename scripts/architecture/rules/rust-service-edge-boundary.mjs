@@ -38,11 +38,14 @@ export const rustServiceEdgeBoundaryRule = {
       const from = topLevelServiceModule(file.rel);
       if (!from) continue;
       const productionText = productionRustSource(file.text);
+      const rejected = new Set();
       for (const parts of cratePaths(productionText, file.rel)) {
         if (parts[0] !== 'services' || parts.length < 2) continue;
         const to = parts[1] === 'project' ? 'project' : parts[1];
         if (to === from || allowedServiceEdges.has(`${from} -> ${to}`)) continue;
-        failures.push(`${file.rel}: backend service ${from} must not depend on service ${to} (crate::${parts.join('::')})`);
+        if (!rejected.has(to))
+          failures.push(`${file.rel}: backend service ${from} must not depend on service ${to} (crate::${parts.join('::')})`);
+        rejected.add(to);
       }
     }
     return failures;

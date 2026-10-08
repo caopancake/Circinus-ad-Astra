@@ -1,6 +1,7 @@
 import { classifyFrontendPath } from '../../shared/classify.mjs';
 import { frontendFile } from '../../shared/files.mjs';
 import { importedProjectPaths } from '../../shared/imports.mjs';
+import { dependencyDiagnostic } from '../../shared/frontend-policy.mjs';
 
 export const windowBoundaryRule = {
   name: 'window-boundary',
@@ -13,8 +14,8 @@ export const windowBoundaryRule = {
       for (const imported of importedProjectPaths(file)) {
         if (imported.typeOnly) continue;
         const target = classifyFrontendPath(imported.resolved);
-        if (current.layer === 'windows' && target.layer === 'services' && target.domain === 'app-config') {
-          failures.push(`${file.rel}: windows must receive settings by request data or events, not read app config`);
+        if (current.layer === 'windows' && target.layer === 'services' && target.domain === 'app-settings') {
+          failures.push(dependencyDiagnostic(file, imported, 'windows must receive settings by request data or events'));
         }
       }
       if (current.layer === 'windows' && /\bopenProject\s*\(|\bopenProjectSession\s*\(/.test(file.text)) {

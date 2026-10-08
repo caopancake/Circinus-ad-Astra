@@ -34,7 +34,7 @@ export function roleFor(path) {
 
 /** @param {string} path @param {number} index @returns {string | null} */
 function segment(path, index) {
-  return path.split('/')[index] ?? null;
+  return path.split('/')[index]?.replace(/\.(?:ts|tsx|js|jsx|mjs|vue)$/, '') ?? null;
 }
 
 /** @param {string} path @returns {string | null} */

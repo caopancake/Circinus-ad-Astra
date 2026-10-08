@@ -1,6 +1,5 @@
 import { frontendFile } from '../../shared/files.mjs';
 import { classifyFrontendPath } from '../../shared/classify.mjs';
-import { importedProjectPaths } from '../../shared/imports.mjs';
 
 export const schemaModuleBoundaryRule = {
   name: 'schema-module-boundary',
@@ -41,18 +40,6 @@ export const schemaModuleBoundaryRule = {
       }
       if (isSchemaComponent(current) && /\bresolveSource\s*\(/.test(file.text)) {
         failures.push(`${file.rel}: schema sources must use session source query, not local source resolution`);
-      }
-      for (const imported of importedProjectPaths(file)) {
-        if (imported.typeOnly) continue;
-        const target = classifyFrontendPath(imported.resolved);
-        if (isSchemaComponent(current) && target.role === 'api') {
-          failures.push(`${file.rel}: schema rendering must not call shared/api directly`);
-        }
-        if (current.layer === 'domain' && current.domain === 'schema') {
-          if (target.layer === 'app' || target.layer === 'stores' || target.layer === 'services' || target.role === 'api') {
-            failures.push(`${file.rel}: schema domain must stay pure and cannot import ${imported.specifier}`);
-          }
-        }
       }
       if (/schemas\/.*\.schema\.json/.test(file.text) && /const\s+\w+Schema\s*=/.test(file.text)) {
         failures.push(`${file.rel}: schema definitions must live in schema file assets`);

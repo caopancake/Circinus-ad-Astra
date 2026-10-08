@@ -1,70 +1,53 @@
 import { classifyFrontendPath } from '../../shared/classify.mjs';
 import { frontendFile } from '../../shared/files.mjs';
-import { importedProjectPaths } from '../../shared/imports.mjs';
+import {
+  capabilityFor,
+  capabilityOrigins,
+  hasCapabilityBoundary,
+  canConsumeCapability,
+  dependencyDiagnostic,
+  frontendDependencyFailure,
+} from '../../shared/frontend-policy.mjs';
 
 export const writeBoundaryRule = {
   name: 'write-boundary',
   /** @param {import('../../shared/files.mjs').RepoFile[]} files @returns {string[]} */
   check(files) {
+    const nodes = new Map(files.map((file) => [file.rel, file]));
     const failures = [];
     for (const file of files) {
       if (!frontendFile(file.rel)) continue;
       const current = classifyFrontendPath(file.rel);
-      for (const imported of importedProjectPaths(file)) {
-        if (imported.typeOnly) continue;
-        const target = classifyFrontendPath(imported.resolved);
-        if (current.role === 'component' && target.layer === 'services' && target.domain === 'write') {
-          failures.push(`${file.rel}: components must not call write service directly`);
-        }
-        if (current.role === 'component' && target.layer === 'orchestrators' && target.domain === 'config-save') {
-          failures.push(`${file.rel}: config components must use ViewModel actions for saves`);
-        }
-        if (target.role === 'api' && target.domain === 'write') {
-          if (!(current.layer === 'services' && current.domain === 'write')) {
-            failures.push(`${file.rel}: write API adapters must be consumed only by write service`);
-          }
-        }
-        if (target.layer === 'services' && target.domain === 'write') {
-          if (!canImportWriteService(current)) {
-            failures.push(`${file.rel}: write service belongs behind write-facing services and file history replay`);
-          }
-        }
-        if (target.layer === 'services' && ['query-cache', 'resource-cache'].includes(target.domain ?? '')) {
-          if (!canImportCacheInvalidationService(current)) {
-            failures.push(`${file.rel}: cache invalidation services must be driven by ProjectSession refresh boundary`);
-          }
-        }
-        if (target.layer === 'services' && target.domain === 'session' && current.layer === 'orchestrators') {
-          if (
-            current.domain !== 'project-session-refresh' &&
-            current.domain !== 'directory-opening' &&
-            current.domain !== 'workspace-persistence'
-          ) {
-            failures.push(`${file.rel}: project session mutation belongs to project session orchestrators`);
-          }
+      if (current.layer === 'test') continue;
+      if (hasCapabilityBoundary(current)) {
+        for (const binding of file.exports) {
+          if (!binding.typeOnly && !capabilityFor(file.rel, binding.exportedName))
+            failures.push(`${file.rel}: ${binding.exportedName}: public runtime exports must declare their capability ownership`);
         }
       }
-      for (const imported of importedProjectPaths(file)) {
-        const target = classifyFrontendPath(imported.resolved);
-        if (imported.typeOnly && target.role === 'api' && current.layer !== 'shared') {
-          failures.push(`${file.rel}: shared/api write types must not be consumed outside API adapters`);
+      for (const edge of file.dependencies) {
+        if (edge.typeOnly) continue;
+        const target = classifyFrontendPath(edge.resolved);
+        if (frontendDependencyFailure(current, target, edge)) continue;
+        const origins = capabilityOrigins(edge, nodes);
+        /** @type {Map<string, {names: Set<string>, owners: import('../../shared/frontend-policy.mjs').Owner[]}>} */
+        const rejected = new Map();
+        for (const origin of origins) {
+          const capability = capabilityFor(origin.rel, origin.name);
+          if (capability && !canConsumeCapability(current, capability)) {
+            const rejection = rejected.get(capability.capability) ?? { names: new Set(), owners: capability.owners };
+            rejection.names.add(origin.name);
+            rejected.set(capability.capability, rejection);
+          }
+        }
+        for (const [capability, rejection] of rejected) {
+          const owners = rejection.owners.map((owner) => [owner.layer, owner.domain ?? owner.role].filter(Boolean).join('/')).join(', ');
+          failures.push(
+            dependencyDiagnostic(file, edge, `${capability} (${[...rejection.names].sort().join(', ')}) must be owned by ${owners}`),
+          );
         }
       }
     }
     return failures;
   },
 };
-
-/** @param {import('../../shared/classify.mjs').FrontendPathClass} current @returns {boolean} */
-function canImportWriteService(current) {
-  if (current.layer === 'services') return current.domain !== 'write';
-  return current.layer === 'orchestrators' && current.domain === 'file-history-session';
-}
-
-/** @param {import('../../shared/classify.mjs').FrontendPathClass} current @returns {boolean} */
-function canImportCacheInvalidationService(current) {
-  return (
-    (current.layer === 'orchestrators' && current.domain === 'project-session-refresh') ||
-    (current.layer === 'services' && current.domain === 'session')
-  );
-}

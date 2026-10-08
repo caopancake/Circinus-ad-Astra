@@ -1,35 +1,50 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { frontendLayerBoundaryRule } from './rules/frontend-layer-boundary.mjs';
+import { architectureFixtures } from '../shared/check-fixtures.mjs';
 
 test('extensionless relative and alias imports reveal an orchestrator cycle', () => {
-  const files = [
-    {
-      path: 'src/orchestrators/alpha.orchestrator.ts',
-      rel: 'src/orchestrators/alpha.orchestrator.ts',
-      text: 'import { beta } from "@/orchestrators/beta.orchestrator";',
-    },
-    {
-      path: 'src/orchestrators/beta.orchestrator.ts',
-      rel: 'src/orchestrators/beta.orchestrator.ts',
-      text: 'import { alpha } from "./alpha.orchestrator";',
-    },
-  ];
-  assert.ok(frontendLayerBoundaryRule.check(files).some((failure) => failure.includes('dependency cycle')));
+  const files = architectureFixtures({
+    'src/orchestrators/alpha.orchestrator.ts': "import { beta } from '@/orchestrators/beta.orchestrator'; export function alpha() {}",
+    'src/orchestrators/beta.orchestrator.ts': "import { alpha } from './alpha.orchestrator'; export function beta() {}",
+  });
+  assert.equal(frontendLayerBoundaryRule.check(files).filter((failure) => failure.includes('dependency cycle')).length, 1);
 });
 
 test('one-way runtime imports and type-only edges keep the dependency graph acyclic', () => {
-  const files = [
-    {
-      path: 'src/orchestrators/alpha.orchestrator.ts',
-      rel: 'src/orchestrators/alpha.orchestrator.ts',
-      text: 'import { beta } from "./beta.orchestrator";',
-    },
-    {
-      path: 'src/orchestrators/beta.orchestrator.ts',
-      rel: 'src/orchestrators/beta.orchestrator.ts',
-      text: 'import type { Alpha } from "./alpha.orchestrator";',
-    },
-  ];
-  assert.ok(frontendLayerBoundaryRule.check(files).every((failure) => !failure.includes('dependency cycle')));
+  const files = architectureFixtures({
+    'src/orchestrators/alpha.orchestrator.ts': "import { beta } from './beta.orchestrator'; export interface Alpha {}",
+    'src/orchestrators/beta.orchestrator.ts': "import type { Alpha } from './alpha.orchestrator'; export function beta() {}",
+  });
+  assert.deepEqual(frontendLayerBoundaryRule.check(files), []);
+});
+
+test('a mixed type import still participates in runtime cycle detection', () => {
+  const files = architectureFixtures({
+    'src/orchestrators/alpha.orchestrator.ts': "import { type Beta, beta } from './beta.orchestrator'; export function alpha() {}",
+    'src/orchestrators/beta.orchestrator.ts':
+      "import { alpha } from './alpha.orchestrator'; export interface Beta {} export function beta() {}",
+  });
+  assert.equal(frontendLayerBoundaryRule.check(files).length, 1);
+});
+
+test('component dependency rejection has one owner and one source-positioned diagnostic', () => {
+  const files = architectureFixtures({
+    'src/app/components/config/Audit.vue':
+      '<script setup lang="ts">\nimport { writeCsvPatch, writeTextFile } from "@/services/write.service";\n</script><template><div /></template>',
+    'src/services/write.service.ts': 'export function writeCsvPatch() {} export function writeTextFile() {}',
+  });
+  const failures = frontendLayerBoundaryRule.check(files);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /Audit.vue:2:\d+: src\/services\/write.service.ts: components must consume/);
+});
+
+test('layer directions govern type imports and production capability constraints exempt test fixtures', () => {
+  const files = architectureFixtures({
+    'src/domain/sample.ts': "import type { State } from '@/stores/sample.store';",
+    'src/stores/sample.store.ts': 'export interface State {}',
+    'src/app/components/sample.spec.ts': "import { writeCsvPatch } from '@/services/write.service';",
+    'src/services/write.service.ts': 'export function writeCsvPatch() {}',
+  });
+  assert.equal(frontendLayerBoundaryRule.check(files).length, 1);
 });

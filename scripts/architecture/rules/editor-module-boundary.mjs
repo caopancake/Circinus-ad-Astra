@@ -1,6 +1,5 @@
 import { classifyFrontendPath } from '../../shared/classify.mjs';
 import { frontendFile } from '../../shared/files.mjs';
-import { importedProjectPaths } from '../../shared/imports.mjs';
 
 export const editorModuleBoundaryRule = {
   name: 'editor-module-boundary',
@@ -11,19 +10,6 @@ export const editorModuleBoundaryRule = {
       if (!frontendFile(file.rel)) continue;
       const current = classifyFrontendPath(file.rel);
       if (!isEditorSurface(current)) continue;
-      for (const imported of importedProjectPaths(file)) {
-        if (imported.typeOnly) continue;
-        const target = classifyFrontendPath(imported.resolved);
-        if (target.role === 'api') {
-          failures.push(`${file.rel}: editor components must not call wire APIs`);
-        }
-        if (target.role === 'service') {
-          failures.push(`${file.rel}: editor components must use editor ViewModel output instead of services`);
-        }
-        if (target.role === 'orchestrator') {
-          failures.push(`${file.rel}: editor components must not own save or history orchestration`);
-        }
-      }
       if (/\bqueryCsvTableWindow\s*\(/.test(file.text)) {
         failures.push(`${file.rel}: editor candidates must use source/entity query, not CSV windows`);
       }

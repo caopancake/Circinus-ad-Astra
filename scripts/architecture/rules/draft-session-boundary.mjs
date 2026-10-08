@@ -22,6 +22,7 @@ export const draftSessionBoundaryRule = {
     for (const file of files) {
       if (!frontendFile(file.rel)) continue;
       const current = classifyFrontendPath(file.rel);
+      if (current.layer === 'test') continue;
 
       for (const imported of importedProjectPaths(file)) {
         if (imported.typeOnly) continue;

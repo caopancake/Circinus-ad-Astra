@@ -18,6 +18,7 @@
 
 - workspace store 必须拥有全局页、已加载 Mod、按 `modRoot` 保存的运行代次与页面上下文、概览、打开失败状态与列宽；页面与组件只允许消费。
 - 移除 Mod 的 5-store 清理序列唯一归属生命周期编排的清理用例；缓存失效、session 关闭与视图回退由调用方组合。
+- 前端按会话清理、后端 session 关闭与 Core 缓存清理必须由生命周期能力边界拥有；目录打开只允许关闭所属迟到响应的 session。
 - 顶部页签经导航编排先同步同一 `modRoot` 的 project/tables/editor/history 运行态，再恢复该 Mod 最近的表格或配置页。
 - 导航 ViewModel 在替换当前配置视图前查询该 Mod 的活跃 Draft Session；工作区关闭、Mod 移除和主窗口关闭同时检查 CSV 与配置 dirty。
 - Rust workspace service 只读写工具私有文件；目录打开只提供打开 outcome。

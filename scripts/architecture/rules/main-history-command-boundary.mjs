@@ -30,22 +30,6 @@ export const mainHistoryCommandBoundaryRule = {
         failures.push(`${file.rel}: main history dispatcher must not own keyboard DOM event handling`);
       }
 
-      if (isCommandDomain(file.text, current)) {
-        for (const imported of importedProjectPaths(file)) {
-          if (imported.typeOnly) continue;
-          const target = classifyFrontendPath(imported.resolved);
-          if (
-            target.layer === 'app' ||
-            target.layer === 'stores' ||
-            target.layer === 'services' ||
-            target.layer === 'orchestrators' ||
-            target.role === 'api'
-          ) {
-            failures.push(`${file.rel}: main window command domain must stay pure and cannot import ${imported.specifier}`);
-          }
-        }
-      }
-
       if (isMainShortcutComposable(file.text, current)) {
         for (const imported of importedProjectPaths(file)) {
           if (historyStoreImport.test(imported.resolved)) {
@@ -66,9 +50,4 @@ function isMainShortcutComposable(text, current) {
 /** @param {string} text @param {import('../../shared/classify.mjs').FrontendPathClass} current @returns {boolean} */
 function isHistoryDispatcher(text, current) {
   return current.layer === 'orchestrators' && /\bdispatchMain(?:Undo|Redo)Command\b/.test(text);
-}
-
-/** @param {string} text @param {import('../../shared/classify.mjs').FrontendPathClass} current @returns {boolean} */
-function isCommandDomain(text, current) {
-  return current.layer === 'domain' && current.domain === 'workspace' && /\bshortcutCommandFromKeyEvent\b/.test(text);
 }

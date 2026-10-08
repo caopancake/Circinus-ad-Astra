@@ -1,12 +1,14 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { extname, join, relative } from 'node:path';
+import { prepareArchitectureFiles } from './imports.mjs';
 
 const ignoredDirs = new Set(['.git', 'dist', 'node_modules', 'release', 'target']);
 const ignoredPathParts = ['src-tauri/gen', 'src-tauri/target'];
-const architectureExtensions = new Set(['.json', '.mjs', '.rs', '.ts', '.vue']);
+const architectureExtensions = new Set(['.css', '.js', '.json', '.jsx', '.mjs', '.rs', '.ts', '.tsx', '.vue']);
 
 /** @typedef {{ path: string, rel: string }} RepoPath */
-/** @typedef {RepoPath & { text: string }} RepoFile */
+/** @typedef {RepoPath & { text: string }} SourceFile */
+/** @typedef {SourceFile & import('./frontend-source.mjs').FrontendSource & { dependencies: import('./imports.mjs').ResolvedImport[], dependencyFailures: string[] }} RepoFile */
 
 /**
  * Walks the repository once with the shared ignore rules and keeps the files
@@ -29,12 +31,17 @@ export async function collectRepoPaths(root, include) {
  * @returns {Promise<RepoFile[]>}
  */
 export async function collectArchitectureFiles(root) {
-  const paths = await collectRepoPaths(root, isArchitecturePath);
-  return Promise.all(
+  const available = await collectRepoPaths(root, () => true);
+  const paths = available.filter((file) => isArchitecturePath(file.rel, extname(file.rel)));
+  const files = await Promise.all(
     paths.map(async (path) => ({
       ...path,
       text: await readFile(path.path, 'utf8'),
     })),
+  );
+  return prepareArchitectureFiles(
+    files,
+    available.map((file) => file.rel),
   );
 }
 
@@ -46,12 +53,16 @@ export async function collectArchitectureFiles(root) {
 function isArchitecturePath(rel, extension) {
   const isModuleDoc = extension === '.md' && rel.startsWith('.zcode/modules/');
   const isModuleMap = extension === '.md' && rel === '.zcode/module-map.md';
-  return (architectureExtensions.has(extension) && (extension !== '.json' || rel.startsWith('schemas/'))) || isModuleDoc || isModuleMap;
+  return (
+    (architectureExtensions.has(extension) && (extension !== '.json' || rel.startsWith('schemas/') || rel === 'tsconfig.json')) ||
+    isModuleDoc ||
+    isModuleMap
+  );
 }
 
 /** @param {string} path @returns {boolean} */
 export function frontendFile(path) {
-  return path.endsWith('.ts') || path.endsWith('.vue');
+  return path.startsWith('src/') && /\.(?:ts|tsx|js|jsx|mjs|vue)$/.test(path);
 }
 
 /// Colocated test files: production naming and failure-semantics conventions

@@ -1,6 +1,7 @@
 import { frontendFile } from '../../shared/files.mjs';
 import { classifyFrontendPath } from '../../shared/classify.mjs';
-import { importedProjectPaths, importSpecifiers } from '../../shared/imports.mjs';
+import { importedProjectPaths } from '../../shared/imports.mjs';
+import { dependencyDiagnostic } from '../../shared/frontend-policy.mjs';
 
 export const feedbackBoundaryRule = {
   name: 'feedback-boundary',
@@ -43,24 +44,6 @@ export const feedbackBoundaryRule = {
           'app feedback log service must use app log types, not settings types',
         );
       }
-      for (const imported of importSpecifiers(file.text)) {
-        if (imported.typeOnly || imported.specifier !== 'naive-ui') continue;
-        if (/\b(useMessage|useDialog|createDiscreteApi)\b/.test(imported.importedName ?? '') && !isFeedbackBoundary(current)) {
-          failures.push(`${file.rel}: message/dialog/discrete feedback must use the unified feedback boundary`);
-        }
-      }
-      if (/\b(?:useMessage|useDialog|createDiscreteApi)\s*\(/.test(file.text) && !isFeedbackBoundary(current)) {
-        failures.push(`${file.rel}: business code must not create feedback APIs directly`);
-      }
-      for (const imported of importedProjectPaths(file)) {
-        if (!/\bcreateAppFeedback\b/.test(imported.importedName ?? '')) continue;
-        // 单一入口：只有同时取得 naive message 与 dialog 的 hook（use-app-feedback）
-        // 才允许消费工厂；其余任何直接导入都视为绕过统一反馈入口。
-        const hookShapesFactoryUsage = /\buseMessage\s*\(\s*\)/.test(file.text) && /\buseDialog\s*\(\s*\)/.test(file.text);
-        if (!hookShapesFactoryUsage) {
-          failures.push(`${file.rel}: the feedback factory must only be consumed by the use-app-feedback hook`);
-        }
-      }
     }
     return failures;
   },
@@ -70,9 +53,13 @@ export const feedbackBoundaryRule = {
 
 /** @param {import('../../shared/files.mjs').RepoFile} file @param {string[]} failures @param {ForbiddenTarget} forbiddenTarget @param {string} message @returns {void} */
 function assertNoImportDomain(file, failures, forbiddenTarget, message) {
+  const reported = new Set();
   for (const imported of importedProjectPaths(file)) {
     const target = classifyFrontendPath(imported.resolved);
-    if (targetMatches(target, imported, forbiddenTarget)) failures.push(`${file.rel}: ${message}`);
+    if (targetMatches(target, imported, forbiddenTarget) && !reported.has(imported.resolved)) {
+      failures.push(dependencyDiagnostic(file, imported, message));
+      reported.add(imported.resolved);
+    }
   }
 }
 
@@ -81,7 +68,8 @@ function targetMatches(target, imported, forbiddenTarget) {
   if (forbiddenTarget.layer && target.layer !== forbiddenTarget.layer) return false;
   if (forbiddenTarget.role && target.role !== forbiddenTarget.role) return false;
   if (forbiddenTarget.domain && target.domain !== forbiddenTarget.domain) return false;
-  if (forbiddenTarget.text && !forbiddenTarget.text.test(imported.importedName ?? '')) return false;
+  const symbolPattern = forbiddenTarget.text;
+  if (symbolPattern && !imported.bindings.some((binding) => symbolPattern.test(binding.importedName ?? ''))) return false;
   return true;
 }
 
@@ -101,9 +89,4 @@ function mixesSettingsAndFeedbackLogTypes(text) {
 /** @param {string} text @returns {boolean} */
 function isTypeBarrel(text) {
   return !/\b(?:interface|type|const|enum)\s+[A-Za-z0-9_]+/.test(text);
-}
-
-/** @param {import('../../shared/classify.mjs').FrontendPathClass} current @returns {boolean} */
-function isFeedbackBoundary(current) {
-  return current.layer === 'app' && current.domain === 'app-feedback';
 }

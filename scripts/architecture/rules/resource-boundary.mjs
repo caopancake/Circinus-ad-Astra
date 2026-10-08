@@ -1,6 +1,5 @@
 import { classifyFrontendPath } from '../../shared/classify.mjs';
 import { frontendFile, specFile } from '../../shared/files.mjs';
-import { importedProjectPaths } from '../../shared/imports.mjs';
 
 export const resourceBoundaryRule = {
   name: 'resource-boundary',
@@ -13,13 +12,6 @@ export const resourceBoundaryRule = {
       // service directly; the boundary governs production call sites only.
       if (specFile(file.rel)) continue;
       const current = classifyFrontendPath(file.rel);
-      for (const imported of importedProjectPaths(file)) {
-        if (imported.typeOnly) continue;
-        const target = classifyFrontendPath(imported.resolved);
-        if (current.role === 'component' && target.layer === 'services' && target.domain === 'resource-cache') {
-          failures.push(`${file.rel}: components must receive resource data through ViewModel/service output`);
-        }
-      }
       if (/\bqueryResourceDataUrl\b|\bquery_resource_data_url\b/.test(file.text)) {
         failures.push(`${file.rel}: single resource data URL APIs are forbidden`);
       }

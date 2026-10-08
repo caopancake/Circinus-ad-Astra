@@ -17,7 +17,8 @@
 `src-tauri/src/services/editor_config/`：后端配置实体 owner，拥有 indexed 与 spec 实体的 query、write 与目录。
 `src-tauri/src/domain/editor_config_definitions.rs`：实体定义与目录规则 owner。
 `src-tauri/src/commands/editor_config.rs`：配置实体 command 边界。
-`scripts/architecture/rules/config-module-boundary.mjs`：配置模块边界规则 owner。
+`scripts/architecture/rules/frontend-layer-boundary.mjs`：配置组件的正式依赖边界 owner。
+`scripts/architecture/rules/write-boundary.mjs`：配置写入能力归属的检查 owner。
 
 ## 边界
 

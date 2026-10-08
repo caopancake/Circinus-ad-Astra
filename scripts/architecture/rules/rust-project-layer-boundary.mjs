@@ -16,15 +16,20 @@ export const rustProjectLayerBoundaryRule = {
       const from = rustLayer(file.rel);
       const source =
         from === 'project-root' && projectServiceModule(file.rel, 'mod') ? stripFacadeReexports(productionText) : productionText;
+      const rejected = new Set();
+      let payloadRejected = false;
       for (const parts of cratePaths(source, file.rel)) {
         const reference = `crate::${parts.join('::')}`;
         const to = rustLayerFromCratePath(reference);
         if (!to) continue;
         if (from !== 'commands' && reference.startsWith('crate::models::command_payloads')) {
-          failures.push(`${file.rel}: command payload models must stay inside Rust command modules`);
+          if (!payloadRejected) failures.push(`${file.rel}: command payload models must stay inside Rust command modules`);
+          payloadRejected = true;
+          continue;
         }
         if (!validRustDependency(from, to)) {
-          failures.push(`${file.rel}: ${from} must not depend on ${to} (${reference})`);
+          if (!rejected.has(to)) failures.push(`${file.rel}: ${from} must not depend on ${to} (${reference})`);
+          rejected.add(to);
         }
       }
       if (from === 'project-query' && writesToDisk(productionText)) {

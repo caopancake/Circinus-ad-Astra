@@ -11,7 +11,7 @@ export function cratePaths(text, moduleRelPath = '') {
   for (const match of code.matchAll(/\b(crate|super|self)::([A-Za-z0-9_:]+)/g)) {
     paths.push(resolveParts(moduleParts, [match[1], ...match[2].split('::').filter(Boolean)]));
   }
-  return paths.filter((path) => path.length > 0);
+  return [...new Map(paths.filter((path) => path.length > 0).map((path) => [path.join('::'), path])).values()];
 }
 
 /** @param {string} rel @returns {string[]} */

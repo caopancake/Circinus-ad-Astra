@@ -54,7 +54,7 @@ export const namingBoundaryRule = {
           }
         }
       }
-      for (const name of exportedFunctionNames(file.text)) {
+      for (const name of exportedFunctionNames(file)) {
         if (/^(?:save|create|delete|upload)(?!FileEditor|TextFile|ModFiles)[A-Za-z0-9_]*File$/.test(name)) {
           failures.push(`${file.rel}: business action ${name} must not use File to describe a save effect`);
         }

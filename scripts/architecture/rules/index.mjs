@@ -1,6 +1,5 @@
 import { noNameExistenceChecksRule } from '../no-name-existence-checks.mjs';
 import { architectureRulesSelfBoundaryRule } from '../self-boundary.mjs';
-import { configModuleBoundaryRule } from './config-module-boundary.mjs';
 import { csvDraftBoundaryRule } from './csv-draft-boundary.mjs';
 import { csvModuleBoundaryRule } from './csv-module-boundary.mjs';
 import { directoryOpeningBoundaryRule } from './directory-opening-boundary.mjs';
@@ -18,7 +17,6 @@ import { namingBoundaryRule } from './naming-boundary.mjs';
 import { parserBoundaryRule } from './parser-boundary.mjs';
 import { projectSessionBoundaryRule } from './project-session-boundary.mjs';
 import { projectResourcesBoundaryRule } from './project-resources-boundary.mjs';
-import { queryBoundaryRule } from './query-boundary.mjs';
 import { resourceBoundaryRule } from './resource-boundary.mjs';
 import { rustProjectLayerBoundaryRule } from './rust-project-layer-boundary.mjs';
 import { rustServiceEdgeBoundaryRule } from './rust-service-edge-boundary.mjs';
@@ -38,7 +36,6 @@ export const rules = [
   mainHistoryCommandBoundaryRule,
   rustProjectLayerBoundaryRule,
   rustServiceEdgeBoundaryRule,
-  queryBoundaryRule,
   writeBoundaryRule,
   resourceBoundaryRule,
   fileHistoryBoundaryRule,
@@ -59,7 +56,6 @@ export const rules = [
   docsModuleMapRule,
   draftSessionBoundaryRule,
   schemaModuleBoundaryRule,
-  configModuleBoundaryRule,
   editorModuleBoundaryRule,
   workspaceModuleBoundaryRule,
 ];
