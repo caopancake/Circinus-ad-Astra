@@ -296,7 +296,7 @@ fn ship_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
 fn weapon_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
     registered_weapon_rows(session)?
         .into_iter()
-        .map(|entry| build_weapon_list_entity(session, EntityKind::Weapon, &entry.id, entry.row))
+        .map(|entry| build_weapon_list_entity(session, EntityKind::Weapon, &entry.id, entry.data))
         .collect()
 }
 
@@ -319,7 +319,7 @@ fn system_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
 fn skill_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
     registered_skill_rows(session)?
         .into_iter()
-        .map(|entry| build_skill_list_entity(session, EntityKind::Skill, &entry.id, entry.row))
+        .map(|entry| build_skill_list_entity(session, EntityKind::Skill, &entry.id, entry.data))
         .collect()
 }
 
@@ -334,7 +334,7 @@ fn faction_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
 fn mission_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
     registered_mission_rows(session)?
         .into_iter()
-        .map(|entry| build_mission_list_entity(session, EntityKind::Mission, &entry.id, entry.row))
+        .map(|entry| build_mission_list_entity(session, EntityKind::Mission, &entry.id, entry.data))
         .collect()
 }
 
@@ -528,7 +528,7 @@ fn skin_file_data(item: &SkinFile) -> AppResult<Value> {
 #[derive(Debug)]
 pub(in crate::services::project) struct RegisteredCsvEntityRow {
     id: String,
-    row: Map<String, Value>,
+    data: Map<String, Value>,
 }
 
 pub(in crate::services::project) fn registered_mission_rows(
@@ -565,12 +565,12 @@ fn registered_skill_rows(session: &ProjectSession) -> AppResult<Vec<RegisteredCs
 
 fn registered_entity_rows(rows: &[SessionCsvRow], id_column: &str) -> Vec<RegisteredCsvEntityRow> {
     rows.iter()
-        .filter(|row| !is_comment_row(&row.row))
+        .filter(|row| !is_comment_row(&row.data))
         .filter_map(|row| {
-            let id = string_from_row(&row.row, id_column)?;
+            let id = string_from_row(&row.data, id_column)?;
             Some(RegisteredCsvEntityRow {
                 id,
-                row: row.row.clone(),
+                data: row.data.clone(),
             })
         })
         .collect()
@@ -604,7 +604,7 @@ fn build_weapon_entity_data(session: &mut ProjectSession, id: &str) -> AppResult
     let Some(csv_row) = registered_weapon_rows(session)?
         .into_iter()
         .find(|row| row.id == id)
-        .map(|row| Value::Object(row.row))
+        .map(|row| Value::Object(row.data))
     else {
         return Ok(None);
     };
@@ -648,7 +648,7 @@ fn build_skill_entity_data(session: &mut ProjectSession, id: &str) -> AppResult<
     let Some(csv_row) = registered_skill_rows(session)?
         .into_iter()
         .find(|row| row.id == id)
-        .map(|row| Value::Object(row.row))
+        .map(|row| Value::Object(row.data))
     else {
         return Ok(None);
     };
@@ -687,7 +687,7 @@ fn build_mission_entity(session: &ProjectSession, id: &str) -> AppResult<Option<
     let Some(row) = registered_mission_rows(session)?
         .into_iter()
         .find(|row| row.id == id)
-        .map(|row| row.row)
+        .map(|row| row.data)
     else {
         return Ok(None);
     };

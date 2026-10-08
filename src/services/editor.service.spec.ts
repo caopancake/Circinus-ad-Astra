@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createWeaponSpec } from '@/domain/editors/spec-construction';
+import { inferWeaponSpecClass } from '@/domain/tables/associated-spec-creation';
 import type { EntityData, ResourceRef, RowData, WriteResult } from '@/shared/types';
 
 const mocks = vi.hoisted(() => ({
@@ -29,7 +31,7 @@ vi.mock('@/services/files.service', () => ({
   loadImportedEditorSpecFile: mocks.loadImportedEditorSpecFile,
 }));
 
-import { editorMissingTargetText, defaultEditorSpec, isEditorWindowKind } from '@/domain/editors/editor-definitions';
+import { editorMissingTargetText, isEditorWindowKind } from '@/domain/editors/editor-definitions';
 import {
   queryEditorEntityBundle,
   refreshBundleProjectiles,
@@ -263,10 +265,10 @@ describe('editor definitions helpers', () => {
   });
 
   it('builds a beam weapon default when the csv row declares beam speed', () => {
-    const beam = defaultEditorSpec('weapon', 'laser', { 'beam speed': 1 });
+    const beam = createWeaponSpec('laser', inferWeaponSpecClass({ 'beam speed': 1 }));
     expect(beam.specClass).toBe('beam');
     expect(beam.fringeColor).toBeDefined();
-    const projectile = defaultEditorSpec('weapon', 'cannon', {});
+    const projectile = createWeaponSpec('cannon', inferWeaponSpecClass({}));
     expect(projectile.specClass).toBe('projectile');
   });
 });

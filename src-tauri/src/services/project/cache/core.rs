@@ -132,7 +132,8 @@ pub(crate) fn load_core_csv_table(
         .enumerate()
         .map(|(index, row)| SessionCsvRow {
             row_key: format!("core:{table_key}:row:{index}"),
-            row,
+            data: row,
+            faction_id: None,
         })
         .collect();
     let next_row_seq = rows.len() as u64;

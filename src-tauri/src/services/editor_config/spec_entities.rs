@@ -4,7 +4,7 @@ use crate::{
     errors::{AppError, AppResult},
     io::{
         FileChangeSetBuilder, FsRootBoundary, JsonWriteBatch, acquire_root_write_lock,
-        read_json_file, strip_internal_fields,
+        read_json_file,
     },
     models::{EntityKind, JsonWriteOptions, WriteResult},
 };
@@ -69,8 +69,7 @@ pub fn save_spec_entity_with_json_options(
         ));
     }
 
-    let clean = strip_internal_fields(&data);
-    let (entity_id, refreshed) = build_spec_file(kind, mod_root, &next_rel_path, &clean)?;
+    let (entity_id, refreshed) = build_spec_file(kind, mod_root, &next_rel_path, &data)?;
     if entity_id != next_id {
         return Err(AppError::message(
             "spec.id_mismatch",
@@ -86,7 +85,7 @@ pub fn save_spec_entity_with_json_options(
     let source_path = boundary.resolve_relative(source_rel_path, "实体源路径")?;
     let preserve_original_json = json_write.preserve_original_json;
     let mut json = JsonWriteBatch::new(json_write);
-    let rendered = json.render(&source_path, &clean, ordered_json)?;
+    let rendered = json.render(&source_path, &data, ordered_json)?;
     json.finish()?;
     if preserve_original_json
         && source_rel_path == next_rel_path

@@ -1,7 +1,7 @@
 use crate::{
     errors::{AppError, AppResult},
     io::read_csv_data,
-    models::{CSV_FACTION_FIELD, CsvTable, CsvTableKey},
+    models::{CsvTable, CsvTableKey},
 };
 use serde_json::Value;
 use std::path::Path;
@@ -101,9 +101,8 @@ pub(crate) fn ensure_session_table_rows(
             csv.header = mission_list_default_header();
         }
     }
-    if CsvTableKey::from_key(table).is_some_and(|key| csv_table_spec(key).supports_faction_filter) {
-        annotate_faction_rows(&mut csv.rows, &session.tag_map);
-    }
+    let supports_faction =
+        CsvTableKey::from_key(table).is_some_and(|key| csv_table_spec(key).supports_faction_filter);
     let row_sequence = session_table(session, table)?.next_row_seq;
     let rows: Vec<SessionCsvRow> = csv
         .rows
@@ -111,7 +110,10 @@ pub(crate) fn ensure_session_table_rows(
         .enumerate()
         .map(|(index, row)| SessionCsvRow {
             row_key: format!("{table}:row:{}", row_sequence + index as u64),
-            row,
+            faction_id: supports_faction
+                .then(|| csv_row_faction_id(&row, &session.tag_map))
+                .flatten(),
+            data: row,
         })
         .collect();
     let next_row_seq = row_sequence + rows.len() as u64;
@@ -141,40 +143,35 @@ pub(crate) fn refresh_faction_annotations(session: &mut ProjectSession) {
             && let Some(rows) = &mut table.rows
         {
             for row in rows {
-                annotate_faction_rows(std::slice::from_mut(&mut row.row), &session.tag_map);
+                row.faction_id = csv_row_faction_id(&row.data, &session.tag_map);
             }
         }
     }
 }
 
-fn annotate_faction_rows(
-    rows: &mut [serde_json::Map<String, Value>],
+fn csv_row_faction_id(
+    row: &serde_json::Map<String, Value>,
     tag_map: &std::collections::HashMap<String, String>,
-) {
-    for row in rows {
-        if is_faction_padding_row(row) {
-            continue;
-        }
-        let id = row
-            .get("id")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .unwrap_or_default();
-        let tags = row
-            .get("tags")
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .unwrap_or_default();
-        if id.is_empty() && tags.is_empty() {
-            continue;
-        }
-        row.insert(
-            CSV_FACTION_FIELD.to_string(),
-            Value::String(crate::domain::faction_annotation::detect_faction(
-                tags, tag_map,
-            )),
-        );
+) -> Option<String> {
+    if is_faction_padding_row(row) {
+        return None;
     }
+    let id = row
+        .get("id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    let tags = row
+        .get("tags")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    if id.is_empty() && tags.is_empty() {
+        return None;
+    }
+    Some(crate::domain::faction_annotation::detect_faction(
+        tags, tag_map,
+    ))
 }
 
 fn is_faction_padding_row(row: &serde_json::Map<String, Value>) -> bool {
@@ -236,13 +233,13 @@ mod tests {
     }
 
     #[test]
-    fn ensure_session_table_rows_only_adds_faction_field_to_supported_data_rows() {
+    fn ensure_session_table_rows_projects_faction_metadata_for_supported_data_rows() {
         let root = temp_dir("csv_faction_annotation_boundary");
         fs::create_dir_all(root.join("data/hulls")).unwrap();
         fs::create_dir_all(root.join("data/characters/skills")).unwrap();
         write_utf8_no_bom(
             &root.join("data/hulls/ship_data.csv"),
-            "id,tags\r\nship,demo_bp\r\n#comment,\r\n,\r\n",
+            "id,tags,_faction,_rowKey\r\nship,demo_bp,business,business-key\r\n#comment,,,\r\n,,,\r\n",
         )
         .unwrap();
         write_utf8_no_bom(
@@ -305,12 +302,11 @@ mod tests {
         let ships = loaded_registered_csv_rows(&session, CsvTableKey::Ships).unwrap();
         let skills = loaded_registered_csv_rows(&session, CsvTableKey::Skills).unwrap();
         let _ = fs::remove_dir_all(root);
-        assert_eq!(
-            ships[0].row.get(CSV_FACTION_FIELD),
-            Some(&Value::String("demo".to_string()))
-        );
-        assert!(!ships[1].row.contains_key(CSV_FACTION_FIELD));
-        assert!(!ships[2].row.contains_key(CSV_FACTION_FIELD));
-        assert!(!skills[0].row.contains_key(CSV_FACTION_FIELD));
+        assert_eq!(ships[0].faction_id.as_deref(), Some("demo"));
+        assert_eq!(ships[0].data["_faction"], "business");
+        assert_eq!(ships[0].data["_rowKey"], "business-key");
+        assert_eq!(ships[1].faction_id, None);
+        assert_eq!(ships[2].faction_id, None);
+        assert_eq!(skills[0].faction_id, None);
     }
 }

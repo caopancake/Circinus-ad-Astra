@@ -63,9 +63,6 @@ fn scan_json_fields(dir: &Path, ext: &str) -> AppResult<Vec<DiscoveredField>> {
             ));
         };
         for (key, value) in &obj {
-            if key.starts_with('_') {
-                continue;
-            }
             field_map
                 .entry(key.clone())
                 .or_insert_with(|| infer_type(value));

@@ -1,4 +1,4 @@
-import type { CsvGridRowSlot, CsvLoadedRowSlot, CsvTableRows, RowData, TableKey } from '@/shared/types';
+import type { CsvGridRowSlot, CsvLoadedRowSlot, CsvTableRows, TableKey } from '@/shared/types';
 import { cell } from '@/shared/lib/starsector';
 import { csvColumnSchemaFor, csvListValues } from '@/domain/tables/csv-column-schema';
 import type { CsvColumnSchema } from '@/domain/schema/schema.types';
@@ -35,12 +35,11 @@ export function createCsvGridModel(
   visibleColumns: string[],
   rowSlots: CsvTableRows,
   rowCount: number,
-  rowKeyFor: (row: RowData, index: number) => string,
   loadedSourceOptions: Map<string, SelectOption[]> = new Map(),
 ): CsvGridModel {
   const startedAt = performance.now();
   const columns = visibleColumns.map((key) => createCsvGridColumn(table, key));
-  const rows = createCsvGridRowSlots(table, rowSlots, rowCount, rowKeyFor);
+  const rows = createCsvGridRowSlots(table, rowSlots, rowCount);
   const loadedRows = rows.filter((row): row is CsvLoadedRowSlot => row.kind === 'row');
   const sourceStartedAt = performance.now();
   const sourceIndex = createCsvSourceIndex(
@@ -65,15 +64,10 @@ export function createCsvGridModel(
   return { columns, performanceSample, rows, sourceIndex, totalWidthPx };
 }
 
-function createCsvGridRowSlots(
-  table: TableKey,
-  rowSlots: CsvTableRows,
-  rowCount: number,
-  rowKeyFor: (row: RowData, index: number) => string,
-): CsvGridRowSlot[] {
+function createCsvGridRowSlots(table: TableKey, rowSlots: CsvTableRows, rowCount: number): CsvGridRowSlot[] {
   return Array.from({ length: rowCount }, (_, rowIndex) => {
     const row = rowSlots[rowIndex];
-    if (row) return { kind: 'row', row, rowIndex, rowKey: rowKeyFor(row, rowIndex) };
+    if (row) return { ...row, kind: 'row', rowIndex };
     return { kind: 'placeholder', rowIndex, slotKey: `${table}:slot:${rowIndex}` };
   });
 }
@@ -113,7 +107,7 @@ function columnWidthPx(column: CsvGridColumn, rows: CsvLoadedRowSlot[], sourceIn
 function maxColumnContentWidthPx(key: string, rows: CsvLoadedRowSlot[]): number {
   let maxWidth = 0;
   for (const row of rows) {
-    maxWidth = Math.max(maxWidth, textWidthPx(cell(row.row[key]), 'cell'));
+    maxWidth = Math.max(maxWidth, textWidthPx(cell(row.data[key]), 'cell'));
   }
   return maxWidth;
 }
@@ -128,7 +122,7 @@ function textColumnMaxPx(key: string): number {
 
 function tagColumnWidthPx(key: string, rows: CsvLoadedRowSlot[]): number {
   const rowWidths = rows
-    .map((row) => tagRowWidthPx(cell(row.row[key])))
+    .map((row) => tagRowWidthPx(cell(row.data[key])))
     .filter((width) => width > 0)
     .sort((a, b) => a - b);
   if (rowWidths.length === 0) return 160;

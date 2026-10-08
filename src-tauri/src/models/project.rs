@@ -22,7 +22,6 @@ pub enum CsvTableKey {
     Descriptions,
 }
 
-pub const CSV_FACTION_FIELD: &str = "_faction";
 pub const CSV_DEFAULT_FACTION_ID: &str = "other";
 /// Frozen on-disk log file name; every writer and validator must share it.
 pub const LOG_FILE: &str = "circinus-ad-astra.log";
@@ -235,8 +234,9 @@ pub struct CsvTableWindow {
 #[serde(rename_all = "camelCase")]
 pub struct CsvWindowRow {
     pub row_key: String,
-    pub row_index: usize,
-    pub row: Map<String, Value>,
+    pub source_row_index: usize,
+    pub data: Map<String, Value>,
+    pub faction_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

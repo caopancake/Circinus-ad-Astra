@@ -28,7 +28,7 @@
 - `src/stores/`：内存运行态；每个 store 一个 `.store.ts` 文件。
 - `src/windows/`：窗口身份、生命周期、事件名与事件封装。
 - `src/shared/`：wire API（唯一 invoke 边界）、runtime、类型与纯工具。
-- `schemas/`：配置字段与 CSV 列 schema 资产，只能经统一加载入口消费。
+- `schemas/`：配置字段、CSV 列与规格默认模板资产必须经各自正式加载 owner 消费。
 
 ## 硬性调用链
 

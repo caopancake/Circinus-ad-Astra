@@ -4,7 +4,7 @@ use crate::{
     models::JsonWriteOptions,
     parsers::{PreserveResult, json_root_tail, parse_starsector_json, preserve_json_text},
 };
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
@@ -149,22 +149,6 @@ pub fn walk_json_dir(dir: &Path, ext: &str, label: &str) -> AppResult<Vec<(PathB
     Ok(files)
 }
 
-pub fn strip_internal_fields(value: &Value) -> Value {
-    match value {
-        Value::Object(obj) => {
-            let mut clean = Map::new();
-            for (key, val) in obj {
-                if !key.starts_with('_') {
-                    clean.insert(key.clone(), strip_internal_fields(val));
-                }
-            }
-            Value::Object(clean)
-        }
-        Value::Array(items) => Value::Array(items.iter().map(strip_internal_fields).collect()),
-        other => other.clone(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,12 +157,14 @@ mod tests {
     use std::fs;
 
     #[test]
-    fn strips_internal_fields_recursively() {
-        let value = serde_json::json!({"id":"x","_source":"mod","nested":{"_temp":1,"ok":2}});
-        let clean = strip_internal_fields(&value);
-        assert!(clean.get("_source").is_none());
-        assert_eq!(clean["nested"]["ok"], 2);
-        assert!(clean["nested"].get("_temp").is_none());
+    fn json_write_preserves_all_business_dictionary_keys() {
+        let content = serde_json::json!({"_source":"business","nested":{"_slot":"weapon"},"array":[{"_tool":1}]});
+        let mut batch = JsonWriteBatch::new(JsonWriteOptions::default());
+        let text = batch
+            .render(Path::new("business.json"), &content, None)
+            .unwrap();
+        batch.finish().unwrap();
+        assert_eq!(parse_starsector_json(&text).unwrap(), content);
     }
 
     #[test]
@@ -252,8 +238,7 @@ mod tests {
 
 /// Real-mod semantic replay fixtures (sanitised subset of a third-party mod).
 /// The contract under test: read a supported JSON spec into memory, write it
-/// back through the production serialisation (internal-field strip plus
-/// pretty print), and read it again — the initial and final in-memory values
+/// back through the production JSON serialisation, and read it again — the initial and final in-memory values
 /// must be equal. Byte identity of the rewritten file is explicitly not
 /// required: pretty printing and key ordering are product normalisations.
 #[cfg(test)]
@@ -277,8 +262,7 @@ mod fixture_replay_tests {
             }
             let first = read_json_file(&path)
                 .unwrap_or_else(|error| panic!("{} must parse: {error}", path.display()));
-            let clean = strip_internal_fields(&first);
-            let text = serde_json::to_string_pretty(&clean).expect("serialisation must succeed");
+            let text = serde_json::to_string_pretty(&first).expect("serialisation must succeed");
             let second = parse_starsector_json(&text)
                 .unwrap_or_else(|error| panic!("rewritten {} must parse: {error}", path.display()));
             assert_eq!(first, second, "semantic replay drift in {}", path.display());

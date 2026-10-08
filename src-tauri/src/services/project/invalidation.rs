@@ -702,8 +702,8 @@ mod tests {
             .as_ref()
             .unwrap();
         assert_eq!(rows[0].row_key, "ships:row:0");
-        assert_eq!(rows[0].row["tags"], "demo_old_bp");
-        assert_eq!(rows[0].row[crate::models::CSV_FACTION_FIELD], "other");
+        assert_eq!(rows[0].data["tags"], "demo_old_bp");
+        assert_eq!(rows[0].faction_id.as_deref(), Some("other"));
         assert!(invalidation.entities.contains(&invalidated_entity(
             EntityKind::Faction,
             Some("demo".to_string())

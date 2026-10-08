@@ -9,7 +9,8 @@ import { queryResourceDataUrls } from '@/services/resource-cache.service';
 import { writeEditorSpec } from '@/services/write.service';
 import { loadImportedEditorSpecFile } from '@/services/files.service';
 import { WEAPON_SPRITE_FIELDS } from '@/domain/editors/lib/weapon-sprite-fields';
-import { defaultEditorSpec } from '@/domain/editors/editor-definitions';
+import { createShipSpec, createProjectileSpec, createSystemSpec, createWeaponSpec } from '@/domain/editors/spec-construction';
+import { inferWeaponSpecClass } from '@/domain/tables/associated-spec-creation';
 import { requireRowData } from '@/shared/lib/row-data';
 import type { EditorSpecKind, EditorWindowKind, EntityData, ProjectSessionId, ResourceRef, RowData, WriteResult } from '@/shared/types';
 
@@ -130,7 +131,7 @@ const BUNDLE_LOADERS: Record<
 
 async function queryShipEditorBundle(sessionId: ProjectSessionId, id: string): Promise<ShipEditorEntityBundle> {
   const ship = await querySessionEntity(sessionId, 'ship', id);
-  const shipSpec = ship ? requireRowData(ship.data, `舰船 ${id} 数据无效`) : defaultEditorSpec('ship', id);
+  const shipSpec = ship ? requireRowData(ship.data, `舰船 ${id} 数据无效`) : createShipSpec(id);
   return {
     kind: 'ship',
     baseVersions: ship ? ship.baseVersions : await querySessionEntityBaseVersions(sessionId, 'ship', id),
@@ -177,9 +178,9 @@ async function queryWeaponLikeBundle(
   const weapon = requireEditorEntity(await querySessionEntity(sessionId, 'weapon', id), 'weapon', id);
   const weaponEntity = requireRowData(weapon.data, `武器 ${id} 数据无效`);
   const savedWeaponSpec = requireRowData(weaponEntity.spec, `武器 ${id} spec 数据无效`);
-  const weaponSpec = weaponOverride ?? savedWeaponSpec;
   const weaponCsvRow = requireRowData(weaponEntity.csvRow, `武器 ${id} CSV 数据无效`);
-  const isNew = Object.keys(weaponSpec).length === 0;
+  const isNew = Object.keys(savedWeaponSpec).length === 0;
+  const weaponSpec = weaponOverride ?? (isNew ? createWeaponSpec(id, inferWeaponSpecClass(weaponCsvRow)) : savedWeaponSpec);
   const resourceRefs = weaponOverride
     ? await querySessionEditorDraftResources(sessionId, 'weapon', id, weaponOverride)
     : weapon.resourceRefs;
@@ -197,7 +198,7 @@ async function queryWeaponLikeBundle(
 
 async function queryProjectileEditorBundle(sessionId: ProjectSessionId, id: string): Promise<ProjectileEditorEntityBundle> {
   const projectile = await querySessionEntity(sessionId, 'projectile', id);
-  const spec = projectile ? requireRowData(projectile.data, `弹体 ${id} 数据无效`) : defaultEditorSpec('projectile', id);
+  const spec = projectile ? requireRowData(projectile.data, `弹体 ${id} 数据无效`) : createProjectileSpec(id);
   return {
     kind: 'projectile',
     baseVersions: projectile ? projectile.baseVersions : await querySessionEntityBaseVersions(sessionId, 'projectile', id),
@@ -212,7 +213,7 @@ async function querySystemEditorBundle(sessionId: ProjectSessionId, id: string):
   return {
     kind: 'system',
     baseVersions: system ? system.baseVersions : await querySessionEntityBaseVersions(sessionId, 'system', id),
-    system: system ? requireRowData(system.data, `战术系统 ${id} 数据无效`) : defaultEditorSpec('system', id),
+    system: system ? requireRowData(system.data, `战术系统 ${id} 数据无效`) : createSystemSpec(id),
     isNew: !system,
   };
 }

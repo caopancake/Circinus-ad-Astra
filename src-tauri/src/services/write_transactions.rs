@@ -477,7 +477,7 @@ mod tests {
             base_versions: original.base_versions,
         };
         let saved = crate::commands::save_csv_patch(payload).unwrap();
-        assert_eq!(query().rows[0].row["name"], "Saved");
+        assert_eq!(query().rows[0].data["name"], "Saved");
         let undone = replay(
             &manifest.session_id,
             &manifest.mod_root,
@@ -486,7 +486,7 @@ mod tests {
             saved.history.revision,
         )
         .unwrap();
-        assert_eq!(query().rows[0].row["name"], "A");
+        assert_eq!(query().rows[0].data["name"], "A");
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
             "id,name\na,A\nb,B\n"

@@ -9,11 +9,10 @@ import {
   type CsvTableWindow,
   type ModTableState,
   type ProjectManifest,
-  type RowData,
+  type CsvDraftRow,
   type TableKey,
 } from '@/shared/types';
 import { getColumns } from '@/shared/lib/starsector';
-import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { csvDirtyCells } from '@/domain/tables/csv-dirty';
 import { DEFAULT_CSV_FACTION_FILTER, filterFromOptionValue, filterOptionValue } from '@/domain/tables/csv-faction-filter';
@@ -24,7 +23,6 @@ import {
   applySavedCsvRowKeyMapDraft,
   clearCsvTableExternalUpdateDraft,
   createCsvRowDraft,
-  csvTableRowKey,
   deleteSelectedCsvRowDraft,
   discardCsvTableWindowForReloadDraft,
   hasCsvTableDraftChanges,
@@ -158,8 +156,8 @@ export const useTablesStore = defineStore('tables', () => {
     const seen = new Set<string>();
     const inferred: string[] = [];
     for (const row of rows.value.filter(isLoadedCsvTableRow).slice(0, 50)) {
-      for (const key of Object.keys(row)) {
-        if (!isInternalJsonFieldKey(key) && !seen.has(key)) {
+      for (const key of Object.keys(row.data)) {
+        if (!seen.has(key)) {
           seen.add(key);
           inferred.push(key);
         }
@@ -169,8 +167,8 @@ export const useTablesStore = defineStore('tables', () => {
   });
   const filteredRows = computed(() => rows.value);
   const filteredRowCount = computed(() => getActiveState()?.filteredRows[currentTab.value] ?? 0);
-  const selectedRow = computed(() =>
-    rows.value.find((row, index): row is RowData => isLoadedCsvTableRow(row) && tableRowKey(row, index) === selectedRowKey.value),
+  const selectedRow = computed(
+    () => rows.value.find((row): row is CsvDraftRow => isLoadedCsvTableRow(row) && row.rowKey === selectedRowKey.value)?.data,
   );
   const tableInfo = computed(() => {
     const state = getActiveState();
@@ -271,10 +269,6 @@ export const useTablesStore = defineStore('tables', () => {
     clearCsvTableExternalUpdateDraft(state, tab);
   }
 
-  function tableRowKey(row: RowData, index: number): string {
-    return csvTableRowKey(currentTab.value, row, index);
-  }
-
   function selectRowByKey(rowKey: string | null) {
     selectedRowKey.value = rowKey;
   }
@@ -342,7 +336,7 @@ export const useTablesStore = defineStore('tables', () => {
     return stateMap.get(modRoot);
   }
 
-  function replaceTableForMod(modRoot: string, tab: TableKey, rows: RowData[]) {
+  function replaceTableForMod(modRoot: string, tab: TableKey, rows: CsvDraftRow[]) {
     const state = stateMap.get(modRoot);
     if (!state) return;
     revokeTableReads(modRoot, tab);
@@ -429,7 +423,6 @@ export const useTablesStore = defineStore('tables', () => {
     applySavedRowKeyMapForMod,
     applyTableWindow,
     hasTableDirtyChanges,
-    tableRowKey,
     undoCurrentTableEdit,
     updateCellValue,
   };

@@ -4,7 +4,7 @@ use crate::{
     errors::{AppError, AppResult},
     io::{
         JsonWriteBatch, acquire_root_write_lock, build_text_change, read_json_file,
-        strip_internal_fields, validate_safe_absolute_path, validate_walk_entry,
+        validate_safe_absolute_path, validate_walk_entry,
     },
     models::{EditorSpecKind, FileChangeReplayDirection, JsonWriteOptions, WriteResult},
     services::file_changes::apply_file_change_set_with_lock,
@@ -33,13 +33,15 @@ pub fn save_editor_spec_with_json_options(
     let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
     let id = validate_config_id(id, editor_spec_definition(kind)?.invalid_id_message)?;
     let target = find_editor_spec_target(Path::new(mod_root), kind, id)?;
-    let clean = strip_internal_fields(&data);
+    if kind == EditorSpecKind::Weapon {
+        crate::domain::spec_construction::validate_weapon_spec_class(&data, &target)?;
+    }
     let preserve_original_json = options.preserve_original_json;
     let mut json = JsonWriteBatch::new(options);
-    let text = json.render(&target, &clean, ordered_json)?;
+    let text = json.render(&target, &data, ordered_json)?;
     json.finish()?;
     if preserve_original_json && target.exists() && crate::io::read_utf8_no_bom(&target)? == text {
-        return Ok(WriteResult::from_refreshed_entity(Vec::new(), clean));
+        return Ok(WriteResult::from_refreshed_entity(Vec::new(), data));
     }
     let change = build_text_change(&target, Some(text))?;
     apply_file_change_set_with_lock(
@@ -48,7 +50,7 @@ pub fn save_editor_spec_with_json_options(
         vec![change.clone()],
         write_lock,
     )?;
-    Ok(WriteResult::from_refreshed_entity(vec![change], clean))
+    Ok(WriteResult::from_refreshed_entity(vec![change], data))
 }
 
 pub fn load_imported_editor_spec_file(kind: EditorSpecKind, path: String) -> AppResult<Value> {
@@ -123,6 +125,38 @@ mod tests {
     use std::fs;
 
     #[test]
+    fn pulse_import_can_be_read_and_corrected_before_structured_save() {
+        let root = temp_dir("pulse_editor_read_correct_save");
+        fs::create_dir_all(root.join("data/weapons")).unwrap();
+        let path = root.join("data/weapons/demo.wpn");
+        let original = r#"{"id":"demo","specClass":"pulse","builtInWeapons":{"_slot":"w"},"array":[{"_field":1}]}"#;
+        write_utf8_no_bom(&path, original).unwrap();
+        let mut content =
+            load_imported_editor_spec_file(EditorSpecKind::Weapon, path.to_string_lossy().into())
+                .unwrap();
+        let error = save_editor_spec(
+            &root.to_string_lossy(),
+            EditorSpecKind::Weapon,
+            "demo",
+            content.clone(),
+        )
+        .unwrap_err();
+        assert_eq!(error.code(), "spec.weapon_class_unsupported");
+        assert_eq!(read_utf8_no_bom(&path).unwrap(), original);
+        content["specClass"] = Value::String("projectile".into());
+        let saved = save_editor_spec(
+            &root.to_string_lossy(),
+            EditorSpecKind::Weapon,
+            "demo",
+            content.clone(),
+        )
+        .unwrap();
+        assert_eq!(read_json_file(&path).unwrap(), content);
+        assert_eq!(saved.refreshed_entity, Some(content));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn editor_spec_receipts_match_persisted_content_and_preserved_noops() {
         for kind in [
             EditorSpecKind::Ship,
@@ -139,7 +173,10 @@ mod tests {
             let target = root
                 .join(definition.dir)
                 .join(format!("demo.{}", definition.extension_without_dot()));
-            let data = serde_json::json!({definition.id_field: "demo", "nested": {"value": 2}, "_tool": true});
+            let mut data = serde_json::json!({definition.id_field: "demo", "nested": {"_slot": 2}, "_tool": true});
+            if kind == EditorSpecKind::Weapon {
+                data["specClass"] = Value::String("projectile".to_string());
+            }
             let result = save_editor_spec(&root.to_string_lossy(), kind, "demo", data).unwrap();
             let persisted = read_json_file(&target).unwrap();
             assert_eq!(result.refreshed_entity, Some(persisted.clone()));
@@ -175,7 +212,7 @@ mod tests {
             &root.to_string_lossy(),
             EditorSpecKind::Weapon,
             "demo",
-            serde_json::json!({"id": "demo", "weaponType": "ENERGY"}),
+            serde_json::json!({"id": "demo", "specClass":"projectile", "weaponType": "ENERGY"}),
         )
         .unwrap();
 
@@ -200,7 +237,7 @@ mod tests {
             &root.to_string_lossy(),
             EditorSpecKind::Weapon,
             "demo",
-            serde_json::json!({"id":"demo","weaponType":"ENERGY"}),
+            serde_json::json!({"id":"demo","specClass":"projectile","weaponType":"ENERGY"}),
             JsonWriteOptions {
                 preserve_original_json: true,
                 confirmed_sources: Vec::new(),
@@ -216,7 +253,7 @@ mod tests {
             &root.to_string_lossy(),
             EditorSpecKind::Weapon,
             "demo",
-            serde_json::json!({"id":"demo","weaponType":"ENERGY"}),
+            serde_json::json!({"id":"demo","specClass":"projectile","weaponType":"ENERGY"}),
             JsonWriteOptions::default(),
             None,
         )
@@ -256,7 +293,7 @@ mod tests {
             &root.to_string_lossy(),
             EditorSpecKind::Weapon,
             "demo",
-            serde_json::json!({"id": "demo", "weaponType": "ENERGY"}),
+            serde_json::json!({"id": "demo", "specClass":"projectile", "weaponType": "ENERGY"}),
         )
         .unwrap_err()
         .to_string();
@@ -277,7 +314,7 @@ mod tests {
             &root.to_string_lossy(),
             EditorSpecKind::Weapon,
             "demo",
-            serde_json::json!({"id": "demo", "weaponType": "ENERGY"}),
+            serde_json::json!({"id": "demo", "specClass":"projectile", "weaponType": "ENERGY"}),
         )
         .unwrap_err()
         .to_string();

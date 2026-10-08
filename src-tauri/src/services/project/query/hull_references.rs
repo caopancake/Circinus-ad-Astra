@@ -358,10 +358,10 @@ fn ship_names_from_rows(
 
 fn all_ship_names_from_rows(rows: &[SessionCsvRow]) -> BTreeMap<String, String> {
     rows.iter()
-        .filter(|row| !is_comment_row(&row.row))
+        .filter(|row| !is_comment_row(&row.data))
         .filter_map(|row| {
-            let id = string_from_row(&row.row, "id")?;
-            let name = string_from_row(&row.row, "name")?;
+            let id = string_from_row(&row.data, "id")?;
+            let name = string_from_row(&row.data, "name")?;
             Some((id, name))
         })
         .collect()

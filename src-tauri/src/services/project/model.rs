@@ -290,7 +290,8 @@ pub(super) struct SessionCsvTable {
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct SessionCsvRow {
     pub row_key: String,
-    pub row: Map<String, Value>,
+    pub data: Map<String, Value>,
+    pub faction_id: Option<String>,
 }
 
 pub(super) struct ProjectSession {

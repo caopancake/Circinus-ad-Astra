@@ -50,7 +50,7 @@ function mountEditor(props: Record<string, unknown>) {
     },
     {
       anchorElement: null,
-      row: { rowKey: 'key-0', row: { size: 'MEDIUM' } },
+      row: { rowKey: 'key-0', factionId: null, data: { size: 'MEDIUM' } },
       sourceIndex,
       ...props,
     },
@@ -182,7 +182,10 @@ describe('CsvGridCellEditor', () => {
   it('keeps pending input attached to the saved rowKey mapping', async () => {
     const editor = mountEditor({ column: columnFixture('number') });
     await editor.get('input').setValue('later');
-    fixture.props.value = { ...fixture.props.value, row: { rowKey: 'ships:row:9', rowIndex: 9, row: { size: 'MEDIUM' } } };
+    fixture.props.value = {
+      ...fixture.props.value,
+      row: { rowKey: 'ships:row:9', sourceRowIndex: 9, factionId: null, data: { size: 'MEDIUM' } },
+    };
     await editor.vm.$nextTick();
     await fixture.inputs.commit();
     expect(fixture.updates[0]).toEqual({ target: { ...fixture.target, rowKey: 'ships:row:9', column: 'size' }, value: 'later' });

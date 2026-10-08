@@ -23,7 +23,7 @@ import { saveEditorSpecByKind } from '@/services/editor.service';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { hasEntityInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/services/resource-cache.service';
-import { defaultEditorSpec, editorMissingTargetText } from '@/domain/editors/editor-definitions';
+import { editorMissingTargetText } from '@/domain/editors/editor-definitions';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { WEAPON_SPRITE_FIELDS } from '@/domain/editors/lib/weapon-sprite-fields';
 import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
@@ -62,7 +62,7 @@ export function useEditorWindowViewModel(params: {
         target,
         meta: { bundle: data, receipt: null },
         baseVersions: data.baseVersions,
-        value: isEditableWindowKind(target.kind) ? primarySpecForBundle(data, target.kind, target.id) : {},
+        value: isEditableWindowKind(target.kind) ? primarySpecForBundle(data, target.kind) : {},
       };
     },
     save: async (target, draft, baseVersions) => {
@@ -188,7 +188,7 @@ export function useEditorWindowViewModel(params: {
     const data = weaponLikeEditorData.value;
     const target = editorWindowTarget();
     if (!data || !target) return {};
-    return Object.keys(data.weapon).length > 0 ? data.weapon : defaultEditorSpec('weapon', target.id, data.weaponCsvRow);
+    return data.weapon;
   });
   const shipSpriteForEditor = computed(() => shipEditorData.value?.shipSpriteData ?? '');
   const draftDirty = draftSession.dirty;
@@ -627,10 +627,10 @@ function isPrimaryEditableKind(windowKind: EditorWindowKind, specKind: EditorSpe
   return isEditableWindowKind(windowKind) && windowKind === specKind;
 }
 
-function primarySpecForBundle(bundle: EditorEntityBundle, kind: EditableEditorKind, id: string): RowData {
+function primarySpecForBundle(bundle: EditorEntityBundle, kind: EditableEditorKind): RowData {
   if (kind === 'ship' && bundle.kind === 'ship') return deepClone(bundle.ship);
   if (kind === 'weapon' && bundle.kind === 'weapon') {
-    return Object.keys(bundle.weapon).length > 0 ? deepClone(bundle.weapon) : defaultEditorSpec('weapon', id, bundle.weaponCsvRow);
+    return deepClone(bundle.weapon);
   }
   if (kind === 'projectile' && bundle.kind === 'projectile') return deepClone(bundle.projectile);
   if (kind === 'system' && bundle.kind === 'system') return deepClone(bundle.system);

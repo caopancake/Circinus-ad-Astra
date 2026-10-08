@@ -6,29 +6,29 @@
 
 ## 参考
 
-`src/stores/tables.store.ts`：表格运行态 owner，拥有窗口行、选择、dirty、列宽、当前表与保存中状态。
 `src/app/components/tables/CsvGrid.vue`：表格网格 owner，拥有滚动窗口、列宽与行虚拟化。
 `src/app/components/tables/CsvGridBody.vue`：表体 owner，拥有可见行窗口与选中行传递。
-`src/app/components/tables/CsvGridRow.vue`：行渲染与选中态 owner。
 `src/app/components/tables/CsvGridCellEditor.vue`：单元格编辑 owner，按列控件类型分派编辑器。
+`src/app/components/tables/CsvGridRow.vue`：行渲染与选中态 owner。
 `src/app/components/tables/DataTable.vue`：表格工作区组合 owner。
-`src/app/composables/tables/use-csv-table-view-model.ts`：表格 ViewModel owner，连接 query、store、列 schema 与网格。
-`src/app/composables/tables/use-csv-table-inputs.ts`：表格输入上下文 owner，连接所属输入集合、活动单元格与值提交。
 `src/app/composables/tables/use-csv-floating-panel.ts`：浮层视口 owner，统一位置、宽度、上下翻转与 resize 释放。
-`src/domain/tables/csv-grid-model.ts`：网格列模型 owner。
+`src/app/composables/tables/use-csv-table-inputs.ts`：表格输入上下文 owner，连接所属输入集合、活动单元格与值提交。
+`src/app/composables/tables/use-csv-table-view-model.ts`：表格 ViewModel owner，连接 query、store、列 schema 与网格。
 `src/domain/schema/schema-registry.ts`：列 schema 唯一加载入口。
+`src/domain/tables/csv-grid-model.ts`：网格列模型 owner。
 `src/domain/tables/table-row-key.ts`：行身份规则 owner。
+`src/stores/tables.store.ts`：表格运行态 owner，拥有窗口行、选择、dirty、列宽、当前表与保存中状态。
 
 ## 边界
 
+- 列 schema 只能从统一加载器的输出类型消费，严禁在组件内二次解析资产。
+- 列宽必须使用结构化 `modRoot/table/column`，严禁拼接 key。
+- 单元格提交必须消费完整 `CsvCellTarget`，包含 sessionId、modRoot、table、rowKey 与 column；历史必须沿用同一目标。
+- 活动单元格身份必须唯一归 tables 运行态；原始输入必须归控件，输入集合必须按 session、Mod 与表隔离。
+- 脏标记只允许经草稿变更边界写入，组件严禁直改 dirty 结构。
 - 行身份只使用 Rust rowKey 或前端临时 new key，严禁按数组索引、显示文本或过滤结果定位行。
 - 表格组件严禁直接 IPC、写盘或维护 history；保存必须经保存编排，撤销重做必须经草稿历史。
-- 列 schema 只能从统一加载器的输出类型消费，严禁在组件内二次解析资产。
 - 选中态以响应式 `selectedRowKey` 为唯一来源，行组件按 key 绑定选中样式，严禁 DOM class 手工同步。
-- 脏标记只允许经草稿变更边界写入，组件严禁直改 dirty 结构。
-- 活动单元格身份必须唯一归 tables 运行态；原始输入必须归控件，输入集合必须按 session、Mod 与表隔离。
-- 单元格提交必须消费完整 `CsvCellTarget`，包含 sessionId、modRoot、table、rowKey 与 column；历史必须沿用同一目标。
-- 列宽必须使用结构化 `modRoot/table/column`，严禁拼接 key。
 
 ## 链路
 
@@ -61,20 +61,24 @@
 
 ## 规范
 
-- 表格窗口必须按可视区请求行，严禁一次加载全表。
-- 窗口读取必须捕获 session、Mod、表、过滤、状态实例与读取代次；本地动作、保存、重载和卸载必须撤销较早响应与错误的接纳权。
-- 保存期间的表格失效必须合并为后续权威读取；查询必须共同比较原始行基线与版本，自身保存回声只允许更新所属投影。
-- 单元格编辑必须在动作提交边界一次性写值与登记历史；中间输入必须参与未保存判定，行脏标记只允许表达已提交行差异。
 - CSV native 输入必须逐字符保留空串、前导零与数字表示，领域转换必须归所属消费者。
-- 搜索必须属于选择器界面状态；自定义值必须使用显式输入入口并登记待提交状态；多选必须以整个编辑动作一次提交。
-- 滚动、单元格切换与窗口化替换必须先提交所属输入；同目标模型更新必须保持控件，rowKey 映射必须保留活动输入的归属。
 - Esc 必须取消本次输入；文本浮层、native 输入与选择器必须共用所属集合的保存提交入口。
-- 选择与文本浮层必须共用视口计算；浮层宽度与水平位置必须服从当前窗口，resize 监听必须随控件释放。
-- 前端新增行只允许使用临时 new key，保存后以后端 rowKey map 替换。
-- 缺失列 schema 的列只做文本编辑，严禁猜测控件类型。
-- 固定枚举选项必须与目标 Starsector 版本的加载器枚举完全一致。
-- 虚拟行（间隔与占位）不参与选择、编辑与 dirty。
+- 下划线开头的文件列必须按普通业务列显示、编辑和保存；行身份只允许消费记录的 rowKey。
+- 业务 CSV 字段必须归 `CsvDraftRow.data`；rowKey、factionId、sourceRowIndex 与 insertAt 必须分别归所属行记录，严禁写入业务字典。
+- 保存期间的表格失效必须合并为后续权威读取；查询必须共同比较原始行基线与版本，自身保存回声只允许更新所属投影。
 - 列宽调整必须即时反映渲染宽度并进入持久化投影。
+- 前端新增行只允许使用临时 new key，保存后以后端 rowKey map 替换。
+- 单元格编辑必须在动作提交边界一次性写值与登记历史；中间输入必须参与未保存判定，行脏标记只允许表达已提交行差异。
+- 同值同版本的窗口接纳必须按 rowKey 更新势力与来源位置投影，并保留正式草稿、dirty 与活动输入。
+- 固定枚举选项必须与目标 Starsector 版本的加载器枚举完全一致。
+- 搜索必须属于选择器界面状态；自定义值必须使用显式输入入口并登记待提交状态；多选必须以整个编辑动作一次提交。
+- 查询窗口必须提供实际 sourceRowIndex；网格 rowIndex 只允许表达当前显示位置。
+- 滚动、单元格切换与窗口化替换必须先提交所属输入；同目标模型更新必须保持控件，rowKey 映射必须保留活动输入的归属。
+- 窗口读取必须捕获 session、Mod、表、过滤、状态实例与读取代次；本地动作、保存、重载和卸载必须撤销较早响应与错误的接纳权。
+- 缺失列 schema 的列只做文本编辑，严禁猜测控件类型。
+- 虚拟行（间隔与占位）不参与选择、编辑与 dirty。
+- 表格窗口必须按可视区请求行，严禁一次加载全表。
+- 选择与文本浮层必须共用视口计算；浮层宽度与水平位置必须服从当前窗口，resize 监听必须随控件释放。
 
 ## 陷阱
 

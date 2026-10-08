@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { configEntityIdInvalidMessage, createDefaultFaction } from '@/domain/config/config-entities';
+import { configFactionSaveDraft, configMissionSaveDraft, configModInfoSaveData } from '@/domain/config/config-entities';
+import { getSchema } from '@/domain/schema/schema-registry';
+
+describe('configuration business content boundaries', () => {
+  it('preserves top-level, dictionary and array object keys through every source split', () => {
+    const content = { id: 'demo', _rowKey: 'business', nested: { _slot: 'weapon' }, values: [{ _field: 2 }] };
+    expect(configModInfoSaveData({ file: content }, getSchema('mod-info')!)).toEqual(content);
+    expect(configFactionSaveDraft({ file: content }, getSchema('faction')!).file).toEqual(content);
+    const mission = configMissionSaveDraft(
+      { list: { mission: 'demo', _column: 'cell' }, descriptor: content, text: { content: 'text' } },
+      getSchema('mission')!,
+    );
+    expect(mission.descriptor).toEqual(content);
+    expect(mission.list).toEqual({ mission: 'demo', _column: 'cell' });
+  });
+});
 
 describe('new faction game contract', () => {
   it('contains the required loader fields and a core faction logo', () => {

@@ -1,18 +1,59 @@
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 import JsonFieldEditor from './JsonFieldEditor.vue';
 import type { RowData } from '@/shared/types';
 import { editorUiStubs } from '@/test/ui-stubs';
+import { h } from 'vue';
+import { vi } from 'vitest';
+import { NInputNumber } from 'naive-ui/es/input-number';
+import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
 
 function mountEditor(props: { knownKeys: string[]; modelValue: RowData }) {
   return mount(JsonFieldEditor, { props, global: { stubs: editorUiStubs } });
 }
 
 describe('JsonFieldEditor', () => {
-  it('lists only extra keys outside the known and internal keys', () => {
+  it('registers extra numeric raw input, focuses invalid save and removes a cleared key', async () => {
+    let session!: ReturnType<typeof useEditTargetDraftSession<RowData, string, null>>;
+    const save = vi.fn(async (target: string, value: RowData) => ({ target, value, baseVersions: [], meta: null }));
+    const wrapper = mount(
+      {
+        setup() {
+          session = useEditTargetDraftSession<RowData, string, null>({
+            emptyValue: {},
+            targetKey: (target) => target,
+            load: (target) => ({ target, value: { _count: 4 }, baseVersions: [], meta: null }),
+            save,
+          });
+          return () => h(JsonFieldEditor, { knownKeys: [], modelValue: session.draftValue.value, 'onUpdate:modelValue': session.setDraft });
+        },
+      },
+      {
+        global: {
+          components: { 'n-input-number': NInputNumber },
+          stubs: { 'n-input': editorUiStubs['n-input']!, 'n-button': editorUiStubs['n-button']! },
+        },
+        attachTo: document.body,
+      },
+    );
+    await session.loadTarget('one');
+    await flushPromises();
+    const input = wrapper.get('.json-field-row input');
+    await input.setValue('1e');
+    await expect(session.saveDraft()).rejects.toMatchObject({ action: 'commit-field-inputs' });
+    expect(session.draftValue.value._count).toBe(4);
+    expect(document.activeElement).toBe(input.element);
+    expect((input.element as HTMLInputElement).value).toBe('1e');
+    await input.setValue('');
+    await session.saveDraft();
+    expect(save).toHaveBeenCalledWith('one', {}, []);
+    expect(session.inputs.dirty.value).toBe(false);
+    wrapper.unmount();
+  });
+  it('lists all extra business keys including underscore-prefixed names', () => {
     const editor = mountEditor({ knownKeys: ['id', 'name'], modelValue: { id: 'a', extra1: 'x', extra2: 3, __internal: true } });
     const keys = editor.findAll('.json-field-key').map((node) => node.text());
-    expect(keys).toEqual(['extra1', 'extra2']);
+    expect(keys).toEqual(['extra1', 'extra2', '__internal']);
   });
 
   it('shows the empty hint when no extra keys exist', () => {

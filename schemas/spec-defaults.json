@@ -1,0 +1,107 @@
+{
+  "$schema": "circinus-ad-astra/spec-defaults/v1",
+  "ship": {
+    "hullId": "",
+    "hullName": "",
+    "hullSize": "FRIGATE",
+    "style": "LOW_TECH",
+    "width": 100,
+    "height": 150,
+    "center": [50, 75],
+    "collisionRadius": 80,
+    "shieldCenter": [0, 0],
+    "shieldRadius": 60,
+    "spriteName": "",
+    "viewOffset": 0,
+    "coversColor": "",
+    "moduleAnchor": [0, 0],
+    "weaponSlots": [],
+    "engineSlots": [],
+    "bounds": [-60, -30, -60, 30, 60, 30, 60, -30],
+    "builtInMods": [],
+    "builtInWeapons": {},
+    "builtInWings": []
+  },
+  "weapon": {
+    "projectile": {
+      "id": "",
+      "specClass": "projectile",
+      "type": "BALLISTIC",
+      "size": "SMALL",
+      "turretSprite": "",
+      "hardpointSprite": "",
+      "turretGunSprite": "",
+      "hardpointGunSprite": "",
+      "turretOffsets": [10, 0],
+      "hardpointOffsets": [15, 0],
+      "turretAngleOffsets": [0],
+      "hardpointAngleOffsets": [0],
+      "barrelMode": "ALTERNATING",
+      "animationType": "MUZZLE_FLASH",
+      "projectileSpecId": "",
+      "fireSoundTwo": ""
+    },
+    "beam": {
+      "id": "",
+      "specClass": "beam",
+      "type": "BALLISTIC",
+      "size": "SMALL",
+      "turretSprite": "",
+      "hardpointSprite": "",
+      "turretOffsets": [10, 0],
+      "hardpointOffsets": [15, 0],
+      "turretAngleOffsets": [0],
+      "hardpointAngleOffsets": [0],
+      "textureType": "SMOOTH",
+      "fringeColor": [100, 200, 255, 200],
+      "coreColor": [255, 255, 255, 255],
+      "glowColor": [100, 200, 255, 100],
+      "width": 10
+    }
+  },
+  "projectile": {
+    "projectile": {
+      "id": "",
+      "specClass": "projectile",
+      "spawnType": "BALLISTIC",
+      "collisionClass": "PROJECTILE_NO_FF",
+      "collisionClassByFighter": "PROJECTILE_FIGHTER",
+      "width": 3.5,
+      "length": 10,
+      "fadeTime": 0.3,
+      "fringeColor": [255, 255, 255, 255],
+      "coreColor": [255, 255, 255, 255],
+      "bulletSprite": ""
+    },
+    "missile": {
+      "id": "",
+      "specClass": "missile",
+      "missileType": "MISSILE",
+      "sprite": "",
+      "size": [10, 20],
+      "center": [5, 10],
+      "collisionRadius": 10,
+      "collisionClass": "MISSILE_NO_FF",
+      "engineSpec": {
+        "turnAcc": 0,
+        "turnRate": 0,
+        "acc": 0,
+        "dec": 0
+      },
+      "engineSlots": []
+    }
+  },
+  "system": {
+    "id": "",
+    "type": "STAT_MOD",
+    "aiType": "NONE",
+    "droneBehavior": [],
+    "aiHints": {},
+    "weaponTypes": []
+  },
+  "skill": {
+    "id": "",
+    "governingAptitude": "",
+    "effectGroups": []
+  }
+}

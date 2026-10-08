@@ -8,12 +8,16 @@
         size="small"
         @update:value="updateField(key, $event)"
       />
-      <n-input-number
+      <NumberValueInput
         v-else-if="typeof model[key] === 'number'"
-        :value="model[key] as number"
+        :value="model[key]"
+        :input-key="key"
+        :label="key"
+        clear-action="remove"
         :show-button="false"
         size="small"
-        @update:value="updateField(key, $event ?? 0)"
+        @update:value="updateField(key, $event)"
+        @remove="removeField(key)"
       />
       <n-switch
         v-else-if="typeof model[key] === 'boolean'"
@@ -45,8 +49,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
+import { extraJsonFieldKeys } from '@/shared/lib/json-fields';
 import type { JsonValue, RowData } from '@/shared/types';
+import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
 import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
 import { useFieldInputs } from '@/shared/runtime/field-inputs';
 
@@ -57,7 +62,7 @@ const model = defineModel<RowData>({ required: true });
 const newKey = ref('');
 const inputs = useFieldInputs();
 
-const extraKeys = computed(() => Object.keys(model.value).filter((k) => !isInternalJsonFieldKey(k) && !props.knownKeys.includes(k)));
+const extraKeys = computed(() => extraJsonFieldKeys(model.value, props.knownKeys));
 
 function updateField(key: string, value: JsonValue) {
   model.value = { ...model.value, [key]: value };

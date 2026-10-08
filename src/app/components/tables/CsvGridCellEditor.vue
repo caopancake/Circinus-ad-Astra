@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, useTemplateRef } from 'vue';
 import { cell } from '@/shared/lib/starsector';
-import type { CsvWindowRow } from '@/shared/types';
+import type { CsvRowRecord } from '@/shared/types';
 import type { CsvGridColumn } from '@/domain/tables/csv-grid-model';
 import type { CsvSourceIndex } from '@/domain/tables/csv-source-options';
 import { includeCurrentValue, includeCurrentValues, sourceOptions, sourceValue, sourceValueSet } from '@/domain/tables/csv-source-options';
@@ -76,7 +76,7 @@ import CsvCellTextEditor from '@/app/components/tables/CsvCellTextEditor.vue';
 const props = defineProps<{
   anchorElement: HTMLElement | null;
   column: CsvGridColumn;
-  row: CsvWindowRow;
+  row: CsvRowRecord;
   sourceIndex: CsvSourceIndex;
 }>();
 
@@ -90,13 +90,13 @@ const { schemaSelectSprite } = useSchemaSelectMedia();
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
 const pickerAnchor = ref<{ height: number; left: number; top: number; width: number } | null>(null);
 
-const raw = ref(cell(props.row.row[props.column.key]));
+const raw = ref(cell(props.row.data[props.column.key]));
 const baseline = ref(raw.value);
 const customDirty = ref(false);
 const pickerRef = ref<InstanceType<typeof CsvCellPicker> | null>(null);
 const dirty = computed(() => raw.value !== baseline.value || customDirty.value);
 
-const rawValue = computed(() => cell(props.row.row[props.column.key]));
+const rawValue = computed(() => cell(props.row.data[props.column.key]));
 const control = computed(() => csvColumnControl(props.column.schema));
 const isTextControl = computed(() => control.value === 'text');
 const usesNativeInput = computed(() => {

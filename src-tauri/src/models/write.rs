@@ -59,23 +59,81 @@ pub struct JsonSourceConfirmation {
     pub source_fingerprint: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AssociatedSpecChange {
-    pub action: AssociatedSpecChangeAction,
-    pub id: String,
-    #[serde(default, deserialize_with = "required_nullable")]
-    pub previous_id: Option<String>,
-    #[serde(default)]
-    pub row: Map<String, Value>,
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WeaponSpecClass {
+    Projectile,
+    Beam,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum AssociatedSpecChangeAction {
-    Create,
-    Delete,
-    Rename,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AssociatedSpecCreateParams {
+    Ship {
+        id: String,
+        hull_name: String,
+    },
+    Weapon {
+        id: String,
+        spec_class: WeaponSpecClass,
+    },
+    System {
+        id: String,
+    },
+    Skill {
+        id: String,
+    },
+}
+
+impl AssociatedSpecCreateParams {
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Ship { id, .. }
+            | Self::Weapon { id, .. }
+            | Self::System { id }
+            | Self::Skill { id } => id,
+        }
+    }
+    pub fn table(&self) -> super::CsvTableKey {
+        match self {
+            Self::Ship { .. } => super::CsvTableKey::Ships,
+            Self::Weapon { .. } => super::CsvTableKey::Weapons,
+            Self::System { .. } => super::CsvTableKey::ShipSystems,
+            Self::Skill { .. } => super::CsvTableKey::Skills,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(
+    tag = "action",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum AssociatedSpecChange {
+    Create {
+        create: AssociatedSpecCreateParams,
+    },
+    Delete {
+        id: String,
+    },
+    Rename {
+        previous_id: String,
+        create: AssociatedSpecCreateParams,
+    },
+}
+
+impl AssociatedSpecChange {
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Create { create } | Self::Rename { create, .. } => create.id(),
+            Self::Delete { id } => id,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -253,8 +311,32 @@ fn changed_paths_for_changes(changes: &[FileChangeRecord]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{AssociatedFileChange, FileChangeRecord, FileSnapshot, WriteResult};
+    use super::{
+        AssociatedFileChange, AssociatedSpecChange, FileChangeRecord, FileSnapshot, WriteResult,
+    };
     use serde_json::json;
+
+    #[test]
+    fn associated_spec_wire_uses_action_and_format_owned_create_parameters() {
+        let seeds = [
+            json!({"kind":"ship","id":"ship","hullName":"Ship"}),
+            json!({"kind":"weapon","id":"weapon","specClass":"beam"}),
+            json!({"kind":"system","id":"system"}),
+            json!({"kind":"skill","id":"skill"}),
+        ];
+        for create in seeds {
+            for action in [
+                json!({"action":"create","create":create}),
+                json!({"action":"rename","previousId":"old","create":create}),
+            ] {
+                let decoded: AssociatedSpecChange = serde_json::from_value(action.clone()).unwrap();
+                assert_eq!(serde_json::to_value(decoded).unwrap(), action);
+            }
+        }
+        let delete = json!({"action":"delete","id":"entity"});
+        let decoded: AssociatedSpecChange = serde_json::from_value(delete.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), delete);
+    }
 
     #[test]
     fn associated_file_change_requires_explicit_nullable_content_fields() {

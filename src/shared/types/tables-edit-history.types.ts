@@ -1,5 +1,4 @@
-import type { RowData } from '@/shared/types/json.types';
-import type { TableKey } from '@/shared/types/tables.types';
+import type { CsvDraftRow, TableKey } from '@/shared/types/tables.types';
 
 export interface CsvCellValueSetOperation {
   type: 'cell-value-set';
@@ -15,7 +14,7 @@ export interface CsvRowCreatedOperation {
   tab: TableKey;
   rowKey: string;
   rowIndex: number;
-  row: RowData;
+  row: CsvDraftRow;
 }
 
 export interface CsvRowDeletedOperation {
@@ -23,7 +22,7 @@ export interface CsvRowDeletedOperation {
   tab: TableKey;
   rowKey: string;
   rowIndex: number;
-  row: RowData;
+  row: CsvDraftRow;
 }
 
 export type CsvDraftOperation = CsvCellValueSetOperation | CsvRowCreatedOperation | CsvRowDeletedOperation;

@@ -22,7 +22,7 @@
 <script setup lang="ts">
 import { computed, watchEffect } from 'vue';
 import { cell } from '@/shared/lib/starsector';
-import type { CsvWindowRow } from '@/shared/types';
+import type { CsvRowRecord } from '@/shared/types';
 import type { CsvGridColumn } from '@/domain/tables/csv-grid-model';
 import type { CsvSourceIndex } from '@/domain/tables/csv-source-options';
 import { sourceValue } from '@/domain/tables/csv-source-options';
@@ -39,11 +39,11 @@ import { useSchemaSelectMedia } from '@/app/composables/tables/use-schema-select
 
 const props = defineProps<{
   column: CsvGridColumn;
-  row: CsvWindowRow;
+  row: CsvRowRecord;
   sourceIndex: CsvSourceIndex;
 }>();
 
-const rawValue = computed(() => cell(props.row.row[props.column.key]));
+const rawValue = computed(() => cell(props.row.data[props.column.key]));
 const mode = useInputEditMode();
 const context = useCsvTableInputs();
 const { schemaSelectSprite, ensureSchemaSelectSprites } = useSchemaSelectMedia();

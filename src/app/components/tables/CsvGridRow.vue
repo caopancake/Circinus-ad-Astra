@@ -14,7 +14,7 @@
   </tr>
 </template>
 <script setup lang="ts">
-import type { CsvWindowRow } from '@/shared/types';
+import type { CsvRowRecord } from '@/shared/types';
 import type { CsvGridColumn } from '@/domain/tables/csv-grid-model';
 import type { CsvSourceIndex } from '@/domain/tables/csv-source-options';
 import CsvGridCell from '@/app/components/tables/CsvGridCell.vue';
@@ -23,18 +23,18 @@ defineProps<{
   activeCell: { columnKey: string; rowKey: string } | null;
   columns: CsvGridColumn[];
   isDirty: (rowKey: string, column: string) => boolean;
-  row: CsvWindowRow;
+  row: CsvRowRecord;
   selected: boolean;
   sourceIndex: CsvSourceIndex;
 }>();
 
 const emit = defineEmits<{
-  'activate-cell': [row: CsvWindowRow, column: CsvGridColumn, event: MouseEvent];
+  'activate-cell': [row: CsvRowRecord, column: CsvGridColumn, event: MouseEvent];
   'close-active-cell': [];
   'select-row': [rowKey: string, event: MouseEvent];
 }>();
 
-function forwardActivateCell(row: CsvWindowRow, column: CsvGridColumn, event: MouseEvent) {
+function forwardActivateCell(row: CsvRowRecord, column: CsvGridColumn, event: MouseEvent) {
   emit('activate-cell', row, column, event);
 }
 </script>

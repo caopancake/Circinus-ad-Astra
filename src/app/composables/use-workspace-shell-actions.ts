@@ -1,4 +1,7 @@
 import { computed, getCurrentScope, h, onScopeDispose, ref, type Ref } from 'vue';
+import { NSelect } from 'naive-ui/es/select';
+import { WEAPON_SPEC_CLASSES, WEAPON_SPEC_CLASS_NOTE } from '@/domain/editors/spec-construction';
+import type { WeaponSpecClass } from '@/shared/types';
 import { NCheckbox } from 'naive-ui/es/checkbox';
 import type { AppFeedback, GameScanWarning, ModOpeningFailure } from '@/shared/types';
 import { useSettingsStore } from '@/stores/settings.store';
@@ -164,16 +167,15 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   }
 
   async function selectAssociatedSpecs(candidates: AssociatedSpecCandidate[]) {
+    const choices = ref(candidates);
     const selectedKeys = ref(new Set(candidates.map((candidate) => candidate.key)));
     const choice = await feedback.choose({
       title: '保存 CSV',
-      content: () => renderAssociatedSpecDialog(candidates, selectedKeys),
+      content: () => renderAssociatedSpecDialog(choices.value, selectedKeys),
       choices: [{ label: '保存', value: 'save', type: 'primary' }],
     });
     if (choice !== 'save') return null;
-    return candidates
-      .filter((candidate) => selectedKeys.value.has(candidate.key))
-      .map(({ action, id, previousId, row }) => ({ action, id, previousId, row }));
+    return choices.value.filter((candidate) => selectedKeys.value.has(candidate.key)).map((candidate) => candidate.change);
   }
 
   function undoCurrentTableEdit() {
@@ -400,25 +402,41 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
 
   function renderAssociatedSpecDialog(candidates: AssociatedSpecCandidate[], selectedKeys: Ref<Set<string>>) {
     return h('div', { class: 'associated-save-dialog' }, [
-      h('p', '检测到 CSV 行变更可能需要同步关联 spec。只有勾选的动作会随本次 CSV 保存一起写入，并作为单次 history 记录。'),
+      h('p', '勾选的关联 spec 动作随本次 CSV 一起保存，并形成一次文件历史。武器类型用于新建及重命名来源缺失时的创建。'),
+      candidates.some((candidate) => candidate.change.action !== 'delete' && candidate.change.create.kind === 'weapon')
+        ? h('p', WEAPON_SPEC_CLASS_NOTE)
+        : null,
       h(
         'div',
         { class: 'associated-save-list' },
-        candidates.map((candidate) =>
-          h(
-            NCheckbox,
-            {
-              checked: selectedKeys.value.has(candidate.key),
-              'onUpdate:checked': (checked: boolean) => {
-                const next = new Set(selectedKeys.value);
-                if (checked) next.add(candidate.key);
-                else next.delete(candidate.key);
-                selectedKeys.value = next;
+        candidates.map((candidate) => {
+          const change = candidate.change;
+          const weaponCreate = change.action !== 'delete' && change.create.kind === 'weapon' ? change.create : null;
+          return h('div', { class: 'associated-save-item' }, [
+            h(
+              NCheckbox,
+              {
+                checked: selectedKeys.value.has(candidate.key),
+                'onUpdate:checked': (checked: boolean) => {
+                  const next = new Set(selectedKeys.value);
+                  if (checked) next.add(candidate.key);
+                  else next.delete(candidate.key);
+                  selectedKeys.value = next;
+                },
               },
-            },
-            { default: () => candidate.label },
-          ),
-        ),
+              { default: () => candidate.label },
+            ),
+            weaponCreate
+              ? h(NSelect, {
+                  value: weaponCreate.specClass,
+                  options: WEAPON_SPEC_CLASSES.map((specClass) => ({ label: specClass, value: specClass })),
+                  'onUpdate:value': (specClass: WeaponSpecClass) => {
+                    weaponCreate.specClass = specClass;
+                  },
+                })
+              : null,
+          ]);
+        }),
       ),
     ]);
   }

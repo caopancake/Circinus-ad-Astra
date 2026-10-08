@@ -32,6 +32,7 @@ function parserRustRole(rel) {
   if (rel.startsWith('src-tauri/src/parsers/')) return 'parser';
   if (rel.startsWith('src-tauri/src/io/')) return 'io';
   if (rel.startsWith('src-tauri/src/domain/well_known_labels')) return 'tool-json';
+  if (rel.startsWith('src-tauri/src/domain/spec_construction.')) return 'tool-json';
   if (rel.startsWith('src-tauri/src/services/app_settings')) return 'tool-json';
   if (rel.startsWith('src-tauri/src/services/workspace_persistence')) return 'tool-json';
   if (rel.startsWith('src-tauri/src/services/editor_config/')) return 'config-service';

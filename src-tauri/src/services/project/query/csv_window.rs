@@ -10,10 +10,7 @@ use super::super::{
 };
 use crate::{
     errors::AppResult,
-    models::{
-        CSV_FACTION_FIELD, CsvFactionFilter, CsvRowPreview, CsvTableKey, CsvTableWindow,
-        CsvWindowRow,
-    },
+    models::{CsvFactionFilter, CsvRowPreview, CsvTableKey, CsvTableWindow, CsvWindowRow},
 };
 
 pub fn query_csv_table_window(
@@ -41,8 +38,9 @@ pub fn query_csv_table_window(
         .take(count)
         .map(|(index, row)| CsvWindowRow {
             row_key: row.row_key.clone(),
-            row_index: *index,
-            row: row.row.clone(),
+            source_row_index: *index,
+            data: row.data.clone(),
+            faction_id: row.faction_id.clone(),
         })
         .collect();
     let mut base_versions = vec![super::super::versions::version_for_path(
@@ -84,7 +82,7 @@ pub fn query_csv_row_preview(
         .iter()
         .find(|row| row.row_key == row_key);
     Ok(CsvRowPreview {
-        resource_ref: row.and_then(|row| csv_table_row_resource_ref(&session, table, &row.row)),
+        resource_ref: row.and_then(|row| csv_table_row_resource_ref(&session, table, &row.data)),
     })
 }
 
@@ -97,22 +95,17 @@ fn csv_row_matches(
     if let Some(faction_id) = faction
         .faction_id()
         .filter(|_| csv_table_supports_faction_filter(table))
+        && row.faction_id.as_deref() != Some(faction_id)
     {
-        let row_faction = row
-            .row
-            .get(CSV_FACTION_FIELD)
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default();
-        if row_faction != faction_id {
-            return false;
-        }
+        return false;
     }
     if search.is_empty() {
         return true;
     }
-    row.row
+    row.data
         .values()
         .filter_map(serde_json::Value::as_str)
+        .chain(row.faction_id.as_deref())
         .any(|value| value.to_lowercase().contains(search))
 }
 
@@ -128,7 +121,8 @@ mod tests {
         }
         SessionCsvRow {
             row_key: key.to_string(),
-            row,
+            data: row,
+            faction_id: None,
         }
     }
 
@@ -172,16 +166,29 @@ mod tests {
     fn faction_filter_scopes_rows_for_tables_that_support_it() {
         let mut row = Map::new();
         row.insert("id".to_string(), json!("XY"));
-        row.insert(CSV_FACTION_FIELD.to_string(), json!("tritachyon"));
+        row.insert("_faction".to_string(), json!("business-faction"));
         let entry = SessionCsvRow {
             row_key: "k".to_string(),
-            row,
+            data: row,
+            faction_id: Some("tritachyon".to_string()),
         };
 
         let filter = CsvFactionFilter::Faction {
             faction_id: "tritachyon".to_string(),
         };
         assert!(csv_row_matches(&entry, "", &filter, CsvTableKey::Ships));
+        assert!(csv_row_matches(
+            &entry,
+            "business-faction",
+            &CsvFactionFilter::All,
+            CsvTableKey::Ships
+        ));
+        assert!(csv_row_matches(
+            &entry,
+            "tritachyon",
+            &CsvFactionFilter::All,
+            CsvTableKey::Ships
+        ));
 
         let other = CsvFactionFilter::Faction {
             faction_id: "hegemony".to_string(),

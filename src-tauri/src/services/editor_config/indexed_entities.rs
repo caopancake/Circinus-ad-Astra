@@ -2,10 +2,7 @@ use crate::domain::editor_config_definitions::FACTION_SPEC_DEFINITION;
 use crate::{
     domain::config::validate_config_id,
     errors::{AppError, AppResult},
-    io::{
-        FileChangeSetBuilder, JsonWriteBatch, acquire_root_write_lock, read_csv_data,
-        strip_internal_fields,
-    },
+    io::{FileChangeSetBuilder, JsonWriteBatch, acquire_root_write_lock, read_csv_data},
     models::{IndexedConfigKind, IndexedEntityRefresh, JsonWriteOptions, WriteResult},
     parsers::render_csv_text,
 };
@@ -460,9 +457,8 @@ fn add_faction_save_changes(
     let file = entity_data.get("file").ok_or_else(|| {
         AppError::message("config.missing_faction_file", "missing faction file data")
     })?;
-    let clean = strip_internal_fields(file);
     let source = builder.root().join(definition.target_rel_path(source_id));
-    let rendered = json.render(&source, &clean, ordered_json)?;
+    let rendered = json.render(&source, file, ordered_json)?;
     if json.is_preserving()
         && source_id == id
         && source.exists()
@@ -495,12 +491,11 @@ fn add_mission_save_changes(
         .ok_or_else(|| {
             AppError::message("config.missing_mission_text", "missing mission text data")
         })?;
-    let clean = strip_internal_fields(descriptor);
     let source = builder.root().join(format!(
         "{}/descriptor.json",
         definition.target_rel_path(source_id)
     ));
-    let rendered = json.render(&source, &clean, ordered_json)?;
+    let rendered = json.render(&source, descriptor, ordered_json)?;
     let descriptor_unchanged = json.is_preserving()
         && source_id == id
         && source.exists()

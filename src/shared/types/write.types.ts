@@ -42,12 +42,16 @@ export interface AssociatedFileChange {
 
 export type AssociatedSpecChangeAction = 'create' | 'delete' | 'rename';
 
-export interface AssociatedSpecChange {
-  action: AssociatedSpecChangeAction;
-  id: string;
-  previousId: string | null;
-  row: RowData;
-}
+export type AssociatedSpecCreateParams =
+  | { kind: 'ship'; id: string; hullName: string }
+  | { kind: 'weapon'; id: string; specClass: import('@/shared/types/editor.types').WeaponSpecClass }
+  | { kind: 'system'; id: string }
+  | { kind: 'skill'; id: string };
+
+export type AssociatedSpecChange =
+  | { action: 'create'; create: AssociatedSpecCreateParams }
+  | { action: 'delete'; id: string }
+  | { action: 'rename'; previousId: string; create: AssociatedSpecCreateParams };
 
 export type CsvRowPatchAction = 'upsert' | 'delete';
 

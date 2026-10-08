@@ -1,3 +1,5 @@
-export function isInternalJsonFieldKey(key: string): boolean {
-  return key.startsWith('_');
+import type { RowData } from '@/shared/types';
+
+export function extraJsonFieldKeys(content: RowData, knownKeys: readonly string[]): string[] {
+  return Object.keys(content).filter((key) => !knownKeys.includes(key));
 }

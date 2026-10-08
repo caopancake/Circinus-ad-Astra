@@ -76,6 +76,9 @@ describe('ProjectileEditor', () => {
     await nextTick();
     const last = editor.emitted('draft-changed')?.at(-1)?.[0] as Record<string, unknown>;
     expect(last.specClass).toBe('missile');
+    expect(last.engineSpec).toEqual({ turnAcc: 0, turnRate: 0, acc: 0, dec: 0 });
+    expect(last.size).toEqual([10, 20]);
+    expect(last.sprite).toBe('');
   });
 
   it('hides projectile-only sections for missiles', async () => {

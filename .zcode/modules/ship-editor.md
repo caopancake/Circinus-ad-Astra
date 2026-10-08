@@ -6,25 +6,25 @@
 
 ## 参考
 
+`scripts/architecture/rules/editor-module-boundary.mjs`：编辑器组件边界规则 owner。
 `src/app/components/editors/ShipEditor.vue`：编辑器组件 owner，注入画布 hooks 并拥有实体语义、检查器表单与贴图。
 `src/app/composables/canvas/use-canvas-editor.ts` 同族：画布交互骨架（见画布骨架模块）。
-`src/domain/editors/lib/normalize.ts`：`.ship` 规格归一化 owner。
-`src/domain/editors/lib/mirror.ts`：镜像规则 owner。
-`src/domain/editors/lib/canvas-visuals.ts`：实体视觉绘制 owner。
 `src/app/composables/editors/use-editor-window-view-model.ts`：窗口 ViewModel owner，维护目标 Draft Session 与 bundle。
 `src/app/composables/editors/use-resource-reference.ts`：贴图引用选择 owner。
-`scripts/architecture/rules/editor-module-boundary.mjs`：编辑器组件边界规则 owner。
+`src/domain/editors/lib/canvas-visuals.ts`：实体视觉绘制 owner。
+`src/domain/editors/lib/mirror.ts`：镜像规则 owner。
+`src/domain/editors/lib/normalize.ts`：`.ship` 规格归一化 owner。
 
 ## 边界
 
-- 窗口 ViewModel query 舰船 bundle、资源与引用并维护目标 Draft Session；组件拥有画布交互与检查器 UI；窗口服务拥有单例身份。
-- 画布命中检测、选区同步、镜像轴与提交引擎全部注入自画布骨架；编辑器只提供目标、命中表、镜像规则、预览与场景绘制。
+- dirty 时外部更新只暂存；画布严禁直读磁盘或 IPC，严禁以数组下标或显示文本替代正式 ID。
+- 保存必须提交当前拖拽位置并结束指针动作；保存期间的新动作必须保留所属草稿与历史。
 - 保存走编辑器写、changeset、文件历史与 session refresh；贴图浏览只解析 Mod 内相对路径写入引用字段，严禁写任何文件。
 - 只允许写 `.ship`，严禁直接改 ship CSV；几何、槽位、引擎与 shield 通过正式 spec/draft 规则更新。
-- dirty 时外部更新只暂存；画布严禁直读磁盘或 IPC，严禁以数组下标或显示文本替代正式 ID。
-- 缺失目标的导入内容必须进入待保存草稿，目标只允许在写盘成功后转为已有文件。
 - 检查器对实体字段的编辑必须经显式提交模型进入草稿并重绘画布；连续字段动作必须在统一动作边界登记一条撤销。
-- 保存必须提交当前拖拽位置并结束指针动作；保存期间的新动作必须保留所属草稿与历史。
+- 画布命中检测、选区同步、镜像轴与提交引擎全部注入自画布骨架；编辑器只提供目标、命中表、镜像规则、预览与场景绘制。
+- 窗口 ViewModel query 舰船 bundle、资源与引用并维护目标 Draft Session；组件拥有画布交互与检查器 UI；窗口服务拥有单例身份。
+- 缺失目标的导入内容必须进入待保存草稿，目标只允许在写盘成功后转为已有文件。
 
 ## 链路
 
@@ -57,13 +57,14 @@
 
 ## 规范
 
-- 编辑器内部显示和编辑 `.ship` 的 `hullName`；编辑器外的舰船显示名称必须优先使用 `ship_data.csv` 的 `name`，仅在该名称缺失时才允许 `hullName`。
-- 镜像模式按空格开关，覆盖武器槽（含甲板）、引擎与碰撞边界；配对只按几何条件实时计算，禁止按下标或 ID 记忆。
-- 镜像新增、调整与删除成对生效；中轴元素退化为单件；center/shield/半径标量与检查器数值输入不参与镜像联动。
-- 贴图选择为纯引用：只接受 Mod 根内 png，相对路径原样作为 `spriteName`，不复制、不改名、不整理目录。
-- 贴图尺寸同步必须以实际加载贴图为准，且仅在用户显式触发时写回宽高。
-- 舰体引用、资源引用必须以后端 ResourceRef 或后端校验的相对路径表达。
 - builtInWeapons 必须以对象形状的 JSON 输入提交，原始输入必须登记到所属目标会话并参与保存、关闭与外部版本保护。
+- 编辑器内部显示和编辑 `.ship` 的 `hullName`；编辑器外的舰船显示名称必须优先使用 `ship_data.csv` 的 `name`，仅在该名称缺失时才允许 `hullName`。
+- 舰体引用、资源引用必须以后端 ResourceRef 或后端校验的相对路径表达。
+- 舰船新建与关联创建必须消费共享模板构造；ID 与 hullName 必须由明确创建参数装配，builtInWeapons 必须保留全部原始槽位键。
+- 贴图尺寸同步必须以实际加载贴图为准，且仅在用户显式触发时写回宽高。
+- 贴图选择为纯引用：只接受 Mod 根内 png，相对路径原样作为 `spriteName`，不复制、不改名、不整理目录。
+- 镜像新增、调整与删除成对生效；中轴元素退化为单件；center/shield/半径标量与检查器数值输入不参与镜像联动。
+- 镜像模式按空格开关，覆盖武器槽（含甲板）、引擎与碰撞边界；配对只按几何条件实时计算，禁止按下标或 ID 记忆。
 
 ## 陷阱
 

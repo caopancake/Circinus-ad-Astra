@@ -1,3 +1,4 @@
+import { csvDraftRow } from '@/test/csv-row';
 import type { VueWrapper } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reactive } from 'vue';
@@ -22,7 +23,7 @@ function modelFixture(): CsvGridModel {
       { className: 'schema-col-text', enumOptions: [], key: 'name', schema: null, widthPx: 100 },
     ],
     performanceSample: { columns: 2, ms: 0, rows: 1, sourceMs: 0, table: 'ships', widthMs: 0 },
-    rows: [{ kind: 'row', row: { id: 's0' }, rowIndex: 0, rowKey: 'key-0' }],
+    rows: [{ ...csvDraftRow({ id: 's0' }, 'key-0', 0), kind: 'row', rowIndex: 0 }],
     sourceIndex: { optionsBySource: new Map(), valueIndexBySource: new Map(), valueSetsBySource: new Map() },
     totalWidthPx: 200,
   };

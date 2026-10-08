@@ -1,4 +1,3 @@
-import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import { stableStringify } from '@/shared/lib/stable-compare';
 import type { FileSchema, SectionSchema } from '@/domain/schema/schema.types';
 
@@ -15,10 +14,6 @@ export function getSchemaFieldKeys(schema: FileSchema): string[] {
     }
   }
   return keys;
-}
-
-export function isSchemaInternalKey(key: string): boolean {
-  return isInternalJsonFieldKey(key);
 }
 
 export function isMultiSourceSchema(schema: FileSchema): boolean {

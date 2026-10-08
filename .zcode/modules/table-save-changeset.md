@@ -6,24 +6,26 @@
 
 ## 参考
 
+`src-tauri/src/domain/spec_construction.rs`：关联规格创建构造与武器类型约束 owner。
+`src-tauri/src/services/project/write/`：后端写入 owner，合成 CSV 与关联目标并构建 changeset。
+`src/domain/tables/associated-spec-candidates.ts`：关联 spec 候选与动作快照 owner。
+`src/domain/tables/associated-spec-creation.ts`：CSV 到创建参数与武器评分 owner。
+`src/domain/tables/csv-dirty.ts`：dirty 行形状 owner。
+`src/orchestrators/file-history-write.orchestrator.ts`：保存完成登记 owner。
+`src/orchestrators/table-save.orchestrator.spec.ts`：保存编排行为测试。
 `src/orchestrators/table-save.orchestrator.ts`：保存编排 owner，以 `saveActiveTableChanges` 拥有输入提交、快照捕获、关联选择、写入与保存后接纳。
 `src/services/write.service.ts`：写入能力包装，提交 patches、版本凭据与关联动作。
 `src/shared/api/write-api.ts`：CSV 保存 wire API。
-`src/domain/tables/associated-spec-candidates.ts`：关联 spec 候选 owner。
-`src/domain/tables/csv-dirty.ts`：dirty 行形状 owner。
-`src/orchestrators/file-history-write.orchestrator.ts`：保存完成登记 owner。
-`src-tauri/src/services/project/write/`：后端写入 owner，合成 CSV 与关联目标并构建 changeset。
-`src/orchestrators/table-save.orchestrator.spec.ts`：保存编排行为测试。
 
 ## 边界
 
 - 关联动作仅允许该表正式声明的关联目标，严禁为未声明的表或实体生成动作。
-- 重命名必须经 JSON-like 解析器处理，严禁字符串替换。
-- 文件历史只允许登记实际 changes；成功的原样保存必须接纳返回版本与提交行基线，写入失败必须保留草稿。
-- 已写盘结果必须先更新行基线、版本与历史映射，再执行后续同步；同步失败必须保留已接纳状态并结束等待交接。
-- 捕获目标必须与当前 manifest session 和 tables 状态一致，任一变化即放弃本次保存。
 - 同根跨窗口写入必须由 Rust FIFO 排队；基线冲突必须以带动作的 AppError 上抛并保留草稿。
 - 后端文件历史必须与写盘同事务完成；前端必须先接纳写结果，再投影该结果的文件历史与刷新。
+- 已写盘结果必须先更新行基线、版本与历史映射，再执行后续同步；同步失败必须保留已接纳状态并结束等待交接。
+- 捕获目标必须与当前 manifest session 和 tables 状态一致，任一变化即放弃本次保存。
+- 文件历史只允许登记实际 changes；成功的原样保存必须接纳返回版本与提交行基线，写入失败必须保留草稿。
+- 重命名必须经 JSON-like 解析器处理，严禁字符串替换。
 
 ## 链路
 
@@ -37,10 +39,10 @@
 ### 提交保存
 
 1. 目标为空或当前表无 dirty 时返回 noop；进行中的保存由同一 Promise 表达。
-2. app 层选择回调展示快照中的关联候选，返回选定动作或取消。
+2. app 层选择回调展示快照中的关联候选与创建类型，返回选定动作或取消。
 3. 编排复核目标并消费同一快照中的 patches、关联动作与版本。
 4. 调用排他写提交 patches 与关联动作。
-5. 后端校验 session/root，合成 CSV 与关联目标，构建并应用原子 changeset。
+5. 后端校验 session/root 与关联种类，按创建参数构造规格或解析已有来源更新 ID，构建并应用原子 changeset。
 6. 返回写结果、rowKey map 与结构化失效。
 
 ### 保存后提交
@@ -54,18 +56,23 @@
 ## 规范
 
 - CSV patch 必须携带读取基线，恢复行必须携带 insertAt；正式 rowKey 删除必须命中实际行，未知键必须返回冲突。
-- upsert patch 必须构造提交时的独立行快照，并剥离内部行键字段。
-- 保存快照必须在活动输入提交后、关联选择前固定；patches、关联行内容、版本与历史捕获必须属于同一次提交。
-- 关联选择必须由 app 层提供可等待回调，取消必须结束准备状态；同一保存面重复触发必须复用进行中的请求。
-- 删除 patch 必须携带删除动作标记，严禁以空 upsert 表达删除。
-- 保存请求期间的新编辑必须保留，original 必须以实际提交 patches 更新，dirty 必须按该基线重算。
-- 保存期间的查询与自身失效必须保留前端草稿；写后 refresh 必须保留与已写盘 after 快照相符的后端行身份。
-- 保存状态必须覆盖整个提交窗口，同一编辑器重复触发必须保持当前请求；跨窗口请求必须进入后端队列。
-- 关联 spec 动作必须与 CSV 变更构成同一次原子 changeset，严禁分次写入。
-- 关联 spec 改名必须按本次 `preserveOriginalJson` 设置更新旧文件文本；需要整体重排时必须在 CSV 与 spec changeset 应用前确认。
-- 结构化失效必须由后端从同一 changeset 推导，严禁前端拼装失效路径。
 - CSV 保存必须原样保留文件自身的表头、列集、行序与注释行，严禁注入、改写或丢弃任何列；每一种 CSV 的保存都必须附带保存测试，以真实文件格式作为夹具断言结构不变。
 - CSV 解析对齐游戏 CSVParser（列数容忍：短行缺失键不写入行 Map、长行多余单元格丢弃；`#` 行与裸空行保留，空 Map 行与全空单元格行可区分），保存渲染按最小引号规则输出 LF 行。
+- upsert patch 必须构造提交时的独立行快照，业务内容只允许从行记录 data 独立克隆，恢复位置必须从 insertAt 装配。
+- 保存快照必须在活动输入提交后、关联选择前固定；patches、关联行内容、版本与历史捕获必须属于同一次提交。
+- 保存期间的查询与自身失效必须保留前端草稿；写后 refresh 必须保留与已写盘 after 快照相符的后端行身份。
+- 保存状态必须覆盖整个提交窗口，同一编辑器重复触发必须保持当前请求；跨窗口请求必须进入后端队列。
+- 保存请求期间的新编辑必须保留，original 必须以实际提交 patches 更新，dirty 必须按该基线重算。
+- 关联 spec 动作必须与 CSV 变更构成同一次原子 changeset，严禁分次写入。
+- 关联 spec 改名必须按本次 `preserveOriginalJson` 设置更新旧文件文本；需要整体重排时必须在 CSV 与 spec changeset 应用前确认。
+- 关联候选列表必须在当前窗口内独立滚动，确认与取消必须保持可操作。
+- 关联创建必须携带所属格式的创建参数；删除必须携带 ID，重命名必须携带原 ID 与目标创建参数。
+- 关联确认必须提供 projectile 与 beam 调整入口，并显示“pulse 在原版中无法正常处理，武器类型只允许 projectile 和 beam。”。
+- 关联选择必须由 app 层提供可等待回调，取消必须结束准备状态；同一保存面重复触发必须复用进行中的请求。
+- 删除 patch 必须携带删除动作标记，严禁以空 upsert 表达删除。
+- 已有来源重命名必须保留全部业务内容并更新 ID；来源缺失的创建必须消费共享模板与目标创建参数。
+- 武器初始分支必须按 10 项 projectile 字段与 3 项 beam 字段的非空原文计分；零值必须计分，平分必须选择 projectile。
+- 结构化失效必须由后端从同一 changeset 推导，严禁前端拼装失效路径。
 
 ## 陷阱
 

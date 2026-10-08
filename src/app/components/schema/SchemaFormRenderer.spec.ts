@@ -93,4 +93,13 @@ describe('SchemaFormRenderer', () => {
     // Non multi-source schemas replace the whole model with the JSON editor value.
     expect(form.emitted('update:modelValue')?.at(-1)).toEqual([{ bonus: 7 }]);
   });
+
+  it('projects underscore-prefixed business fields into the extra editor', () => {
+    const form = mountForm({ name: 'a', _rowKey: 'business', nested: { _slot: 'weapon' } });
+    expect(form.findComponent({ name: 'JsonFieldEditor' }).props('modelValue')).toEqual({
+      name: 'a',
+      _rowKey: 'business',
+      nested: { _slot: 'weapon' },
+    });
+  });
 });

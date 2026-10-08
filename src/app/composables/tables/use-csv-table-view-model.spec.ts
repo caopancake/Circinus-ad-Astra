@@ -1,7 +1,8 @@
+import { csvDraftRow } from '@/test/csv-row';
 import { mount } from '@vue/test-utils';
 import { createPinia, getActivePinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CsvTableWindow, RowData, TableKey } from '@/shared/types';
+import type { CsvTableWindow, CsvTableRows, TableKey } from '@/shared/types';
 
 const mocks = vi.hoisted(() => ({
   queryTableWindow: vi.fn(),
@@ -68,7 +69,7 @@ vi.mock('@/stores/tables.store', () => ({
       return (tablesState.visibleColumns ?? ['id', 'name']) as string[];
     },
     get filteredRows() {
-      return (tablesState.filteredRows ?? []) as (RowData | null)[];
+      return (tablesState.filteredRows ?? []) as CsvTableRows;
     },
     get filteredRowCount() {
       return (tablesState.filteredRowCount ?? 0) as number;
@@ -85,9 +86,6 @@ vi.mock('@/stores/tables.store', () => ({
     get activeModRoot() {
       return (tablesState.activeModRoot ?? 'M:/mod') as string | null;
     },
-    get tableRowKey() {
-      return (row: RowData) => `key-${String(row.id)}`;
-    },
     get saving() {
       return Boolean(tablesState.saving);
     },
@@ -102,7 +100,7 @@ vi.mock('@/stores/tables.store', () => ({
     discardTableDraftForReload: vi.fn(),
     applyTableWindow: vi.fn((window: CsvTableWindow) => {
       tablesState.appliedWindow = window;
-      tablesState.filteredRows = window.rows.map((entry) => entry.row);
+      tablesState.filteredRows = window.rows.map((entry) => ({ ...entry, insertAt: null }));
     }),
   }),
 }));
@@ -119,8 +117,9 @@ function windowFixture(totalRows: number): CsvTableWindow {
     filteredRows: totalRows,
     rows: Array.from({ length: Math.min(2, totalRows) }, (_, index) => ({
       rowKey: `key-${index}`,
-      rowIndex: index,
-      row: { id: `s${index}`, name: `Ship ${index}` },
+      sourceRowIndex: index,
+      factionId: null,
+      data: { id: `s${index}`, name: `Ship ${index}` },
     })),
   };
 }
@@ -147,7 +146,7 @@ describe('useCsvTableViewModel', () => {
   }
 
   it('builds the grid model from the tables store projection', () => {
-    tablesState.filteredRows = [{ id: 's0', name: 'Ship 0' }];
+    tablesState.filteredRows = [csvDraftRow({ id: 's0', name: 'Ship 0' }, 'key-s0', 0)];
     tablesState.filteredRowCount = 1;
     const vm = mountViewModel();
     expect(vm.gridModel.value.columns.map((column) => column.key)).toEqual(['id', 'name']);

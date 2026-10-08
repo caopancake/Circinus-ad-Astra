@@ -19,7 +19,7 @@
 </template>
 <script setup lang="ts">
 import { computed, useTemplateRef } from 'vue';
-import type { CsvWindowRow } from '@/shared/types';
+import type { CsvRowRecord } from '@/shared/types';
 import type { CsvGridColumn } from '@/domain/tables/csv-grid-model';
 import type { CsvSourceIndex } from '@/domain/tables/csv-source-options';
 import CsvCellFrame from '@/app/components/tables/CsvCellFrame.vue';
@@ -30,7 +30,7 @@ defineProps<{
   active: boolean;
   column: CsvGridColumn;
   dirty: boolean;
-  row: CsvWindowRow;
+  row: CsvRowRecord;
   sourceIndex: CsvSourceIndex;
 }>();
 
@@ -38,7 +38,7 @@ const frameRef = useTemplateRef('frameRef');
 const frameElement = computed(() => frameRef.value?.frameRef ?? null);
 
 defineEmits<{
-  'activate-cell': [row: CsvWindowRow, column: CsvGridColumn, event: MouseEvent];
+  'activate-cell': [row: CsvRowRecord, column: CsvGridColumn, event: MouseEvent];
   'close-active-cell': [];
 }>();
 </script>

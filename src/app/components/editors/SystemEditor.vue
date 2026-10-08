@@ -243,7 +243,7 @@
           </n-collapse-item>
         </n-collapse>
       </div>
-      <EditorFooter note="结构化 JSON 写回，内部字段会被后端剔除。">
+      <EditorFooter note="结构化 JSON 写回，完整保留业务字段。">
         <template #actions>
           <n-button @click="$emit('close')">关闭</n-button>
           <n-button type="primary" :disabled="!canSave" :loading="saving" @click="emit('save-requested')">保存</n-button>
@@ -264,8 +264,8 @@ import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 import type { JsonValue, RowData, EditContext } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
-import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import { normalizeSystemSpec } from '@/domain/editors/lib/normalize';
+import { createSystemSpec } from '@/domain/editors/spec-construction';
 import { SYSTEM_STRUCTURED_FIELD_KEYS } from '@/domain/editors/lib/system-fields';
 import { SYSTEM_TYPES } from '@/domain/editors/lib/game-spec-enums';
 import { useObjectField } from '@/app/composables/editors/use-object-field';
@@ -282,7 +282,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: []; 'save-requested': []; 'draft-changed': [system: RowData]; 'load-external': [] }>();
 
-const localSystem = ref<RowData>(normalizeSystemSpec(props.system || { id: props.systemId, type: 'STAT_MOD' }));
+const localSystem = ref<RowData>(normalizeSystemSpec(props.system || createSystemSpec(props.systemId)));
 const { commitBefore } = useFieldInputActions();
 const expandedSections = ref(['basic']);
 const { bindObjectField } = useObjectField(localSystem, { onCommit: commitEdit });
@@ -371,7 +371,7 @@ const structuredKnownKeys = [...SYSTEM_STRUCTURED_FIELD_KEYS];
 const extraFields = computed<RowData>(() => {
   const extra: RowData = {};
   for (const [key, value] of Object.entries(localSystem.value)) {
-    if (!SYSTEM_STRUCTURED_FIELD_KEYS.has(key) && !isInternalJsonFieldKey(key)) {
+    if (!SYSTEM_STRUCTURED_FIELD_KEYS.has(key)) {
       extra[key] = value;
     }
   }
@@ -381,7 +381,7 @@ const extraFields = computed<RowData>(() => {
 function onExtraUpdate(nextExtra: RowData) {
   const nextSystem: RowData = {};
   for (const [key, value] of Object.entries(localSystem.value)) {
-    if (SYSTEM_STRUCTURED_FIELD_KEYS.has(key) || isInternalJsonFieldKey(key)) {
+    if (SYSTEM_STRUCTURED_FIELD_KEYS.has(key)) {
       nextSystem[key] = value;
     }
   }
@@ -401,7 +401,7 @@ watch(
   () => props.editContext,
   () => {
     if (props.editContext?.handoff === 'save') return;
-    localSystem.value = normalizeSystemSpec(props.system || { id: props.systemId, type: 'STAT_MOD' });
+    localSystem.value = normalizeSystemSpec(props.system || createSystemSpec(props.systemId));
   },
 );
 </script>

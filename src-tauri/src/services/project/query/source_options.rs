@@ -237,8 +237,8 @@ fn source_options_from_rows(
 ) -> AppResult<Vec<crate::models::SourceOption>> {
     let is_id_column = column == "id";
     let mut options = Vec::new();
-    for row in rows.iter().filter(|row| !is_comment_row(&row.row)) {
-        let Some(cell_value) = row.row.get(column).and_then(serde_json::Value::as_str) else {
+    for row in rows.iter().filter(|row| !is_comment_row(&row.data)) {
+        let Some(cell_value) = row.data.get(column).and_then(serde_json::Value::as_str) else {
             continue;
         };
         if cell_value.trim().is_empty() {
@@ -283,7 +283,7 @@ fn source_option_from_row(
             resource_source,
             context.table,
             value,
-            &row.row,
+            &row.data,
             core_data,
             context.session,
         )?
@@ -319,7 +319,7 @@ fn source_option_label_for_row(
             resource_source,
             context.table,
             value,
-            &row.row,
+            &row.data,
             core_data,
             context.session,
         )? && display_name != value
@@ -327,9 +327,9 @@ fn source_option_label_for_row(
             return Ok(format!("{display_name} ({value})"));
         }
         let name = row
-            .row
+            .data
             .get("name")
-            .or_else(|| row.row.get("displayName"))
+            .or_else(|| row.data.get("displayName"))
             .and_then(serde_json::Value::as_str)
             .unwrap_or_default();
         if name.trim().is_empty() || name == value {
@@ -437,7 +437,7 @@ fn add_core_blueprint_package_metadata(
         return Ok(());
     };
     for row in rows {
-        add_blueprint_package_metadata(metadata, &row.row);
+        add_blueprint_package_metadata(metadata, &row.data);
     }
     Ok(())
 }
@@ -448,7 +448,7 @@ fn add_mod_blueprint_package_metadata(
 ) -> AppResult<()> {
     ensure_registered_table_rows(session, CsvTableKey::SpecialItems)?;
     for row in loaded_registered_csv_rows(session, CsvTableKey::SpecialItems)? {
-        add_blueprint_package_metadata(metadata, &row.row);
+        add_blueprint_package_metadata(metadata, &row.data);
     }
     Ok(())
 }

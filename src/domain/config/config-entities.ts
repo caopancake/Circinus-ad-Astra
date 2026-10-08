@@ -2,7 +2,6 @@ import { cell } from '@/shared/lib/starsector';
 import { AppError } from '@/shared/lib/errors';
 import type { IndexedConfigKind, JsonValue, RowData, VariantFile } from '@/shared/types';
 import type { FileSchema } from '@/domain/schema/schema.types';
-import { isSchemaInternalKey } from '@/domain/schema/schema-sections';
 import { aggregateSchemaSources, splitSchemaSources } from '@/domain/schema/schema-sources';
 
 type IndexedConfigLabelAction = 'save' | 'create' | 'delete';
@@ -140,7 +139,7 @@ export function configModInfoEditorModel(modInfo: RowData): RowData {
 
 export function configModInfoSaveData(local: RowData, schema: FileSchema): RowData {
   const split = splitSchemaSources(local, schema);
-  return stripSchemaInternalFields(requireConfigObjectSource(split.file, 'mod_info.json 数据无效')) as RowData;
+  return requireConfigObjectSource(split.file, 'mod_info.json 数据无效');
 }
 
 export function missionIdFromRow(row: RowData): string {
@@ -185,7 +184,7 @@ export function configMissionSaveDraft(localMission: RowData, schema: FileSchema
   return {
     nextId: missionIdFromRow(list),
     list,
-    descriptor: stripSchemaInternalFields(descriptor) as RowData,
+    descriptor,
     text,
   };
 }
@@ -213,7 +212,7 @@ export function configFactionSaveDraft(local: RowData, schema: FileSchema): Conf
   }
   return {
     nextId,
-    file: stripSchemaInternalFields(file) as RowData,
+    file,
   };
 }
 
@@ -252,17 +251,6 @@ export function configEntityRenameContext(currentId: string, nextId: string): { 
 export function trimmedConfigStringField(data: RowData, key: string): string {
   const value = data[key];
   return typeof value === 'string' ? value.trim() : '';
-}
-
-export function stripSchemaInternalFields(value: JsonValue): JsonValue {
-  if (Array.isArray(value)) return value.map(stripSchemaInternalFields);
-  if (!value || typeof value !== 'object') return value;
-  const result: RowData = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (isSchemaInternalKey(key)) continue;
-    result[key] = stripSchemaInternalFields(item);
-  }
-  return result;
 }
 
 function configColorCss(color: JsonValue): string {

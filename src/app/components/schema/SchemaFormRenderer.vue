@@ -40,6 +40,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue';
+import { extraJsonFieldKeys } from '@/shared/lib/json-fields';
 import type { RowData } from '@/shared/types';
 import type { SchemaRuntimeContext } from '@/domain/schema/schema-runtime';
 import type { FileSchema, SectionSchema, SchemaFieldUpdate } from '@/domain/schema/schema.types';
@@ -48,7 +49,6 @@ import {
   getSchemaFieldKeys,
   getSchemaSections,
   isMultiSourceSchema,
-  isSchemaInternalKey,
   schemaSectionCollapseIdentity,
 } from '@/domain/schema/schema-sections';
 import { applySchemaFieldUpdate, getNestedValue, setNestedValue } from '@/domain/schema/schema-values';
@@ -86,9 +86,7 @@ const extraKnownKeys = computed<string[]>(() => {
   return schemaKeys.value.filter((key) => key.startsWith(`${sourceId}.`)).map((key) => key.slice(sourceId.length + 1));
 });
 
-const extraKeys = computed<string[]>(() =>
-  Object.keys(extraModelValue.value).filter((key) => !isSchemaInternalKey(key) && !extraKnownKeys.value.includes(key)),
-);
+const extraKeys = computed<string[]>(() => extraJsonFieldKeys(extraModelValue.value, extraKnownKeys.value));
 
 const collapsedSections = reactive(new Set<string>());
 

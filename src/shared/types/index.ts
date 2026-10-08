@@ -11,6 +11,7 @@ export type { FileHistoryItem, FileSaveHistoryEntry, FileHistorySnapshot } from 
 export type {
   AssociatedFileChange,
   AssociatedSpecChange,
+  AssociatedSpecCreateParams,
   AssociatedSpecChangeAction,
   CsvRowKeyMapping,
   CsvRowPatch,
@@ -39,6 +40,8 @@ export type {
 } from '@/shared/types/config-entity.types';
 export type {
   CsvDirtyRow,
+  CsvDraftRow,
+  CsvRowRecord,
   CsvCellTarget,
   CsvTableTarget,
   CsvFactionFilter,
@@ -52,7 +55,7 @@ export type {
   CsvWindowRow,
   TableKey,
 } from '@/shared/types/tables.types';
-export { CSV_DEFAULT_FACTION_ID, CSV_FACTION_FIELD, CSV_FACTION_FILTER_ALL, TABLE_KEYS } from '@/shared/types/tables.types';
+export { CSV_DEFAULT_FACTION_ID, CSV_FACTION_FILTER_ALL, TABLE_KEYS } from '@/shared/types/tables.types';
 export type {
   DiscoveredField,
   DiscoveredFieldType,
@@ -87,7 +90,15 @@ export type {
   TableSummary,
 } from '@/shared/types/query.types';
 export { RESOURCE_OWNER_KINDS, RESOURCE_SOURCES } from '@/shared/types/query.types';
-export type { EditableFileData, EditorKind, EditorResourceKind, EditorSpecKind, EditorWindowKind } from '@/shared/types/editor.types';
+export type {
+  EditableFileData,
+  EditorKind,
+  EditorResourceKind,
+  EditorSpecKind,
+  EditorWindowKind,
+  WeaponSpecClass,
+  ProjectileSpecClass,
+} from '@/shared/types/editor.types';
 export { EDITOR_KINDS, EDITOR_WINDOW_KINDS } from '@/shared/types/editor.types';
 export type {
   ConfigView,

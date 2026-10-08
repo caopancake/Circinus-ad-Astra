@@ -1,4 +1,3 @@
-import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import type { TableKey } from '@/shared/types';
 
 export const TABLE_COLUMNS: Record<TableKey, string[]> = {
@@ -152,7 +151,7 @@ export function getColumns(tab: TableKey, headers: string[]): string[] {
     }
   }
   for (const col of headers) {
-    if (col && !isInternalJsonFieldKey(col) && !seen.has(col)) {
+    if (col && !seen.has(col)) {
       result.push(col);
       seen.add(col);
     }

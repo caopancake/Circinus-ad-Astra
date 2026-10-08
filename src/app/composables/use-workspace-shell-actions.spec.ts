@@ -1,4 +1,9 @@
 import { createPinia, setActivePinia } from 'pinia';
+import { flushPromises, mount } from '@vue/test-utils';
+import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
+import type { AssociatedSpecChange, ChooseOptions } from '@/shared/types';
+import { NSelect } from 'naive-ui/es/select';
+import { NCheckbox } from 'naive-ui/es/checkbox';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppFeedback } from '@/shared/types';
 
@@ -210,6 +215,40 @@ describe('useWorkspaceShellActions', () => {
     await actions.saveChanges();
     expect(mocks.saveActiveTableChanges).toHaveBeenCalledWith({ manifest: null, selectAssociatedSpecs: expect.any(Function), feedback });
     expect(feedback.success).toHaveBeenCalledWith('当前 CSV 表已保存');
+  });
+
+  it('returns the adjusted weapon creation branch and selected actions from the confirmation', async () => {
+    mocks.saveActiveTableChanges.mockResolvedValue('noop');
+    const feedback = feedbackStub();
+    const actions = useWorkspaceShellActions(feedback);
+    await actions.saveChanges();
+    const select = mocks.saveActiveTableChanges.mock.calls[0]![0].selectAssociatedSpecs as (
+      choices: AssociatedSpecCandidate[],
+    ) => Promise<AssociatedSpecChange[] | null>;
+    (feedback.choose as ReturnType<typeof vi.fn>).mockImplementationOnce(async (options: ChooseOptions) => {
+      const content = options.content as () => import('vue').VNode;
+      const wrapper = mount({ render: content });
+      try {
+        expect(wrapper.text()).toContain('pulse 在原版中无法正常处理');
+        wrapper.findComponent(NSelect).vm.$emit('update:value', 'beam');
+        wrapper.findAllComponents(NCheckbox)[1]!.vm.$emit('update:checked', false);
+        await flushPromises();
+        expect(wrapper.findComponent(NSelect).props('value')).toBe('beam');
+      } finally {
+        wrapper.unmount();
+      }
+      return 'save';
+    });
+    const chosen = await select([
+      {
+        key: 'create',
+        table: 'weapons',
+        label: '创建武器',
+        change: { action: 'create', create: { kind: 'weapon', id: 'weapon', specClass: 'projectile' } },
+      },
+      { key: 'delete', table: 'weapons', label: '删除武器', change: { action: 'delete', id: 'old' } },
+    ]);
+    expect(chosen).toEqual([{ action: 'create', create: { kind: 'weapon', id: 'weapon', specClass: 'beam' } }]);
   });
 
   it('informs when there is nothing to save', async () => {

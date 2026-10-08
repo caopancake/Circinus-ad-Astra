@@ -66,14 +66,7 @@ export function useCsvTableViewModel() {
   }
 
   const gridModel = computed(() =>
-    createCsvGridModel(
-      tables.currentTab,
-      tables.visibleColumns,
-      tables.filteredRows,
-      tables.filteredRowCount,
-      tables.tableRowKey,
-      loadedSourceOptions.value,
-    ),
+    createCsvGridModel(tables.currentTab, tables.visibleColumns, tables.filteredRows, tables.filteredRowCount, loadedSourceOptions.value),
   );
   const sourceIndex = computed(() => gridModel.value.sourceIndex);
 

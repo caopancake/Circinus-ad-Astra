@@ -81,6 +81,30 @@ describe('WeaponEditor', () => {
     expect(last.type).toBe('ENERGY');
   });
 
+  it('switches a pulse draft to an allowed branch and records one canvas undo action', async () => {
+    const editor = mountEditor({ id: 'railgun', specClass: 'pulse', type: 'ENERGY', custom: { _slot: 'keep' } });
+    await editor.setProps({ editContext: { targetKey: 'weapon', baselineGeneration: 1, handoff: 'load' } });
+    expect(editor.text()).toContain('pulse 在原版中无法正常处理');
+    const type = editor.findAll('select')[0]!;
+    expect(type.findAll('option').map((option) => option.text())).toEqual(['projectile', 'beam']);
+    await type.setValue(JSON.stringify('beam'));
+    await vi.waitFor(() =>
+      expect(editor.emitted('draft-changed')?.at(-1)?.[0]).toMatchObject({
+        specClass: 'beam',
+        textureType: 'SMOOTH',
+        custom: { _slot: 'keep' },
+      }),
+    );
+    editor.get('.editor-window').element.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+    await vi.waitFor(() =>
+      expect(editor.emitted('draft-changed')?.at(-1)?.[0]).toMatchObject({ specClass: 'pulse', custom: { _slot: 'keep' } }),
+    );
+    const count = editor.emitted('draft-changed')!.length;
+    editor.get('.editor-window').element.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+    await editor.vm.$nextTick();
+    expect(editor.emitted('draft-changed')).toHaveLength(count);
+  });
+
   it('renders the weapon canvas and barrel structure for projectile weapons', () => {
     const editor = mountEditor({ id: 'railgun', specClass: 'projectile', type: 'BALLISTIC' });
     expect(editor.find('canvas.editor-canvas').exists()).toBe(true);

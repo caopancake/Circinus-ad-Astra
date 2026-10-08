@@ -16,7 +16,7 @@
               ><n-select
                 :value="localProjectile.specClass"
                 :options="toOptions(['projectile', 'missile'])"
-                @update:value="setField('specClass', $event)"
+                @update:value="onSpecClassChange"
               />
             </div>
           </n-collapse-item>
@@ -127,7 +127,7 @@
           </n-collapse-item>
         </n-collapse>
       </div>
-      <EditorFooter note="结构化 JSON 写回，内部字段会被后端剔除。">
+      <EditorFooter note="结构化 JSON 写回，完整保留业务字段。">
         <template #actions>
           <n-button @click="$emit('close')">关闭</n-button>
           <n-button type="primary" :disabled="!canSave" :loading="saving" @click="emit('save-requested')">保存</n-button>
@@ -146,9 +146,10 @@ import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
 import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 import { useEditActionContext } from '@/app/composables/use-edit-action-context';
-import type { RowData, EditContext } from '@/shared/types';
+import type { RowData, EditContext, ProjectileSpecClass } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
 import { entryKey } from '@/shared/lib/entry-keys';
+import { changeProjectileSpecClass, createProjectileSpec } from '@/domain/editors/spec-construction';
 import { normalizeProjectileSpec } from '@/domain/editors/lib/normalize';
 import { MISSILE_TYPES, PROJECTILE_SPAWN_TYPES } from '@/domain/editors/lib/game-spec-enums';
 import { createProjectileEngineSlot } from '@/domain/editors/lib/projectile-fields';
@@ -173,7 +174,7 @@ const emit = defineEmits<{
   'draft-changed': [projectile: RowData];
   'load-external': [];
 }>();
-const localProjectile = ref<RowData>(normalizeProjectileSpec(props.projectile || { id: props.projectileId, specClass: 'projectile' }));
+const localProjectile = ref<RowData>(normalizeProjectileSpec(props.projectile || createProjectileSpec(props.projectileId)));
 const { commitBefore } = useFieldInputActions();
 const expandedSections = ref(['basic']);
 const { bindObjectField } = useObjectField(localProjectile, { onCommit: commitEdit });
@@ -203,15 +204,14 @@ function commitEdit() {
   emit('draft-changed', localProjectile.value);
 }
 function setField(key: string, value: RowData[string]) {
-  if (key === 'specClass') {
-    void commitBefore(() => {
-      localProjectile.value[key] = value;
-      commitEdit();
-    });
-    return;
-  }
   localProjectile.value[key] = value;
   commitEdit();
+}
+function onSpecClassChange(specClass: ProjectileSpecClass) {
+  void commitBefore(() => {
+    localProjectile.value = changeProjectileSpecClass(localProjectile.value, specClass);
+    commitEdit();
+  });
 }
 function setArray(key: string, idx: number, value: number | null) {
   const v = arr(localProjectile.value[key], [0, 0]);

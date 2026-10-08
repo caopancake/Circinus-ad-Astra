@@ -1,5 +1,5 @@
-import type { RowData } from '@/shared/types';
+import type { CsvDraftRow } from '@/shared/types';
 
-export function isLoadedCsvTableRow(row: RowData | null | undefined): row is RowData {
+export function isLoadedCsvTableRow(row: CsvDraftRow | null | undefined): row is CsvDraftRow {
   return row !== null && row !== undefined;
 }

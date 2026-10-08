@@ -117,7 +117,7 @@ describe('DetailPane', () => {
       header: ['id', 'name'],
       totalRows: 1,
       filteredRows: 1,
-      rows: [{ rowKey: 'key-XY', row: { id: 'XY', name: 'Ruler' } }],
+      rows: [{ rowKey: 'key-XY', sourceRowIndex: 0, factionId: null, data: { id: 'XY', name: 'Ruler' } }],
     } as never;
     tables.applyTableWindow(window);
     tables.selectRowByKey('key-XY');
@@ -143,7 +143,7 @@ describe('DetailPane', () => {
       header: ['id'],
       totalRows: 1,
       filteredRows: 1,
-      rows: [{ rowKey: 'key-XY', row: { id: 'XY' } }],
+      rows: [{ rowKey: 'key-XY', sourceRowIndex: 0, factionId: null, data: { id: 'XY' } }],
     } as never;
     tables.applyTableWindow(window);
     tables.selectRowByKey('key-XY');
@@ -164,7 +164,7 @@ describe('DetailPane', () => {
       header: ['id'],
       totalRows: 1,
       filteredRows: 1,
-      rows: [{ rowKey: 'key-c', row: { id: '#note' } }],
+      rows: [{ rowKey: 'key-c', sourceRowIndex: 0, factionId: null, data: { id: '#note' } }],
     } as never;
     tables.applyTableWindow(window);
     tables.selectRowByKey('key-c');

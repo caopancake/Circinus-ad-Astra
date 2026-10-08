@@ -26,18 +26,18 @@
   </tbody>
 </template>
 <script setup lang="ts">
-import type { CsvGridRowSlot, CsvWindowRow } from '@/shared/types';
+import type { CsvGridRowSlot, CsvRowRecord } from '@/shared/types';
 import type { CsvGridColumn } from '@/domain/tables/csv-grid-model';
 import type { CsvSourceIndex } from '@/domain/tables/csv-source-options';
 import CsvGridRow from '@/app/components/tables/CsvGridRow.vue';
 import type { RowData } from '@/shared/types';
 
 const renderKeys = new WeakMap<RowData, string>();
-function rowRenderKey(row: CsvWindowRow) {
-  let key = renderKeys.get(row.row);
+function rowRenderKey(row: CsvRowRecord) {
+  let key = renderKeys.get(row.data);
   if (key === undefined) {
     key = row.rowKey;
-    renderKeys.set(row.row, key);
+    renderKeys.set(row.data, key);
   }
   return key;
 }
@@ -54,7 +54,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  'activate-cell': [row: CsvWindowRow, column: CsvGridColumn, event: MouseEvent];
+  'activate-cell': [row: CsvRowRecord, column: CsvGridColumn, event: MouseEvent];
   'close-active-cell': [];
   'select-row': [rowKey: string, event: MouseEvent];
 }>();
@@ -63,7 +63,7 @@ function selectRow(rowKey: string, event: MouseEvent) {
   emit('select-row', rowKey, event);
 }
 
-function forwardActivateCell(row: CsvWindowRow, column: CsvGridColumn, event: MouseEvent) {
+function forwardActivateCell(row: CsvRowRecord, column: CsvGridColumn, event: MouseEvent) {
   emit('activate-cell', row, column, event);
 }
 </script>

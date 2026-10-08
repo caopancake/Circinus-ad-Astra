@@ -49,8 +49,8 @@
                 <label>id</label><n-input :value="weaponId" disabled /> <label>specClass</label
                 ><n-select
                   :value="localWeapon.specClass"
-                  :options="toOptions(['projectile', 'beam'])"
-                  @update:value="setField('specClass', $event)"
+                  :options="toOptions([...WEAPON_SPEC_CLASSES])"
+                  @update:value="onSpecClassChange"
                 />
                 <label>type</label
                 ><n-select
@@ -78,6 +78,7 @@
                   @update:value="setField('size', $event)"
                 />
               </div>
+              <p>{{ WEAPON_SPEC_CLASS_NOTE }}</p>
             </n-collapse-item>
             <n-collapse-item title="炮塔贴图" name="turretSprites">
               <div class="form-grid">
@@ -262,8 +263,9 @@ import EditorInspector from '@/app/components/editors/common/EditorInspector.vue
 import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
 import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
-import type { RowData, EditContext } from '@/shared/types';
+import type { RowData, EditContext, WeaponSpecClass } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
+import { changeWeaponSpecClass, WEAPON_SPEC_CLASSES, WEAPON_SPEC_CLASS_NOTE } from '@/domain/editors/spec-construction';
 import { normalizeWeaponSpec } from '@/domain/editors/lib/normalize';
 import { pointAngleScreen } from '@/domain/editors/lib/geometry';
 import {
@@ -441,15 +443,17 @@ function setView(v: WeaponViewMode) {
   draw();
 }
 function setField(key: string, value: RowData[string]) {
-  if (key === 'specClass') {
-    void commitBefore(() => {
-      localWeapon.value[key] = value;
-      commitEdit();
-    });
-    return;
-  }
   localWeapon.value[key] = value;
   commitEdit();
+}
+function onSpecClassChange(specClass: WeaponSpecClass) {
+  void commitBefore(() =>
+    canvas.runAction(() => {
+      beginEdit();
+      localWeapon.value = changeWeaponSpecClass(localWeapon.value, specClass);
+      commitEdit();
+    }),
+  );
 }
 function selectBarrel(mode: WeaponViewMode, index: number) {
   viewMode.value = mode;

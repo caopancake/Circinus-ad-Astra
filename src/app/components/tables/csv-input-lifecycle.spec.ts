@@ -47,11 +47,11 @@ function mountTable() {
     start: 0,
     filteredRows: 1,
     totalRows: 1,
-    rows: [{ rowKey: 'ships:new:0', rowIndex: 0, row: { width: '1' } }],
+    rows: [{ rowKey: 'ships:new:0', sourceRowIndex: 0, factionId: null, data: { width: '1' } }],
   });
   const inputs = tables.getTableInputs(root, 'ships');
   const grid = computed(() => {
-    const model = createCsvGridModel('ships', ['width'], tables.rows, 1, tables.tableRowKey);
+    const model = createCsvGridModel('ships', ['width'], tables.rows, 1);
     model.columns[0]!.schema = { key: 'width', control: 'number' };
     return model;
   });
@@ -82,16 +82,16 @@ describe('CSV input, target and row lifecycle', () => {
     const input = wrapper.get('input.csv-cell-input');
     await input.setValue('0012');
     expect(useDraftSessionsStore().hasUnsavedWorkForMod(root)).toBe(true);
-    expect(tables.rows[0]?.width).toBe('1');
+    expect(tables.rows[0]?.data.width).toBe('1');
     tables.applySavedRowKeyMapForMod(root, 'ships', [{ previousKey: 'ships:new:0', nextKey: 'ships:row:9', rowIndex: 9 }]);
     await nextTick();
     expect(wrapper.get('input.csv-cell-input').element).toBe(input.element);
     expect((input.element as HTMLInputElement).value).toBe('0012');
     await inputs.commit();
-    expect(tables.rows[0]?._rowKey).toBe('ships:row:9');
-    expect(tables.rows[0]?.width).toBe('0012');
+    expect(tables.rows[0]?.rowKey).toBe('ships:row:9');
+    expect(tables.rows[0]?.data.width).toBe('0012');
     expect(tables.undoCurrentTableEdit()).toBeTruthy();
-    expect(tables.rows[0]?.width).toBe('1');
+    expect(tables.rows[0]?.data.width).toBe('1');
     expect(useTablesEditHistoryStore().canUndoCsvEdit(root, 'ships')).toBe(false);
     wrapper.unmount();
   });
@@ -108,13 +108,13 @@ describe('CSV input, target and row lifecycle', () => {
       start: 0,
       filteredRows: 1,
       totalRows: 1,
-      rows: [{ rowKey: 'ships:new:0', rowIndex: 0, row: { width: 'external' } }],
+      rows: [{ rowKey: 'ships:new:0', sourceRowIndex: 0, factionId: null, data: { width: 'external' } }],
     });
-    expect(tables.rows[0]?.width).toBe('1');
+    expect(tables.rows[0]?.data.width).toBe('1');
     expect(tables.hasCurrentTableExternalUpdate).toBe(true);
     await wrapper.get('.table-panel').trigger('scroll');
     await nextTick();
-    expect(tables.rows[0]?.width).toBe('later');
+    expect(tables.rows[0]?.data.width).toBe('later');
     expect(tables.editing).toBeNull();
     expect(inputs.dirty.value).toBe(false);
     expect(wrapper.find('input.csv-cell-input').exists()).toBe(false);

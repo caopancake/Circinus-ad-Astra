@@ -5,8 +5,6 @@ import { writeCsvPatch } from '@/services/write.service';
 import { useTablesStore } from '@/stores/tables.store';
 import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
 import { useProjectStore } from '@/stores/project.store';
-import { resolveTableRowKey } from '@/domain/tables/table-row-key';
-import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import { isLoadedCsvTableRow } from '@/domain/tables/csv-table-rows';
 import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
@@ -78,7 +76,7 @@ async function saveTarget(target: CapturedTableSaveTarget, options: TableSaveOpt
   const submittedHistory = csvEditHistory.captureSaveHistory(modRoot, table);
   const patches = buildCurrentTablePatches(state, table);
   const baseVersions = deepClone(state.baseVersions[table]);
-  const candidates = deepClone(getAssociatedSpecCandidates(state, table, manifest.associatedSpecTables, resolveTableRowKey));
+  const candidates = deepClone(getAssociatedSpecCandidates(state, table, manifest.associatedSpecTables));
   const associatedSpecs = candidates.length > 0 ? await options.selectAssociatedSpecs(candidates) : [];
   if (associatedSpecs === null) return 'cancelled';
   if (!isTableSaveTargetCurrent(target)) return 'noop';
@@ -125,10 +123,8 @@ function buildCurrentTablePatches(state: ModTableState, table: TableKey): CsvRow
   const dirty = state.dirty[table] ?? {};
   return Object.entries(dirty).map(([rowKey, changes]) => {
     if (isCsvDeletedRow(changes)) return { rowKey, action: 'delete', row: {} };
-    const row = state.tables[table].find(
-      (candidate, index) => isLoadedCsvTableRow(candidate) && resolveTableRowKey(table, candidate, index) === rowKey,
-    );
-    const cleanRow = deepClone(Object.fromEntries(Object.entries(row ?? {}).filter(([key]) => !isInternalJsonFieldKey(key))));
-    return { rowKey, action: 'upsert', row: cleanRow, ...(typeof row?._insertAt === 'number' ? { insertAt: row._insertAt } : {}) };
+    const row = state.tables[table].find((candidate) => isLoadedCsvTableRow(candidate) && candidate.rowKey === rowKey)!;
+    const cleanRow = deepClone(row.data);
+    return { rowKey, action: 'upsert', row: cleanRow, ...(row.insertAt !== null ? { insertAt: row.insertAt } : {}) };
   });
 }

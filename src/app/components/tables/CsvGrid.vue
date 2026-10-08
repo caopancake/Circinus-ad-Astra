@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue';
-import type { CsvGridRowSlot, CsvWindowRow, ModTableState } from '@/shared/types';
+import type { CsvGridRowSlot, CsvRowRecord, ModTableState } from '@/shared/types';
 import type { CsvGridColumn, CsvGridModel } from '@/domain/tables/csv-grid-model';
 import { useCsvGridViewport } from '@/app/composables/tables/use-csv-grid-viewport';
 import CsvGridBody from '@/app/components/tables/CsvGridBody.vue';
@@ -81,7 +81,7 @@ function handleScroll(event: Event) {
   });
 }
 
-function activateCell(row: CsvWindowRow, column: CsvGridColumn) {
+function activateCell(row: CsvRowRecord, column: CsvGridColumn) {
   performanceLogger.measure('frontend.csvGrid.activateCell', { column: column.key, rowKey: row.rowKey }, () => {
     void commitBefore(() => {
       forwardSelectRow(row.rowKey);

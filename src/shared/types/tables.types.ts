@@ -32,7 +32,6 @@ export interface CsvCellTarget extends CsvTableTarget {
   column: string;
 }
 
-export const CSV_FACTION_FIELD = '_faction';
 export const CSV_DEFAULT_FACTION_ID = 'other';
 export const CSV_FACTION_FILTER_ALL = 'all';
 
@@ -40,7 +39,18 @@ export type CsvFactionFilter = { kind: 'all' } | { kind: 'faction'; factionId: s
 
 export type CsvDirtyRow = { action: 'upsert'; cells: Record<string, string> } | { action: 'delete' };
 
-export type CsvTableRows = Array<RowData | null>;
+export interface CsvRowRecord {
+  rowKey: string;
+  data: RowData;
+  factionId: string | null;
+}
+
+export interface CsvDraftRow extends CsvRowRecord {
+  sourceRowIndex: number | null;
+  insertAt: number | null;
+}
+
+export type CsvTableRows = Array<CsvDraftRow | null>;
 
 export interface CsvTableWindow {
   baseVersions: import('@/shared/types/write.types').FileVersion[];
@@ -52,10 +62,8 @@ export interface CsvTableWindow {
   rows: CsvWindowRow[];
 }
 
-export interface CsvWindowRow {
-  rowKey: string;
-  rowIndex: number;
-  row: RowData;
+export interface CsvWindowRow extends CsvRowRecord {
+  sourceRowIndex: number;
 }
 
 export interface CsvPlaceholderRowSlot {
@@ -64,8 +72,9 @@ export interface CsvPlaceholderRowSlot {
   slotKey: string;
 }
 
-export interface CsvLoadedRowSlot extends CsvWindowRow {
+export interface CsvLoadedRowSlot extends CsvDraftRow {
   kind: 'row';
+  rowIndex: number;
 }
 
 export type CsvGridRowSlot = CsvLoadedRowSlot | CsvPlaceholderRowSlot;
