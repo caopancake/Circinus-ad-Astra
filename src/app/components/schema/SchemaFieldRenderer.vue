@@ -2,7 +2,7 @@
   <div class="schema-field" :class="{ 'nested-row': isNested }">
     <span class="field-label" :title="fieldTitle">{{ field.label }}</span>
     <div class="field-control">
-      <template v-if="settings.isPlainEditMode">
+      <template v-if="plainMode">
         <n-input
           v-if="field.type === 'string'"
           :value="strVal"
@@ -10,7 +10,7 @@
           :autosize="stringTextareaAutosize"
           size="small"
           :disabled="field.editable === false"
-          @update:value="emit('update', $event)"
+          @update:value="emitValue($event)"
         />
         <n-input
           v-else-if="field.type === 'text'"
@@ -18,48 +18,35 @@
           type="textarea"
           :autosize="{ minRows: 2, maxRows: 6 }"
           size="small"
-          @update:value="emit('update', $event)"
+          @update:value="emitValue($event)"
         />
-        <n-input
-          v-else-if="field.type === 'integer'"
-          :value="plainNumberText"
-          size="small"
-          :disabled="field.editable === false"
-          @update:value="emitPlainNumber($event, true)"
-        />
-        <n-input
-          v-else-if="field.type === 'float'"
-          :value="plainNumberText"
-          size="small"
-          :disabled="field.editable === false"
-          @update:value="emitPlainNumber($event, false)"
-        />
-        <n-input
-          v-else-if="field.type === 'boolean'"
-          :value="plainBooleanText"
-          size="small"
-          :disabled="field.editable === false"
-          @update:value="emitPlainBoolean"
+        <SchemaScalarInput
+          v-else-if="field.type === 'integer' || field.type === 'float' || field.type === 'boolean'"
+          :field="field"
+          :value="props.value"
+          :input-key="fieldInputKey"
+          @update="emit('update', $event)"
         />
         <n-input
           v-else-if="field.type === 'enum'"
           :value="strVal"
           size="small"
           :disabled="field.editable === false"
-          @update:value="emit('update', $event)"
+          @update:value="emitValue($event)"
         />
         <JsonValueInput
           v-else-if="field.type === 'color-rgb' || field.type === 'color-rgba'"
           :value="props.value"
           :label="field.label"
+          :input-key="fieldInputKey"
           shape="array"
-          @update="emit('update', $event)"
+          @update="emitValue($event)"
         />
         <n-input
           v-else-if="field.type === 'path-image' || field.type === 'path'"
           :value="strVal"
           size="small"
-          @update:value="emit('update', $event)"
+          @update:value="emitValue($event)"
         />
         <n-input
           v-else-if="field.type === 'string-array'"
@@ -77,10 +64,18 @@
           v-else-if="field.type === 'key-value' || field.type === 'object' || field.type === 'array' || field.type === 'array-of-object'"
           :value="props.value"
           :label="field.label"
+          :input-key="fieldInputKey"
           :shape="jsonShape"
-          @update="emit('update', $event)"
+          @update="emitValue($event)"
         />
-        <JsonValueInput v-else :value="props.value" :label="field.label" shape="json" @update="emit('update', $event)" />
+        <JsonValueInput
+          v-else
+          :value="props.value"
+          :label="field.label"
+          :input-key="fieldInputKey"
+          shape="json"
+          @update="emitValue($event)"
+        />
       </template>
 
       <template v-else>
@@ -91,7 +86,7 @@
           :autosize="stringInputAutosize"
           size="small"
           :disabled="field.editable === false"
-          @update:value="emit('update', $event)"
+          @update:value="emitValue($event)"
         />
 
         <n-input
@@ -100,7 +95,7 @@
           type="textarea"
           :autosize="{ minRows: 2, maxRows: 6 }"
           size="small"
-          @update:value="emit('update', $event)"
+          @update:value="emitValue($event)"
         />
 
         <n-input-number
@@ -130,7 +125,7 @@
           class="tool-switch field-switch"
           :value="boolVal"
           size="small"
-          @update:value="emit('update', $event)"
+          @update:value="emitValue($event)"
         />
 
         <n-select
@@ -143,7 +138,7 @@
           clearable
           @mousedown.capture="closeOpenSelectOnFieldClick"
           @update:show="handleSelectShowUpdate"
-          @update:value="emit('update', $event)"
+          @update:value="emitValue($event)"
         />
 
         <ColorPicker
@@ -151,7 +146,9 @@
           :model-value="props.value as JsonValue"
           :channels="field.type === 'color-rgb' ? 'rgb' : 'rgba'"
           :output="field.type === 'color-rgb' ? 'rgb-array' : 'rgba-array'"
-          @update:model-value="emit('update', $event)"
+          :label="field.label"
+          :input-key="fieldInputKey"
+          @update:model-value="emitValue($event)"
         />
 
         <!-- path-image: searchable dropdown + file picker -->
@@ -169,7 +166,7 @@
             class="path-select"
             @mousedown.capture="closeOpenSelectOnFieldClick"
             @update:show="handleSelectShowUpdate"
-            @update:value="emit('update', $event ?? '')"
+            @update:value="emitValue($event ?? '')"
           />
           <n-button class="compact-icon-button" size="small" quaternary title="选择图片文件" @click="pickPathFile({ imageFilter: true })">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -181,7 +178,7 @@
 
         <!-- path: input + file picker (no image dropdown) -->
         <div v-else-if="field.type === 'path'" class="path-field">
-          <n-input :value="strVal" size="small" @update:value="emit('update', $event)" />
+          <n-input :value="strVal" size="small" @update:value="emitValue($event)" />
           <n-button class="compact-icon-button" size="small" quaternary title="选择文件" @click="pickPathFile">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M4 19V5h6l2 2h8v12H4z" />
@@ -203,7 +200,7 @@
           size="small"
           @mousedown.capture="closeOpenSelectOnFieldClick"
           @update:show="handleSelectShowUpdate"
-          @update:value="emit('update', $event)"
+          @update:value="emitValue($event)"
         />
 
         <n-select
@@ -219,7 +216,7 @@
           size="small"
           @mousedown.capture="closeOpenSelectOnFieldClick"
           @update:show="handleSelectShowUpdate"
-          @update:value="emit('update', wrapTags($event))"
+          @update:value="emitValue(wrapTags($event))"
         />
 
         <div v-else-if="field.type === 'key-value'" class="key-value-editor" :class="{ 'reference-key-value': isReferenceKeyValue }">
@@ -243,6 +240,7 @@
               :value="row.entry.val"
               :runtime-context="runtimeContext"
               :is-nested="true"
+              :input-key="`${fieldInputKey}/${row.rowId}`"
               @update="updateKvValue(idx, $event)"
             />
             <n-input
@@ -270,6 +268,7 @@
             :value="getSubValue(sub.key)"
             :runtime-context="runtimeContext"
             :is-nested="true"
+            :input-key="`${fieldInputKey}/${sub.key}`"
             @update="onSubUpdate(sub.key, $event)"
           />
         </div>
@@ -285,10 +284,11 @@
               </n-button>
             </div>
             <SchemaFieldRenderer
-              :field="field.item"
+              :field="{ ...field.item, required: true }"
               :value="genericArrayItems[idx]"
               :runtime-context="runtimeContext"
               :is-nested="true"
+              :input-key="`${fieldInputKey}/${genericRowIds[idx]}`"
               @update="updateGenericArrayItem(idx, $event)"
             />
           </div>
@@ -312,13 +312,21 @@
               :value="getArrayItemValue(idx, sub.key)"
               :runtime-context="runtimeContext"
               :is-nested="true"
+              :input-key="`${fieldInputKey}/${arrayRowIds[idx]}/${sub.key}`"
               @update="onArrayItemUpdate(idx, sub.key, $event)"
             />
           </div>
           <n-button size="tiny" @click="addArrayItem">+ 添加项</n-button>
         </div>
 
-        <JsonValueInput v-else :value="props.value" :label="field.label" shape="json" @update="emit('update', $event)" />
+        <JsonValueInput
+          v-else
+          :value="props.value"
+          :label="field.label"
+          :input-key="fieldInputKey"
+          shape="json"
+          @update="emitValue($event)"
+        />
       </template>
 
       <!-- Warning text -->
@@ -336,21 +344,21 @@ import { useSchemaPathPicker } from '@/app/composables/editors/use-schema-path-p
 import { useSchemaSourceOptions } from '@/app/composables/editors/use-schema-source-options';
 import type { SchemaRuntimeContext } from '@/domain/schema/schema-runtime';
 import type { FieldSchema } from '@/domain/schema/schema.types';
+import type { SchemaFieldUpdate } from '@/domain/schema/schema.types';
 import {
   appendSchemaKeyValueEntry,
+  applySchemaFieldUpdate,
+  convertSchemaScalarInput,
   formatSchemaCommaList,
   formatSchemaKeyValueText,
   parseSchemaControlNumber,
   parseSchemaCommaList,
   parseSchemaKeyValueText,
-  parseSchemaPlainBoolean,
-  parseSchemaPlainNumber,
   schemaArrayStringValues,
   schemaKeyValueEntries,
   schemaKeyValueOutput,
   schemaNumberControlValue,
   schemaPathDisplayLabel,
-  schemaPlainBooleanText,
   schemaStringValue,
   schemaTagValues,
   type SchemaKeyValueEntry,
@@ -367,7 +375,9 @@ import ColorPicker from '@/shared/ui/ColorPicker.vue';
 import { useEditorRowIdentities } from '@/app/composables/editors/use-editor-row-identities';
 import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
 import { useCoreGraphics } from '@/app/composables/use-core-assets';
-import { useSettingsStore } from '@/stores/settings.store';
+import SchemaScalarInput from '@/app/components/schema/SchemaScalarInput.vue';
+import { useInputEditMode } from '@/app/composables/use-input-edit-mode';
+import { useFieldInputs } from '@/shared/runtime/field-inputs';
 import { isCsvSource } from '@/domain/tables/csv-source-options';
 import { useSchemaSelectMedia } from '@/app/composables/tables/use-schema-select-media';
 
@@ -376,11 +386,16 @@ const props = defineProps<{
   value: unknown;
   runtimeContext?: SchemaRuntimeContext | null;
   isNested?: boolean;
+  inputKey?: string;
 }>();
 
 const emit = defineEmits<{
-  update: [value: unknown];
+  update: [update: SchemaFieldUpdate];
 }>();
+
+function emitValue(value: unknown) {
+  emit('update', { kind: 'set', value });
+}
 
 const { graphicsPaths, loadGraphics } = useCoreGraphics();
 watch(
@@ -391,7 +406,10 @@ watch(
   { immediate: true },
 );
 
-const settings = useSettingsStore();
+const mode = useInputEditMode();
+const plainMode = computed(() => mode.value === 'plain');
+const fieldInputs = useFieldInputs();
+const fieldInputKey = computed(() => props.inputKey ?? props.field.key);
 const fieldTitle = computed(() => [props.field.key, props.field.description ?? ''].filter(Boolean).join('\n'));
 const { schemaSelectSprite, ensureSchemaSelectSprites } = useSchemaSelectMedia();
 
@@ -401,8 +419,6 @@ const stringInputType = computed(() => (strVal.value.includes('\n') || strVal.va
 const stringInputAutosize = computed(() => (stringInputType.value === 'textarea' ? stringTextareaAutosize : undefined));
 
 const numVal = computed(() => schemaNumberControlValue(props.value));
-const plainNumberText = computed(() => (props.value === null || props.value === undefined ? '' : String(props.value)));
-const plainBooleanText = computed(() => schemaPlainBooleanText(props.value));
 
 const boolVal = computed(() => props.value === true);
 
@@ -419,24 +435,21 @@ function wrapTags(tags: string[]): unknown {
   return wrapSchemaTagValues(props.value, tags);
 }
 
-function emitPlainNumber(raw: string, integer: boolean) {
-  emit('update', parseSchemaPlainNumber(raw, integer));
-}
-
 function emitControlNumber(value: number | null, integer: boolean) {
-  emit('update', parseSchemaControlNumber(value, integer));
-}
-
-function emitPlainBoolean(raw: string) {
-  emit('update', parseSchemaPlainBoolean(raw));
+  if (value === null) {
+    const converted = convertSchemaScalarInput('', props.field);
+    if (converted.kind !== 'error') emit('update', converted);
+    return;
+  }
+  emitValue(parseSchemaControlNumber(value, integer));
 }
 
 function emitPlainStringArray(raw: string) {
-  emit('update', parseSchemaCommaList(raw));
+  emitValue(parseSchemaCommaList(raw));
 }
 
 function emitPlainTagSelect(raw: string) {
-  emit('update', wrapSchemaTagValues(props.value, parseSchemaCommaList(raw)));
+  emitValue(wrapSchemaTagValues(props.value, parseSchemaCommaList(raw)));
 }
 
 const { sourceOptions } = useSchemaSourceOptions({
@@ -447,7 +460,7 @@ const { sourceOptions } = useSchemaSourceOptions({
 const { pickPathFile } = useSchemaPathPicker({
   pathBase: () => props.field.pathBase,
   runtimeContext: () => props.runtimeContext,
-  setPath: (path) => emit('update', path),
+  setPath: (path) => emitValue(path),
 });
 const isReferenceKeyValue = computed(() => props.field.type === 'key-value' && isCsvSource(props.field.source));
 const selectOpen = ref(false);
@@ -580,10 +593,10 @@ function getSubValue(subKey: string): unknown {
   return undefined;
 }
 
-function onSubUpdate(subKey: string, subValue: unknown) {
+function onSubUpdate(subKey: string, update: SchemaFieldUpdate) {
   const current =
-    props.value && typeof props.value === 'object' && !Array.isArray(props.value) ? (props.value as Record<string, unknown>) : {};
-  emit('update', { ...current, [subKey]: subValue });
+    props.value && typeof props.value === 'object' && !Array.isArray(props.value) ? (props.value as import('@/shared/types').RowData) : {};
+  emitValue(applySchemaFieldUpdate(current, subKey, update));
 }
 
 const arrayItems = computed(() => (Array.isArray(props.value) ? (props.value as Record<string, unknown>[]) : []));
@@ -595,11 +608,11 @@ function getArrayItemValue(idx: number, subKey: string): unknown {
   return item ? item[subKey] : undefined;
 }
 
-function onArrayItemUpdate(idx: number, subKey: string, subValue: unknown) {
+function onArrayItemUpdate(idx: number, subKey: string, update: SchemaFieldUpdate) {
   const items = [...arrayItems.value];
-  items[idx] = { ...items[idx], [subKey]: subValue };
+  items[idx] = applySchemaFieldUpdate(items[idx] as import('@/shared/types').RowData, subKey, update);
   arrayIdentity.commit(items);
-  emit('update', items);
+  emitValue(items);
 }
 
 function addArrayItem() {
@@ -612,14 +625,15 @@ function addArrayItem() {
   }
   items.push(newItem);
   arrayIdentity.commit(items, { kind: 'insert', index: items.length - 1 });
-  emit('update', items);
+  emitValue(items);
 }
 
 function removeArrayItem(idx: number) {
+  fieldInputs?.cancel(`${fieldInputKey.value}/${arrayRowIds.value[idx]}`);
   const items = [...arrayItems.value];
   items.splice(idx, 1);
   arrayIdentity.commit(items, { kind: 'remove', index: idx });
-  emit('update', items);
+  emitValue(items);
 }
 
 const kvEntries = computed<SchemaKeyValueEntry[]>(() => schemaKeyValueEntries(props.value, props.field.format));
@@ -632,7 +646,7 @@ const kvRows = computed(() => kvEntries.value.map((entry, idx) => ({ entry, rowI
 function emitKvUpdate(entries: SchemaKeyValueEntry[], operation?: { kind: 'insert' | 'remove'; index: number }) {
   const output = schemaKeyValueOutput(entries, props.field.format);
   kvIdentity.commit(schemaKeyValueEntries(output, props.field.format), operation);
-  emit('update', output);
+  emitValue(output);
 }
 
 function updateKvKey(idx: number, newKey: string) {
@@ -647,13 +661,18 @@ function updateKvVal(idx: number, newVal: string) {
   emitKvUpdate(entries);
 }
 
-function updateKvValue(idx: number, newVal: unknown) {
+function updateKvValue(idx: number, update: SchemaFieldUpdate) {
+  if (update.kind === 'remove') {
+    removeKvEntry(idx);
+    return;
+  }
   const entries = [...kvEntries.value];
-  entries[idx] = { ...entries[idx]!, val: newVal };
+  entries[idx] = { ...entries[idx]!, val: update.value };
   emitKvUpdate(entries);
 }
 
 function removeKvEntry(idx: number) {
+  fieldInputs?.cancel(`${fieldInputKey.value}/${kvRowIds.value[idx]}`);
   const rowId = kvRowIds.value[idx];
   if (rowId !== undefined) {
     delete kvSelectOpen.value[rowId];
@@ -667,32 +686,37 @@ function removeKvEntry(idx: number) {
 function addKvEntry() {
   const output = appendSchemaKeyValueEntry(kvEntries.value, props.field.format);
   kvIdentity.commit(schemaKeyValueEntries(output, props.field.format), { kind: 'insert', index: kvEntries.value.length });
-  emit('update', output);
+  emitValue(output);
 }
 
 const genericArrayItems = computed(() => (Array.isArray(props.value) ? props.value : []));
 const genericIdentity = useEditorRowIdentities(() => genericArrayItems.value);
 const genericRowIds = genericIdentity.identities;
 
-function updateGenericArrayItem(idx: number, itemValue: unknown) {
+function updateGenericArrayItem(idx: number, update: SchemaFieldUpdate) {
+  if (update.kind === 'remove') {
+    removeGenericArrayItem(idx);
+    return;
+  }
   const items = [...genericArrayItems.value];
-  items[idx] = itemValue;
+  items[idx] = update.value;
   genericIdentity.commit(items);
-  emit('update', items);
+  emitValue(items);
 }
 
 function addGenericArrayItem() {
   const items = [...genericArrayItems.value];
   items.push(props.field.item?.default ?? null);
   genericIdentity.commit(items, { kind: 'insert', index: items.length - 1 });
-  emit('update', items);
+  emitValue(items);
 }
 
 function removeGenericArrayItem(idx: number) {
+  fieldInputs?.cancel(`${fieldInputKey.value}/${genericRowIds.value[idx]}`);
   const items = [...genericArrayItems.value];
   items.splice(idx, 1);
   genericIdentity.commit(items, { kind: 'remove', index: idx });
-  emit('update', items);
+  emitValue(items);
 }
 
 function closeOpenSelectOnFieldClick(event: MouseEvent) {

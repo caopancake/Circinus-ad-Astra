@@ -1,4 +1,3 @@
-import { mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initializeSettingsStore } from '@/stores/settings.store';
@@ -6,6 +5,10 @@ import type { CsvSourceIndex } from '@/domain/tables/csv-source-options';
 import type { CsvGridColumn } from '@/domain/tables/csv-grid-model';
 import CsvGridCellEditor from './CsvGridCellEditor.vue';
 import { editorUiStubs } from '@/test/ui-stubs';
+import { mountCsvInputHost } from '@/test/csv-input-host';
+import { vi } from 'vitest';
+
+vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ choose: vi.fn(), error: vi.fn() }) }));
 
 const SETTINGS = {
   theme: 'light',
@@ -31,6 +34,7 @@ function columnFixture(control: string): CsvGridColumn {
 }
 
 let wrapper: import('@vue/test-utils').VueWrapper | null = null;
+let fixture: ReturnType<typeof mountCsvInputHost>;
 
 afterEach(() => {
   wrapper?.unmount();
@@ -38,33 +42,21 @@ afterEach(() => {
 });
 
 function mountEditor(props: Record<string, unknown>) {
-  wrapper = mount(CsvGridCellEditor, {
-    props: {
+  fixture = mountCsvInputHost(
+    CsvGridCellEditor,
+    {
+      global: { stubs: editorUiStubs },
+      attachTo: document.body,
+    },
+    {
       anchorElement: null,
       row: { rowKey: 'key-0', row: { size: 'MEDIUM' } },
       sourceIndex,
       ...props,
-    } as never,
-    global: {
-      stubs: {
-        ...editorUiStubs,
-        CsvCellPicker: {
-          name: 'CsvCellPicker',
-          props: ['anchor', 'multiple', 'options', 'values'],
-          emits: ['close', 'update'],
-          template: '<div class="picker-stub" />',
-        },
-        CsvCellTextEditor: {
-          name: 'CsvCellTextEditor',
-          props: ['anchor', 'value'],
-          emits: ['close', 'commit'],
-          template: '<div class="text-editor-stub" />',
-        },
-      },
     },
-    attachTo: document.body,
-  });
-  return wrapper!;
+  );
+  wrapper = fixture.host;
+  return fixture.surface;
 }
 
 describe('CsvGridCellEditor', () => {
@@ -78,21 +70,21 @@ describe('CsvGridCellEditor', () => {
     const input = editor.get('input');
     await input.setValue('LARGE');
     await input.trigger('blur');
-    expect(editor.emitted('update-cell')?.[0]).toEqual(['key-0', 'size', 'LARGE']);
+    expect(fixture.updates[0]).toEqual({ target: { ...fixture.target, rowKey: 'key-0', column: 'size' }, value: 'LARGE' });
     expect(editor.emitted('close')).toHaveLength(1);
 
     const editor2 = mountEditor({ column: columnFixture('number') });
     const input2 = editor2.get('input');
     await input2.setValue('SMALL');
     await input2.trigger('keydown', { key: 'Enter' });
-    expect(editor2.emitted('update-cell')?.[0]).toEqual(['key-0', 'size', 'SMALL']);
+    expect(fixture.updates[0]?.value).toBe('SMALL');
   });
 
   it('does not emit when the native value is unchanged', async () => {
     const editor = mountEditor({ column: columnFixture('number') });
     await editor.get('input').setValue('MEDIUM');
     await editor.get('input').trigger('blur');
-    expect(editor.emitted('update-cell')).toBeUndefined();
+    expect(fixture.updates).toEqual([]);
     expect(editor.emitted('close')).toHaveLength(1);
   });
 
@@ -103,7 +95,7 @@ describe('CsvGridCellEditor', () => {
     const input = editor.get('input');
     await input.setValue('changed');
     await input.trigger('blur');
-    expect(editor.emitted('update-cell')?.[0]).toEqual(['key-0', 'size', 'changed']);
+    expect(fixture.updates[0]?.value).toBe('changed');
   });
 
   it('shows the raw value for text controls in smart mode until anchored', () => {
@@ -118,9 +110,9 @@ describe('CsvGridCellEditor', () => {
     await editor.vm.$nextTick();
     const picker = editor.findComponent({ name: 'CsvCellPicker' });
     expect(picker.exists()).toBe(true);
-    picker.vm.$emit('update', ['LARGE']);
+    picker.vm.$emit('commit', ['LARGE']);
     await editor.vm.$nextTick();
-    expect(editor.emitted('update-cell')?.[0]).toEqual(['key-0', 'size', 'LARGE']);
+    expect(fixture.updates[0]?.value).toBe('LARGE');
   });
 
   it('commits through the text editor once anchored', async () => {
@@ -129,14 +121,70 @@ describe('CsvGridCellEditor', () => {
     await editor.vm.$nextTick();
     const textEditor = editor.findComponent({ name: 'CsvCellTextEditor' });
     expect(textEditor.exists()).toBe(true);
+    await textEditor.get('textarea').setValue('committed');
     textEditor.vm.$emit('commit', 'committed');
     await editor.vm.$nextTick();
-    expect(editor.emitted('update-cell')?.[0]).toEqual(['key-0', 'size', 'committed']);
+    expect(fixture.updates[0]?.value).toBe('committed');
   });
 
   it('closes on the escape key', async () => {
     const editor = mountEditor({ column: columnFixture('number') });
     await editor.get('.csv-cell-editor').trigger('keydown', { key: 'Escape' });
     expect(editor.emitted('close')).toHaveLength(1);
+  });
+
+  it('registers native raw input and commits its complete target without blur', async () => {
+    const editor = mountEditor({ column: columnFixture('number') });
+    await editor.get('input').setValue('001.50');
+    expect(fixture.inputs.dirty.value).toBe(true);
+    expect(fixture.updates).toEqual([]);
+    await fixture.inputs.commit();
+    expect(fixture.updates).toEqual([{ target: { ...fixture.target, rowKey: 'key-0', column: 'size' }, value: '001.50' }]);
+    expect(fixture.inputs.dirty.value).toBe(false);
+    await editor.get('input').setValue('later');
+    await editor.get('input').trigger('keydown', { key: 'Escape' });
+    await fixture.inputs.commit();
+    expect(fixture.updates).toHaveLength(1);
+  });
+
+  it('commits an open text overlay through the same input registry', async () => {
+    const editor = mountEditor({ column: columnFixture('text'), anchorElement: document.createElement('div') });
+    await editor.vm.$nextTick();
+    await editor.vm.$nextTick();
+    await editor.get('textarea').setValue('first\nsecond');
+    expect(fixture.inputs.dirty.value).toBe(true);
+    await fixture.inputs.commit();
+    expect(fixture.updates[0]?.value).toBe('first\nsecond');
+    expect(fixture.inputs.dirty.value).toBe(false);
+    wrapper!.unmount();
+    wrapper = null;
+    expect(fixture.inputs.commit()).toBeUndefined();
+  });
+
+  it('commits multiple selections once and cancels the next editing action', async () => {
+    const editor = mountEditor({
+      column: { ...columnFixture('multi'), schema: { key: 'size', control: 'multi', options: [] } },
+      anchorElement: document.createElement('div'),
+    });
+    await editor.vm.$nextTick();
+    await editor.vm.$nextTick();
+    const picker = editor.findComponent({ name: 'CsvCellPicker' });
+    picker.vm.$emit('update', ['A']);
+    await editor.vm.$nextTick();
+    picker.vm.$emit('update', ['A', 'B']);
+    await editor.vm.$nextTick();
+    expect(fixture.updates).toEqual([]);
+    await fixture.inputs.commit();
+    expect(fixture.updates).toHaveLength(1);
+    expect(fixture.updates[0]?.value).toBe('A, B');
+  });
+
+  it('keeps pending input attached to the saved rowKey mapping', async () => {
+    const editor = mountEditor({ column: columnFixture('number') });
+    await editor.get('input').setValue('later');
+    fixture.props.value = { ...fixture.props.value, row: { rowKey: 'ships:row:9', rowIndex: 9, row: { size: 'MEDIUM' } } };
+    await editor.vm.$nextTick();
+    await fixture.inputs.commit();
+    expect(fixture.updates[0]).toEqual({ target: { ...fixture.target, rowKey: 'ships:row:9', column: 'size' }, value: 'later' });
   });
 });

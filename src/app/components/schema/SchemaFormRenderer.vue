@@ -42,7 +42,7 @@
 import { computed, reactive, watch } from 'vue';
 import type { RowData } from '@/shared/types';
 import type { SchemaRuntimeContext } from '@/domain/schema/schema-runtime';
-import type { FileSchema, SectionSchema } from '@/domain/schema/schema.types';
+import type { FileSchema, SectionSchema, SchemaFieldUpdate } from '@/domain/schema/schema.types';
 import {
   getExtraFieldSource,
   getSchemaFieldKeys,
@@ -51,9 +51,12 @@ import {
   isSchemaInternalKey,
   schemaSectionCollapseIdentity,
 } from '@/domain/schema/schema-sections';
-import { getNestedValue, setNestedValue } from '@/domain/schema/schema-values';
+import { applySchemaFieldUpdate, getNestedValue, setNestedValue } from '@/domain/schema/schema-values';
 import SchemaFieldRenderer from '@/app/components/schema/SchemaFieldRenderer.vue';
 import JsonFieldEditor from '@/shared/ui/JsonFieldEditor.vue';
+import { useInputEditMode } from '@/app/composables/use-input-edit-mode';
+
+useInputEditMode();
 
 const props = defineProps<{
   schema: FileSchema;
@@ -110,8 +113,8 @@ function toggleSection(id: string) {
   }
 }
 
-function onFieldUpdate(key: string, value: unknown) {
-  const updated = setNestedValue(modelValue.value, key, value);
+function onFieldUpdate(key: string, update: SchemaFieldUpdate) {
+  const updated = applySchemaFieldUpdate(modelValue.value, key, update);
   modelValue.value = updated;
 }
 

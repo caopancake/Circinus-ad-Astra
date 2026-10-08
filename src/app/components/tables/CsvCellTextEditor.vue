@@ -2,7 +2,8 @@
   <div class="csv-cell-text-editor" :style="editorStyle" tabindex="-1" @mousedown.stop>
     <textarea
       ref="textRef"
-      v-model="draft"
+      :value="value"
+      @input="updateText"
       class="csv-cell-text-input"
       spellcheck="false"
       @keydown.enter.ctrl.prevent="commit"
@@ -16,7 +17,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, useTemplateRef } from 'vue';
+import { useCsvFloatingPanel } from '@/app/composables/tables/use-csv-floating-panel';
 
 const props = defineProps<{
   anchor: { height: number; left: number; top: number; width: number };
@@ -24,43 +26,35 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  close: [];
+  update: [value: string];
+  cancel: [];
   commit: [value: string];
 }>();
 
 // Mirrors the .csv-cell-text-editor height in tables.css.
 const EDITOR_HEIGHT = 260;
 
-const draft = ref(props.value);
 const textRef = useTemplateRef<HTMLTextAreaElement>('textRef');
 
-const editorStyle = computed(() => {
-  const top = props.anchor.top + props.anchor.height + 2;
-  const spaceBelow = window.innerHeight - top;
-  // Open upward when the editor would be clipped by the window edge.
-  const flipUp = spaceBelow < EDITOR_HEIGHT && props.anchor.top - 2 > spaceBelow;
-  return {
-    bottom: flipUp ? `${window.innerHeight - props.anchor.top + 2}px` : undefined,
-    height: `${EDITOR_HEIGHT}px`,
-    left: `${props.anchor.left}px`,
-    top: flipUp ? undefined : `${top}px`,
-    width: `${Math.min(Math.max(props.anchor.width, 300), 600)}px`,
-  };
-});
+const panelStyle = useCsvFloatingPanel(() => props.anchor, EDITOR_HEIGHT);
+const editorStyle = computed(() => ({ ...panelStyle.value, height: `${EDITOR_HEIGHT}px` }));
 
 let settled = false;
 
 function commit() {
   if (settled) return;
   settled = true;
-  emit('commit', draft.value);
-  emit('close');
+  emit('commit', props.value);
 }
 
 function cancel() {
   if (settled) return;
   settled = true;
-  emit('close');
+  emit('cancel');
+}
+
+function updateText(event: Event) {
+  emit('update', (event.target as HTMLTextAreaElement).value);
 }
 
 function handleDocumentMouseDown(event: MouseEvent) {

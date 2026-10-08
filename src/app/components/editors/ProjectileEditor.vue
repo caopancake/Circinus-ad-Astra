@@ -90,7 +90,7 @@
               <n-button size="small" tertiary @click="pickProjectileSprite('sprite')">浏览贴图（引用 Mod 内文件）</n-button>
             </n-collapse-item>
             <n-collapse-item title="引擎参数" name="engine">
-              <ObjectEditor v-model="engineSpec" @invalid-json="feedback.warning('engineSpec JSON 无效，已保留输入内容')" />
+              <JsonValueInput :value="engineSpec" label="engineSpec" shape="object" @update="engineSpec = $event" />
             </n-collapse-item>
             <n-collapse-item title="引擎槽位" name="slots">
               <div class="bounds-list">
@@ -113,15 +113,16 @@
                 ><n-input-number :value="localProjectile.armingTime" @update:value="setField('armingTime', $event)" />
                 <label>fadeTime</label><n-input-number :value="localProjectile.fadeTime" @update:value="setField('fadeTime', $event)" />
               </div>
-              <ObjectEditor v-model="explosionSpec" @invalid-json="feedback.warning('explosionSpec JSON 无效，已保留输入内容')" />
+              <JsonValueInput :value="explosionSpec" label="explosionSpec" shape="object" @update="explosionSpec = $event" />
             </n-collapse-item>
           </template>
           <n-collapse-item v-else title="通用属性" name="generic">
-            <ObjectEditor
-              :model-value="localProjectile"
-              :parse="(text: string) => normalizeProjectileSpec(JSON.parse(text || '{}'))"
-              @update:model-value="projectileUpdated"
-              @invalid-json="feedback.warning('JSON 无效，已保留输入内容')"
+            <JsonValueInput
+              :value="localProjectile"
+              label="弹体规格"
+              shape="object"
+              :normalize="normalizeProjectileSpec"
+              @update="projectileUpdated"
             />
           </n-collapse-item>
         </n-collapse>
@@ -138,11 +139,11 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import ColorPicker from '@/shared/ui/ColorPicker.vue';
 import EditorFooter from '@/app/components/editors/common/EditorFooter.vue';
 import EditorHeader from '@/app/components/editors/common/EditorHeader.vue';
-import ObjectEditor from '@/app/components/editors/common/ObjectEditor.vue';
+import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
+import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 import type { RowData } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
 import { entryKey } from '@/shared/lib/entry-keys';
@@ -170,8 +171,8 @@ const emit = defineEmits<{
   'draft-changed': [projectile: RowData];
   'load-external': [];
 }>();
-const feedback = useAppFeedback();
 const localProjectile = ref<RowData>(normalizeProjectileSpec(props.projectile || { id: props.projectileId, specClass: 'projectile' }));
+const { commitBefore } = useFieldInputActions();
 const expandedSections = ref(['basic']);
 const { bindObjectField } = useObjectField(localProjectile, { onCommit: commitDraft });
 const { pickModImageReference } = useResourceReference();
@@ -200,6 +201,13 @@ function commitDraft() {
   emit('draft-changed', localProjectile.value);
 }
 function setField(key: string, value: RowData[string]) {
+  if (key === 'specClass') {
+    void commitBefore(() => {
+      localProjectile.value[key] = value;
+      commitDraft();
+    });
+    return;
+  }
   localProjectile.value[key] = value;
   commitDraft();
 }
@@ -228,8 +236,8 @@ function removeEngineSlot(i: number) {
   engineSlots.value.splice(i, 1);
   commitDraft();
 }
-function projectileUpdated(value: unknown) {
-  localProjectile.value = normalizeProjectileSpec(value as RowData);
+function projectileUpdated(value: RowData) {
+  localProjectile.value = value;
   commitDraft();
 }
 async function pickProjectileSprite(field: 'bulletSprite' | 'sprite') {

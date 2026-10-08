@@ -13,6 +13,8 @@
 `src/app/components/tables/CsvGridCellEditor.vue`：单元格编辑 owner，按列控件类型分派编辑器。
 `src/app/components/tables/DataTable.vue`：表格工作区组合 owner。
 `src/app/composables/tables/use-csv-table-view-model.ts`：表格 ViewModel owner，连接 query、store、列 schema 与网格。
+`src/app/composables/tables/use-csv-table-inputs.ts`：表格输入上下文 owner，连接所属输入集合、活动单元格与值提交。
+`src/app/composables/tables/use-csv-floating-panel.ts`：浮层视口 owner，统一位置、宽度、上下翻转与 resize 释放。
 `src/domain/tables/csv-grid-model.ts`：网格列模型 owner。
 `src/domain/schema/schema-registry.ts`：列 schema 唯一加载入口。
 `src/domain/tables/table-row-key.ts`：行身份规则 owner。
@@ -24,6 +26,8 @@
 - 列 schema 只能从统一加载器的输出类型消费，严禁在组件内二次解析资产。
 - 选中态以响应式 `selectedRowKey` 为唯一来源，行组件按 key 绑定选中样式，严禁 DOM class 手工同步。
 - 脏标记只允许经草稿变更边界写入，组件严禁直改 dirty 结构。
+- 活动单元格身份必须唯一归 tables 运行态；原始输入必须归控件，输入集合必须按 session、Mod 与表隔离。
+- 单元格提交必须消费完整 `CsvCellTarget`，包含 sessionId、modRoot、table、rowKey 与 column；历史必须沿用同一目标。
 - 列宽必须使用结构化 `modRoot/table/column`，严禁拼接 key。
 
 ## 链路
@@ -36,10 +40,11 @@
 
 ### 编辑单元格
 
-1. 用户激活单元格，网格挂载对应编辑控件。
-2. 编辑控件按列 schema 选择输入、选择器或引用选择。
-3. 提交经 store 的单元格变更边界写入行值并标记 dirty。
-4. dirty 行在网格中以脏样式渲染并进入保存范围。
+1. 用户激活单元格，所属输入集合提交前一个编辑动作。
+2. tables 记录完整活动身份，网格挂载对应编辑控件。
+3. 控件登记原始输入并按列 schema 选择输入、选择器或引用选择。
+4. 提交经目标化单元格变更边界写入行值并登记一次历史。
+5. 已提交行差异进入行脏标记，活动输入差异进入表与 Mod 未保存判定。
 
 ### 选择行
 
@@ -50,13 +55,19 @@
 ### 过滤与搜索
 
 1. 用户输入搜索文本或切换势力过滤。
-2. store 重算过滤行数并约束窗口请求。
-3. 全部行被过滤或无可显示列时显示对应说明。
+2. ViewModel 提交所属输入并复核目标，更新过滤状态。
+3. 查询接纳消费草稿与活动输入保护状态。
+4. 全部行被过滤或无可显示列时显示对应说明。
 
 ## 规范
 
 - 表格窗口必须按可视区请求行，严禁一次加载全表。
-- 单元格编辑必须在提交边界一次性写值，中间输入不得进入 dirty。
+- 单元格编辑必须在动作提交边界一次性写值与登记历史；中间输入必须参与未保存判定，行脏标记只允许表达已提交行差异。
+- CSV native 输入必须逐字符保留空串、前导零与数字表示，领域转换必须归所属消费者。
+- 搜索必须属于选择器界面状态；自定义值必须使用显式输入入口并登记待提交状态；多选必须以整个编辑动作一次提交。
+- 滚动、单元格切换与窗口化替换必须先提交所属输入；同目标模型更新必须保持控件，rowKey 映射必须保留活动输入的归属。
+- Esc 必须取消本次输入；文本浮层、native 输入与选择器必须共用所属集合的保存提交入口。
+- 选择与文本浮层必须共用视口计算；浮层宽度与水平位置必须服从当前窗口，resize 监听必须随控件释放。
 - 前端新增行只允许使用临时 new key，保存后以后端 rowKey map 替换。
 - 缺失列 schema 的列只做文本编辑，严禁猜测控件类型。
 - 固定枚举选项必须与目标 Starsector 版本的加载器枚举完全一致。

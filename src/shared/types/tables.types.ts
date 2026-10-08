@@ -21,6 +21,17 @@ export const TABLE_KEYS = [
 
 export type TableKey = (typeof TABLE_KEYS)[number];
 
+export interface CsvTableTarget {
+  sessionId: string;
+  modRoot: string;
+  table: TableKey;
+}
+
+export interface CsvCellTarget extends CsvTableTarget {
+  rowKey: string;
+  column: string;
+}
+
 export const CSV_FACTION_FIELD = '_faction';
 export const CSV_DEFAULT_FACTION_ID = 'other';
 export const CSV_FACTION_FILTER_ALL = 'all';

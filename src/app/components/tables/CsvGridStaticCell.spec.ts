@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils';
+import { mountCsvInputHost } from '@/test/csv-input-host';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initializeSettingsStore } from '@/stores/settings.store';
@@ -24,6 +24,8 @@ vi.mock('@/services/resource-media.service', () => ({
   ensureResourceMedia: vi.fn(async () => {}),
 }));
 
+vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ choose: vi.fn(), error: vi.fn() }) }));
+
 let wrapper: import('@vue/test-utils').VueWrapper | null = null;
 
 afterEach(() => {
@@ -48,15 +50,17 @@ function columnFixture(control: string, source?: string): CsvGridColumn {
 }
 
 function mountCell(props: Record<string, unknown>) {
-  wrapper = mount(CsvGridStaticCell, {
-    props: {
+  const fixture = mountCsvInputHost(
+    CsvGridStaticCell,
+    { global: { stubs: editorUiStubs } },
+    {
       row: { rowKey: 'key-0', row: { col: 'railgun' } },
       sourceIndex: sourceIndexFixture(),
       ...props,
-    } as never,
-    global: { stubs: editorUiStubs },
-  });
-  return wrapper!;
+    },
+  );
+  wrapper = fixture.host;
+  return fixture.surface;
 }
 
 describe('CsvGridStaticCell', () => {

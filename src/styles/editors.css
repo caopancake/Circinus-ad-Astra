@@ -486,10 +486,6 @@ textarea {
   border-radius: var(--radius-sm);
 }
 
-.object-editor {
-  margin-top: 10px;
-}
-
 .editor-side .n-collapse-item,
 .projectile-body .n-collapse-item {
   margin-bottom: 0;

@@ -11,7 +11,6 @@
     @request-window="csvTable.loadTableWindow"
     @resize-column="csvTable.setColumnWidth"
     @select-row="csvTable.tables.selectRowByKey"
-    @update-cell="csvTable.tables.updateCellValueByKey"
   />
   <div v-if="csvTable.tables.filteredRowCount > 0 && csvTable.tables.visibleColumns.length === 0" class="table-empty-note">
     当前表有 {{ csvTable.tables.filteredRowCount }} 行，但没有可显示列。请检查 CSV 表头。
@@ -22,11 +21,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onScopeDispose } from 'vue';
 import CsvGrid from '@/app/components/tables/CsvGrid.vue';
 import type { CsvTableViewModel } from '@/app/composables/tables/use-csv-table-view-model';
+import { provideCsvTableInputs } from '@/app/composables/tables/use-csv-table-inputs';
+import { useInputEditMode } from '@/app/composables/use-input-edit-mode';
 
 const props = defineProps<{ csvTable: CsvTableViewModel }>();
+const target = props.csvTable.target.value!;
+const inputs = props.csvTable.tables.getTableInputs(target.modRoot, target.table);
+provideCsvTableInputs({
+  target,
+  inputs,
+  activate: (cell) => props.csvTable.tables.setActiveCell(cell, target.modRoot),
+  update: props.csvTable.tables.updateCellValue,
+});
+useInputEditMode(inputs);
+onScopeDispose(() => props.csvTable.tables.setActiveCell(null, target.modRoot));
 const effectiveGridModel = computed(() => ({
   ...props.csvTable.gridModel.value,
   columns: props.csvTable.effectiveColumns.value,

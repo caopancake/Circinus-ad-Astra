@@ -229,6 +229,7 @@ describe('useFileEditorViewModel external text', () => {
       expect(viewModel.text.value).toBe('local');
       expect(viewModel.hasPendingExternalText.value).toBe(true);
       viewModel.loadPendingExternalText();
+      mocks.feedback.confirmWarning.mock.calls.at(-1)![0].onConfirm();
       expect(viewModel.text.value).toBe('external');
       viewModel.dispose();
     },
@@ -251,6 +252,7 @@ describe('useFileEditorViewModel external text', () => {
     expect(viewModel.externalTextNotice.value).toContain('外部文本已更新');
 
     viewModel.loadPendingExternalText();
+    mocks.feedback.confirmWarning.mock.calls.at(-1)![0].onConfirm();
     expect(viewModel.text.value).toBe('external');
     expect(viewModel.hasPendingExternalText.value).toBe(false);
     viewModel.dispose();

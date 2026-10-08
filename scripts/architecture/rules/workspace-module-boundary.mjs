@@ -1,4 +1,5 @@
 import { frontendFile, singleFileByRel } from '../../shared/files.mjs';
+import { classifyFrontendPath } from '../../shared/classify.mjs';
 
 const storePath = 'src/stores/workspace.store.ts';
 const oldWorkspaceNames = ['modList', 'modCount', 'hasAnyMod', 'setGameWorkspace', 'restoreFrom'];
@@ -25,7 +26,7 @@ export const workspaceModuleBoundaryRule = {
     /** @type {string[]} */
     const failures = [];
     for (const file of files) {
-      if (frontendFile(file.rel)) {
+      if (frontendFile(file.rel) && classifyFrontendPath(file.rel).layer !== 'test') {
         checkFrontendWorkspaceBoundary(file, failures);
       }
     }

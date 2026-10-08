@@ -87,7 +87,7 @@ export const nDynamicTags = {
 export const nPopover = {
   props: ['show', 'placement', 'showArrow', 'raw', 'trigger'],
   emits: ['update:show', 'clickoutside'],
-  template: `<div class="n-popover-stub" v-if="show"><slot name="trigger" /><slot /></div>`,
+  template: `<div class="n-popover-stub"><slot name="trigger" /><div v-if="show"><slot /></div></div>`,
 };
 
 export const nCollapse = {

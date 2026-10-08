@@ -1,10 +1,14 @@
 import * as workspaceNavigation from '@/orchestrators/workspace-navigation.orchestrator';
 import { useDraftTransitionConfirmation } from '@/app/composables/use-draft-transition-confirmation';
 import { useWorkspaceStore } from '@/stores/workspace.store';
+import { useTablesStore } from '@/stores/tables.store';
+import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import type { ConfigView, TableKey } from '@/shared/types';
 
 export function useWorkspaceNavigationActions() {
   const workspace = useWorkspaceStore();
+  const tables = useTablesStore();
+  const feedback = useAppFeedback();
   const { confirmDraftTransition } = useDraftTransitionConfirmation();
 
   function navigateToModOverview(modRoot: string): void {
@@ -38,6 +42,23 @@ export function useWorkspaceNavigationActions() {
   }
 
   function confirmNavigation(action: () => void) {
+    const modRoot = workspace.activeModRoot;
+    if (modRoot && workspace.currentView === 'table') {
+      const inputs = tables.getTableInputs(modRoot, tables.currentTab);
+      const pending = inputs.commit();
+      if (pending) {
+        void pending
+          .then((accepted) => {
+            if (accepted && workspace.activeModRoot === modRoot) confirmConfigNavigation(action);
+          })
+          .catch((error: unknown) => feedback.error(error));
+        return;
+      }
+    }
+    confirmConfigNavigation(action);
+  }
+
+  function confirmConfigNavigation(action: () => void) {
     confirmDraftTransition(workspace.activeModRoot, {
       title: '放弃未保存配置修改？',
       content: '当前配置有未保存修改，切换后这些修改将丢失。确认继续？',

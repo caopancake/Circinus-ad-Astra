@@ -1,8 +1,12 @@
-import { mount, type VueWrapper } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { VueWrapper } from '@vue/test-utils';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reactive } from 'vue';
 import CsvGrid from './CsvGrid.vue';
 import type { CsvGridModel } from '@/domain/tables/csv-grid-model';
+import { mountCsvInputHost } from '@/test/csv-input-host';
+
+vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ error: vi.fn() }) }));
+let fixture: ReturnType<typeof mountCsvInputHost>;
 
 let wrapper: VueWrapper | null = null;
 
@@ -25,25 +29,21 @@ function modelFixture(): CsvGridModel {
 }
 
 function mountGrid() {
-  wrapper = mount(CsvGrid, {
-    props: {
-      editing: null,
-      isDirty: () => false,
-      model: reactive(modelFixture()),
-      selectedRowKey: null,
-    },
-    global: {
-      stubs: {
-        CsvGridHeader: {
-          props: ['columns'],
-          emits: ['resize-column'],
-          template: '<thead class="header-stub" />',
-        },
-        CsvGridBody: {
-          name: 'CsvGridBody',
-          props: ['visibleRows', 'columns', 'activeCell'],
-          emits: ['activate-cell', 'close-active-cell', 'select-row', 'update-cell'],
-          template: `<tbody class="body-stub">
+  fixture = mountCsvInputHost(
+    CsvGrid,
+    {
+      global: {
+        stubs: {
+          CsvGridHeader: {
+            props: ['columns'],
+            emits: ['resize-column'],
+            template: '<thead class="header-stub" />',
+          },
+          CsvGridBody: {
+            name: 'CsvGridBody',
+            props: ['visibleRows', 'columns', 'activeCell'],
+            emits: ['activate-cell', 'close-active-cell', 'select-row'],
+            template: `<tbody class="body-stub">
             <div
               v-for="row in visibleRows"
               :key="row.rowKey ?? row.slotKey"
@@ -51,12 +51,15 @@ function mountGrid() {
               @click="$emit('activate-cell', row, columns[0], $event)"
             >{{ row.rowKey ?? row.slotKey }}</div>
           </tbody>`,
+          },
         },
       },
+      attachTo: document.body,
     },
-    attachTo: document.body,
-  });
-  return wrapper!;
+    { isDirty: () => false, model: reactive(modelFixture()), selectedRowKey: null },
+  );
+  wrapper = fixture.host;
+  return fixture.surface;
 }
 
 describe('CsvGrid', () => {
@@ -76,23 +79,22 @@ describe('CsvGrid', () => {
     expect(grid.findComponent({ name: 'CsvGridBody' }).props('activeCell')).toEqual({ columnKey: 'id', rowKey: 'key-0' });
   });
 
-  it('clears the active cell when the model is replaced', async () => {
+  it('keeps the active cell when the same target model is replaced', async () => {
     const grid = mountGrid();
     await grid.vm.$nextTick();
     await grid.find('.row-slot').trigger('click');
     expect(grid.findComponent({ name: 'CsvGridBody' }).props('activeCell')).not.toBeNull();
 
-    await grid.setProps({ model: reactive(modelFixture()) });
-    expect(grid.findComponent({ name: 'CsvGridBody' }).props('activeCell')).toBeNull();
+    fixture.props.value = { ...fixture.props.value, model: reactive(modelFixture()) };
+    await grid.vm.$nextTick();
+    expect(grid.findComponent({ name: 'CsvGridBody' }).props('activeCell')).toEqual({ rowKey: 'key-0', columnKey: 'id' });
   });
 
-  it('forwards select and update events from the body', async () => {
+  it('forwards selection from the body', async () => {
     const grid = mountGrid();
     const body = grid.findComponent({ name: 'CsvGridBody' });
     body.vm.$emit('select-row', 'key-1');
-    body.vm.$emit('update-cell', 'key-1', 'name', 'new');
     await grid.vm.$nextTick();
     expect(grid.emitted('select-row')?.at(-1)).toEqual(['key-1']);
-    expect(grid.emitted('update-cell')?.at(-1)).toEqual(['key-1', 'name', 'new']);
   });
 });

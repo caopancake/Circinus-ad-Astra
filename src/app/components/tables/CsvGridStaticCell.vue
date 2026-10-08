@@ -1,5 +1,5 @@
 <template>
-  <template v-if="settings.isPlainEditMode">
+  <template v-if="mode === 'plain'">
     <span class="csv-cell-value">{{ rawValue }}</span>
   </template>
   <template v-else-if="isListControl">
@@ -33,8 +33,8 @@ import {
   isCsvListControl,
   isCsvReferenceControl,
 } from '@/domain/tables/csv-column-schema';
-import { useProjectStore } from '@/stores/project.store';
-import { useSettingsStore } from '@/stores/settings.store';
+import { useCsvTableInputs } from '@/app/composables/tables/use-csv-table-inputs';
+import { useInputEditMode } from '@/app/composables/use-input-edit-mode';
 import { useSchemaSelectMedia } from '@/app/composables/tables/use-schema-select-media';
 
 const props = defineProps<{
@@ -44,8 +44,8 @@ const props = defineProps<{
 }>();
 
 const rawValue = computed(() => cell(props.row.row[props.column.key]));
-const settings = useSettingsStore();
-const project = useProjectStore();
+const mode = useInputEditMode();
+const context = useCsvTableInputs();
 const { schemaSelectSprite, ensureSchemaSelectSprites } = useSchemaSelectMedia();
 const control = computed(() => csvColumnControl(props.column.schema));
 const isListControl = computed(() => isCsvListControl(control.value));
@@ -58,12 +58,12 @@ const displayValue = computed(() => referenceMatch.value?.option.label ?? rawVal
 const sprite = computed(() => {
   const match = referenceMatch.value;
   if (!match?.option.resourceRef) return undefined;
-  return schemaSelectSprite(project.activeSessionId ?? undefined, match.option.resourceRef);
+  return schemaSelectSprite(context.target.sessionId, match.option.resourceRef);
 });
 
 watchEffect(() => {
   const match = referenceMatch.value;
-  const sessionId = project.activeSessionId;
+  const sessionId = context.target.sessionId;
   if (!sessionId || !match?.option.resourceRef) return;
   void ensureSchemaSelectSprites(sessionId, [match.option.resourceRef]);
 });

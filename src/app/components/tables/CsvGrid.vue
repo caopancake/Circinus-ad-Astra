@@ -14,25 +14,21 @@
         @activate-cell="activateCell"
         @close-active-cell="clearActiveCell"
         @select-row="forwardSelectRow"
-        @update-cell="forwardUpdateCell"
       />
     </table>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue';
 import type { CsvGridRowSlot, CsvWindowRow, ModTableState } from '@/shared/types';
 import type { CsvGridColumn, CsvGridModel } from '@/domain/tables/csv-grid-model';
 import { useCsvGridViewport } from '@/app/composables/tables/use-csv-grid-viewport';
 import CsvGridBody from '@/app/components/tables/CsvGridBody.vue';
 import CsvGridHeader from '@/app/components/tables/CsvGridHeader.vue';
 import { usePerformanceLogger } from '@/app/composables/use-performance-logger';
-
-interface ActiveCell {
-  column: CsvGridColumn;
-  row: CsvWindowRow;
-}
+import { useCsvTableInputs } from '@/app/composables/tables/use-csv-table-inputs';
+import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 
 const props = defineProps<{
   editing: ModTableState['editing'];
@@ -45,15 +41,13 @@ const emit = defineEmits<{
   'request-window': [start: number, count: number];
   'resize-column': [key: string, width: number];
   'select-row': [rowKey: string];
-  'update-cell': [rowKey: string, column: string, value: string];
 }>();
 
 const panelRef = useTemplateRef<HTMLDivElement>('panelRef');
-const activeCell = ref<ActiveCell | null>(null);
+const context = useCsvTableInputs();
+const { commitBefore } = useFieldInputActions(context.inputs);
 const performanceLogger = usePerformanceLogger();
-const activeCellKey = computed(() =>
-  activeCell.value ? { columnKey: activeCell.value.column.key, rowKey: activeCell.value.row.rowKey } : null,
-);
+const activeCellKey = computed(() => (props.editing ? { columnKey: props.editing.column, rowKey: props.editing.rowKey } : null));
 const editingIndex = computed(() => {
   const rowKey = props.editing?.rowKey;
   if (!rowKey) return null;
@@ -69,7 +63,6 @@ const visibleRows = computed<CsvGridRowSlot[]>(() => viewport.visibleItems.value
 watch(
   () => props.model,
   () => {
-    clearActiveCell();
     nextTick(syncViewportMetrics);
   },
 );
@@ -79,18 +72,21 @@ onMounted(() => {
 });
 
 function handleScroll(event: Event) {
-  viewport.onScroll(event);
-  emit('request-window', viewport.startIndex.value, Math.max(0, viewport.endIndex.value - viewport.startIndex.value));
-  clearActiveCell();
+  const panel = event.currentTarget as HTMLDivElement;
+  const metrics = { clientHeight: panel.clientHeight, scrollTop: panel.scrollTop };
+  void commitBefore(() => {
+    viewport.setViewportMetrics(metrics);
+    clearActiveCell();
+    emit('request-window', viewport.startIndex.value, Math.max(0, viewport.endIndex.value - viewport.startIndex.value));
+  });
 }
 
 function activateCell(row: CsvWindowRow, column: CsvGridColumn) {
   performanceLogger.measure('frontend.csvGrid.activateCell', { column: column.key, rowKey: row.rowKey }, () => {
-    forwardSelectRow(row.rowKey);
-    activeCell.value = {
-      column,
-      row,
-    };
+    void commitBefore(() => {
+      forwardSelectRow(row.rowKey);
+      context.activate({ ...context.target, rowKey: row.rowKey, column: column.key });
+    });
   });
 }
 
@@ -101,15 +97,11 @@ function syncViewportMetrics() {
 }
 
 function clearActiveCell() {
-  activeCell.value = null;
+  context.activate(null);
 }
 
 function forwardSelectRow(rowKey: string) {
-  performanceLogger.measure('frontend.csvGrid.selectRow', { rowKey }, () => emit('select-row', rowKey));
-}
-
-function forwardUpdateCell(rowKey: string, column: string, value: string) {
-  performanceLogger.measure('frontend.csvGrid.updateCell', { column, rowKey }, () => emit('update-cell', rowKey, column, value));
+  void commitBefore(() => performanceLogger.measure('frontend.csvGrid.selectRow', { rowKey }, () => emit('select-row', rowKey)));
 }
 
 function forwardResizeColumn(key: string, width: number) {

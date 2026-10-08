@@ -7,6 +7,8 @@
 ## 参考
 
 `scripts/architecture/capability-boundary.check.mjs`：能力授权、规则归属和真实仓库入口的行为测试。
+`scripts/architecture/schema-input-boundary.check.mjs`：字段分派器与专用输入组件的职责验收。
+`scripts/architecture/workspace-input-boundary.check.mjs`：生产导航与共址输入测试角色的职责验收。
 `scripts/architecture/rules/frontend-layer-boundary.mjs`：前端层级、组件消费、wire 边界、service 依赖和运行时循环的检查 owner。
 `scripts/architecture/rules/index.mjs`：正式规则及元规则注册表。
 `scripts/architecture/rules/rust-project-layer-boundary.mjs`：Rust 内部分层和 command payload 归属的检查 owner。

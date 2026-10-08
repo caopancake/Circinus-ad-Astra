@@ -92,6 +92,10 @@ vi.mock('@/stores/tables.store', () => ({
       return Boolean(tablesState.saving);
     },
     hasTableDirtyChanges: vi.fn(() => false),
+    getTableInputs: vi.fn(() => ({ dirty: { value: false }, cancel: vi.fn() })),
+    get hasCurrentTableExternalUpdate() {
+      return Boolean(tablesState.externalUpdate);
+    },
     markTableExternalUpdate: vi.fn(),
     discardTableDraftForReload: vi.fn(),
     applyTableWindow: vi.fn((window: CsvTableWindow) => {

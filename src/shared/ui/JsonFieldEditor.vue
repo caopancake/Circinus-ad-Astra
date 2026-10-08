@@ -48,12 +48,14 @@ import { computed, ref } from 'vue';
 import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import type { JsonValue, RowData } from '@/shared/types';
 import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
+import { useFieldInputs } from '@/shared/runtime/field-inputs';
 
 const props = defineProps<{ knownKeys: string[] }>();
 
 const model = defineModel<RowData>({ required: true });
 
 const newKey = ref('');
+const inputs = useFieldInputs();
 
 const extraKeys = computed(() => Object.keys(model.value).filter((k) => !isInternalJsonFieldKey(k) && !props.knownKeys.includes(k)));
 
@@ -62,6 +64,7 @@ function updateField(key: string, value: JsonValue) {
 }
 
 function removeField(key: string) {
+  inputs?.cancel(key);
   const updated = { ...model.value };
   delete updated[key];
   model.value = updated;

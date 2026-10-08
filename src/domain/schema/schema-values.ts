@@ -1,6 +1,6 @@
 import type { RowData } from '@/shared/types';
 import { pathBasename } from '@/shared/lib/paths';
-import type { FieldSchema } from '@/domain/schema/schema.types';
+import type { FieldSchema, SchemaFieldUpdate } from '@/domain/schema/schema.types';
 
 export interface SchemaKeyValueEntry {
   key: string;
@@ -54,6 +54,34 @@ export function parseSchemaPlainNumber(raw: string, integer: boolean): number | 
   if (!integer && !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) return raw;
   const parsed = Number(trimmed);
   return (integer ? Number.isSafeInteger(parsed) : Number.isFinite(parsed)) ? parsed : raw;
+}
+
+export function convertSchemaScalarInput(raw: string, field: FieldSchema): SchemaFieldUpdate | { kind: 'error'; message: string } {
+  if (raw.trim() === '') {
+    return field.required ? { kind: 'error', message: '必填字段不能为空' } : { kind: 'remove' };
+  }
+  const value = field.type === 'boolean' ? parseSchemaPlainBoolean(raw) : parseSchemaPlainNumber(raw, field.type === 'integer');
+  if (typeof value === 'string') return { kind: 'error', message: field.type === 'boolean' ? '请输入有效布尔值' : '请输入完整有效数字' };
+  if (typeof value === 'number' && ((field.min !== undefined && value < field.min) || (field.max !== undefined && value > field.max))) {
+    return { kind: 'error', message: '数值超出字段允许范围' };
+  }
+  return { kind: 'set', value };
+}
+
+export function applySchemaFieldUpdate(obj: RowData, key: string, update: SchemaFieldUpdate): RowData {
+  if (update.kind === 'set') return setNestedValue(obj, key, update.value);
+  const parts = key.split('.');
+  const leaf = parts.pop()!;
+  const result = { ...obj };
+  let target: Record<string, unknown> = result;
+  for (const part of parts) {
+    const source = target[part];
+    if (source === undefined) return result;
+    target[part] = { ...(source as Record<string, unknown>) };
+    target = target[part] as Record<string, unknown>;
+  }
+  delete target[leaf];
+  return result;
 }
 
 export function schemaNumberControlValue(value: unknown): number | null {

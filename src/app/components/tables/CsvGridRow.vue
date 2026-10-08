@@ -10,11 +10,9 @@
       :source-index="sourceIndex"
       @activate-cell="forwardActivateCell"
       @close-active-cell="$emit('close-active-cell')"
-      @update-cell="forwardUpdateCell"
     />
   </tr>
 </template>
-
 <script setup lang="ts">
 import type { CsvWindowRow } from '@/shared/types';
 import type { CsvGridColumn } from '@/domain/tables/csv-grid-model';
@@ -34,14 +32,9 @@ const emit = defineEmits<{
   'activate-cell': [row: CsvWindowRow, column: CsvGridColumn, event: MouseEvent];
   'close-active-cell': [];
   'select-row': [rowKey: string, event: MouseEvent];
-  'update-cell': [rowKey: string, column: string, value: string];
 }>();
 
 function forwardActivateCell(row: CsvWindowRow, column: CsvGridColumn, event: MouseEvent) {
   emit('activate-cell', row, column, event);
-}
-
-function forwardUpdateCell(rowKey: string, column: string, value: string) {
-  emit('update-cell', rowKey, column, value);
 }
 </script>

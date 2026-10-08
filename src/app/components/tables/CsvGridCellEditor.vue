@@ -1,17 +1,24 @@
 <template>
-  <div class="csv-cell-editor" @mousedown.stop @click.stop @keydown.esc.prevent="$emit('close')">
+  <div class="csv-cell-editor" @mousedown.stop @click.stop @keydown.esc.stop.prevent="cancelAndClose">
     <input
       v-if="usesNativeInput"
       ref="inputRef"
       class="csv-cell-input"
-      :value="localInputValue"
+      :value="raw"
       @blur="commitAndClose"
       @input="handleNativeInput"
       @keydown.enter.prevent="commitAndClose"
     />
     <template v-else-if="isTextControl">
       <span class="csv-cell-value">{{ displayValue }}</span>
-      <CsvCellTextEditor v-if="pickerAnchor" :anchor="pickerAnchor" :value="rawValue" @close="$emit('close')" @commit="handleTextCommit" />
+      <CsvCellTextEditor
+        v-if="pickerAnchor"
+        :anchor="pickerAnchor"
+        :value="raw"
+        @update="update"
+        @cancel="cancelAndClose"
+        @commit="commitAndClose"
+      />
     </template>
     <template v-else>
       <template v-if="isListControl">
@@ -26,12 +33,16 @@
       </template>
       <span class="csv-cell-caret">⌄</span>
       <CsvCellPicker
+        ref="pickerRef"
         v-if="pickerAnchor"
         :anchor="pickerAnchor"
         :multiple="isListControl"
         :options="pickerOptions"
+        :session-id="context.target.sessionId"
         :values="pickerValues"
-        @close="$emit('close')"
+        @cancel="cancelAndClose"
+        @commit="handlePickerCommit"
+        @pending-custom="customDirty = $event"
         @update="handlePickerUpdate"
       />
     </template>
@@ -54,9 +65,11 @@ import {
   isCsvListControl,
   isCsvReferenceControl,
 } from '@/domain/tables/csv-column-schema';
-import { useProjectStore } from '@/stores/project.store';
-import { useSettingsStore } from '@/stores/settings.store';
 import { useSchemaSelectMedia } from '@/app/composables/tables/use-schema-select-media';
+import { useCsvTableInputs } from '@/app/composables/tables/use-csv-table-inputs';
+import { useInputEditMode } from '@/app/composables/use-input-edit-mode';
+import { registerFieldInput } from '@/shared/runtime/field-inputs';
+import { focusFieldInput } from '@/shared/runtime/focus-field-input';
 import CsvCellPicker from '@/app/components/tables/CsvCellPicker.vue';
 import CsvCellTextEditor from '@/app/components/tables/CsvCellTextEditor.vue';
 
@@ -69,29 +82,31 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  'update-cell': [rowKey: string, column: string, value: string];
 }>();
 
-const settings = useSettingsStore();
-const project = useProjectStore();
+const mode = useInputEditMode();
+const context = useCsvTableInputs();
 const { schemaSelectSprite } = useSchemaSelectMedia();
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
 const pickerAnchor = ref<{ height: number; left: number; top: number; width: number } | null>(null);
 
-// Local buffer for native input — only commits on blur/Enter, avoids reactive cascade during typing.
-const localInputValue = ref('');
+const raw = ref(cell(props.row.row[props.column.key]));
+const baseline = ref(raw.value);
+const customDirty = ref(false);
+const pickerRef = ref<InstanceType<typeof CsvCellPicker> | null>(null);
+const dirty = computed(() => raw.value !== baseline.value || customDirty.value);
 
 const rawValue = computed(() => cell(props.row.row[props.column.key]));
 const control = computed(() => csvColumnControl(props.column.schema));
 const isTextControl = computed(() => control.value === 'text');
 const usesNativeInput = computed(() => {
   if (isTextControl.value) return false;
-  if (settings.isPlainEditMode) return true;
+  if (mode.value === 'plain') return true;
   return csvControlUsesNativeInput(control.value);
 });
 const isListControl = computed(() => isCsvListControl(control.value));
 const isReferenceControl = computed(() => isCsvReferenceControl(control.value));
-const listValue = computed(() => csvListValues(rawValue.value));
+const listValue = computed(() => csvListValues(raw.value));
 const pickerOptions = computed(() => {
   if (control.value === 'boolean') return csvBooleanOptions();
   if (control.value === 'enum') return props.column.enumOptions;
@@ -100,18 +115,17 @@ const pickerOptions = computed(() => {
   if (isListControl.value) return includeCurrentValues(options, valueSet, listValue.value);
   return includeCurrentValue(options, valueSet, rawValue.value);
 });
-const pickerValues = computed(() => (isListControl.value ? listValue.value : rawValue.value ? [rawValue.value] : []));
+const pickerValues = computed(() => (isListControl.value ? listValue.value : raw.value ? [raw.value] : []));
 const referenceMatch = computed(() => sourceValue(props.sourceIndex, props.column.schema?.source, rawValue.value));
 const displayValue = computed(() => referenceMatch.value?.option.label ?? rawValue.value);
 
 const sprite = computed(() => {
   const match = referenceMatch.value;
   if (!match?.option.resourceRef) return undefined;
-  return schemaSelectSprite(project.activeSessionId ?? undefined, match.option.resourceRef);
+  return schemaSelectSprite(context.target.sessionId, match.option.resourceRef);
 });
 
 onMounted(() => {
-  localInputValue.value = rawValue.value;
   nextTick(() => {
     if (usesNativeInput.value) {
       inputRef.value?.focus();
@@ -126,24 +140,65 @@ onMounted(() => {
 
 function handleNativeInput(event: Event) {
   const target = event.target as HTMLInputElement | null;
-  localInputValue.value = target?.value ?? '';
+  update(target?.value ?? '');
+}
+
+function update(value: string) {
+  raw.value = value;
+}
+
+function commit(): string | null {
+  if (pickerRef.value) handlePickerUpdate(pickerRef.value.captureValues());
+  commitValue();
+  return null;
+}
+
+function commitValue() {
+  if (raw.value !== baseline.value) {
+    context.update({ ...context.target, rowKey: props.row.rowKey, column: props.column.key }, raw.value);
+    baseline.value = raw.value;
+  }
 }
 
 function commitAndClose() {
-  if (localInputValue.value !== rawValue.value) {
-    emit('update-cell', props.row.rowKey, props.column.key, localInputValue.value);
-  }
+  commit();
   emit('close');
 }
 
-function handleTextCommit(value: string) {
-  if (value !== rawValue.value) emit('update-cell', props.row.rowKey, props.column.key, value);
+function cancelAndClose() {
+  cancel();
   emit('close');
 }
 
 function handlePickerUpdate(values: string[]) {
-  emit('update-cell', props.row.rowKey, props.column.key, isListControl.value ? formatCsvListValue(values) : (values[0] ?? ''));
+  raw.value = isListControl.value ? formatCsvListValue(values) : (values[0] ?? '');
 }
+
+function handlePickerCommit(values: string[]) {
+  handlePickerUpdate(values);
+  commitValue();
+  emit('close');
+}
+
+function cancel() {
+  raw.value = rawValue.value;
+  baseline.value = raw.value;
+  customDirty.value = false;
+  pickerRef.value?.cancelCustom();
+}
+
+registerFieldInput({
+  get key() {
+    return JSON.stringify([props.row.rowKey, props.column.key]);
+  },
+  get label() {
+    return `${context.target.table} / ${props.row.rowKey} / ${props.column.key}`;
+  },
+  dirty,
+  commit,
+  focus: () => focusFieldInput(inputRef.value),
+  cancel,
+});
 
 function listValueDescription(value: string): string | undefined {
   return sourceValue(props.sourceIndex, props.column.schema?.source, value)?.option.description ?? undefined;

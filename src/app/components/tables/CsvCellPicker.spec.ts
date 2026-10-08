@@ -14,7 +14,7 @@ function mountPicker(
   props: { multiple?: boolean; options?: SelectOption[]; values?: string[] } = {},
 ) {
   return mount(CsvCellPicker, {
-    props: { anchor, multiple: false, options: [], values: [], ...props },
+    props: { anchor, sessionId: 'sess-1', multiple: false, options: [], values: [], ...props },
     global: { plugins: [createPinia()] },
   });
 }
@@ -61,8 +61,7 @@ describe('CsvCellPicker placement', () => {
 
     await wrapper.find('.csv-cell-picker-clear').trigger('click');
 
-    expect(wrapper.emitted('update')).toEqual([[['']]]);
-    expect(wrapper.emitted('close')).toHaveLength(1);
+    expect(wrapper.emitted('commit')).toEqual([[['']]]);
     wrapper.unmount();
   });
 
@@ -77,6 +76,31 @@ describe('CsvCellPicker placement', () => {
     const wrapper = mountPicker({ height: 30, left: 40, top: 100, width: 200 }, { multiple: true, values: ['a', 'b'] });
 
     expect(wrapper.find('.csv-cell-picker-clear').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('keeps search local and exposes custom input as pending work', async () => {
+    const wrapper = mountPicker({ height: 30, left: 40, top: 100, width: 200 }, { values: ['A'], multiple: true });
+    await wrapper.get('.csv-cell-picker-search').setValue('search only');
+    expect(wrapper.emitted('pending-custom')).toBeUndefined();
+    await wrapper.get('.csv-cell-picker-action').trigger('click');
+    await wrapper.get('.csv-cell-picker-custom').setValue(' B ');
+    expect(wrapper.emitted('pending-custom')?.at(-1)).toEqual([true]);
+    expect(wrapper.vm.captureValues()).toEqual(['A', 'B']);
+    expect(wrapper.emitted('pending-custom')?.at(-1)).toEqual([false]);
+    wrapper.unmount();
+  });
+
+  it('keeps the floating panel inside a narrow viewport and follows resizing', async () => {
+    vi.stubGlobal('innerWidth', 480);
+    const wrapper = mountPicker({ height: 30, left: 420, top: 100, width: 200 });
+    expect(wrapper.attributes('style')).toContain('left: 176px');
+    expect(wrapper.attributes('style')).toContain('width: 300px');
+    vi.stubGlobal('innerWidth', 280);
+    window.dispatchEvent(new Event('resize'));
+    await wrapper.vm.$nextTick();
+    expect(wrapper.attributes('style')).toContain('left: 4px');
+    expect(wrapper.attributes('style')).toContain('width: 272px');
     wrapper.unmount();
   });
 });

@@ -26,9 +26,9 @@ export function csvRowTargetOf(result: CsvDraftResult): CsvRowTarget | null {
   return { rowKey: operation.rowKey, rowIndex: operation.rowIndex };
 }
 
-export function applyCsvTableWindowDraft(state: ModTableState, window: CsvTableWindow): CsvDraftResult {
+export function applyCsvTableWindowDraft(state: ModTableState, window: CsvTableWindow, hasPendingInput = false): CsvDraftResult {
   const table = window.table;
-  if (hasCsvTableDraftChanges(state, table)) {
+  if (hasCsvTableDraftChanges(state, table) || hasPendingInput) {
     state.pendingExternalTableUpdates[table] = true;
     return { changed: false, externalUpdateMarked: true };
   }
@@ -47,7 +47,7 @@ export function applyCsvTableWindowDraft(state: ModTableState, window: CsvTableW
 }
 
 export function hasCsvTableDraftChanges(state: ModTableState, table: TableKey): boolean {
-  return Object.keys(state.dirty[table]).length > 0 || state.editing?.tab === table;
+  return Object.keys(state.dirty[table]).length > 0;
 }
 
 export function markCsvTableExternalUpdateDraft(state: ModTableState, table: TableKey): void {
@@ -56,25 +56,6 @@ export function markCsvTableExternalUpdateDraft(state: ModTableState, table: Tab
 
 export function clearCsvTableExternalUpdateDraft(state: ModTableState, table: TableKey): void {
   state.pendingExternalTableUpdates[table] = false;
-}
-
-export function startCsvCellEditDraft(state: ModTableState, rowKey: string, col: string, value: string): void {
-  state.editing = { tab: state.currentTab, rowKey, col, value };
-}
-
-export function setCsvEditingValueDraft(state: ModTableState, value: string): void {
-  if (state.editing) state.editing.value = value;
-}
-
-export function cancelCsvCellEditDraft(state: ModTableState): void {
-  state.editing = null;
-}
-
-export function finishCsvCellEditDraft(state: ModTableState): CsvDraftResult {
-  if (!state.editing) return { changed: false };
-  const { tab, rowKey, col, value } = state.editing;
-  state.editing = null;
-  return setCsvCellValueDraft(state, tab, rowKey, col, value);
 }
 
 export function setCsvCellValueDraft(state: ModTableState, tab: TableKey, rowKey: string, col: string, value: string): CsvDraftResult {
@@ -268,7 +249,7 @@ export function applySavedCsvRowKeyMapDraft(state: ModTableState, tab: TableKey,
   if (state.selectedRowKey) {
     state.selectedRowKey = mapped.get(state.selectedRowKey) ?? state.selectedRowKey;
   }
-  if (state.editing?.tab === tab) {
+  if (state.editing?.table === tab) {
     state.editing.rowKey = mapped.get(state.editing.rowKey) ?? state.editing.rowKey;
   }
 }
@@ -303,7 +284,7 @@ function removeCsvRowForReplay(state: ModTableState, tab: TableKey, rowKey: stri
   adjustCsvTableRowCounts(state, tab, -1);
   markCsvRowDeleted(state, tab, rowKey);
   if (state.selectedRowKey === rowKey) state.selectedRowKey = null;
-  if (state.editing?.tab === tab && state.editing.rowKey === rowKey) state.editing = null;
+  if (state.editing?.table === tab && state.editing.rowKey === rowKey) state.editing = null;
   return true;
 }
 

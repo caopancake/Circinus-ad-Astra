@@ -29,7 +29,7 @@ export function navigateToModTable(modRoot: string, tab: TableKey) {
   if (!workspace.mods.has(modRoot)) return;
   if (isActiveTableTarget(modRoot, tab)) return;
   syncActiveModRuntime(modRoot);
-  tables.switchTab(tab);
+  tables.switchTab(modRoot, tab);
   workspace.activateModTable(modRoot);
 }
 

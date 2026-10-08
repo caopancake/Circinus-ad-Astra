@@ -23,6 +23,7 @@ import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
 import { WEAPON_SPRITE_FIELDS } from '@/domain/editors/lib/weapon-sprite-fields';
 import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
+import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 import { pickEditorSpecFile } from '@/shared/runtime/dialog.runtime';
 import { closeCurrentWindow } from '@/windows/current.window';
 import type { QueryCacheInvalidationEvent } from '@/services/query-cache.service';
@@ -79,6 +80,7 @@ export function useEditorWindowViewModel(params: {
     targetKey: editorWindowTargetKey,
   });
   const loading = ref(true);
+  const { confirmDiscard } = useFieldInputActions(draftSession.inputs);
   const errorText = ref('');
   let unlistenEditorSpecSaved: UnlistenFn | null = null;
   let unlistenPreviewDraftUpdated: UnlistenFn | null = null;
@@ -256,9 +258,14 @@ export function useEditorWindowViewModel(params: {
   function loadPendingExternalSpec(): void {
     const target = editorWindowTarget();
     if (!target || !editorData.value || !draftSession.pendingExternalValue.value || !isEditableWindowKind(params.kind)) return;
+    confirmDiscard(adoptPendingExternalSpec, draftSession.dirty.value, () => draftSession.currentTargetKey.value);
+  }
+
+  function adoptPendingExternalSpec(): void {
+    const target = editorWindowTarget()!;
     draftSession.loadPendingExternal();
     const spec = deepClone(draftSession.draftValue.value);
-    editorData.value = applySavedSpecToBundle(editorData.value, params.kind, target.id, spec);
+    editorData.value = applySavedSpecToBundle(editorData.value!, params.kind as EditableEditorKind, target.id, spec);
     resourceRevision.value++;
   }
 
@@ -452,7 +459,7 @@ export function useEditorWindowViewModel(params: {
   ): void {
     if (!editorData.value) return;
     const spec = deepClone(data);
-    if (stableDeepEqual(draftSession.draftValue.value, spec)) {
+    if (stableDeepEqual(draftSession.draftValue.value, spec) && !draftSession.inputs.dirty.value) {
       const target = editorWindowTarget();
       if (target) draftSession.loadBaseForTarget(target, spec, versions);
       commitSavedSpecToBundle(kind, id, spec);

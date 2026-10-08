@@ -34,6 +34,9 @@ import { useWorkspaceNavigationActions } from './use-workspace-navigation-action
 import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { ref } from 'vue';
+import { useTablesStore } from '@/stores/tables.store';
+import type { ProjectManifest } from '@/shared/types';
+import { TABLE_KEYS } from '@/shared/types';
 
 describe('useWorkspaceNavigationActions', () => {
   beforeEach(() => {
@@ -103,5 +106,44 @@ describe('useWorkspaceNavigationActions', () => {
     expect(mocks.feedback.confirmWarning).toHaveBeenCalledTimes(1);
     mocks.feedback.confirmWarning.mock.calls[0]![0].onConfirm();
     expect(mocks.navigation.navigateToModOverview).toHaveBeenCalledWith('C:/mods/alpha');
+  });
+
+  it('commits the departing table input before changing the workspace target', async () => {
+    const workspace = useWorkspaceStore();
+    const tables = useTablesStore();
+    const root = 'M:/A';
+    workspace.registerMod({ modRoot: root, displayName: 'A', version: '', status: 'ready' });
+    tables.hydrate(root, {
+      modRoot: root,
+      baseVersions: [],
+      starsectorRoot: null,
+      coreAvailable: false,
+      associatedSpecTables: [],
+      modInfo: {},
+      tableEntitySummaries: Object.fromEntries(TABLE_KEYS.map((table) => [table, 0])) as ProjectManifest['tableEntitySummaries'],
+      entitySummaries: { factions: 0, missions: 0, ships: 0, weapons: 0, projectiles: 0, variants: 0, skins: 0, systems: 0, skills: 0 },
+      warnings: [],
+      sessionId: 'sA',
+      tableSummaries: Object.fromEntries(
+        TABLE_KEYS.map((table) => [table, { path: `${table}.csv`, available: table === 'ships', header: ['id'], totalRows: 0 }]),
+      ) as ProjectManifest['tableSummaries'],
+    });
+    workspace.activateModTable(root);
+    const dirty = ref(true);
+    tables.getTableInputs(root, 'ships').register({
+      key: 'row/field',
+      label: 'Field',
+      dirty,
+      commit: () => {
+        expect(mocks.navigation.navigateToModTable).not.toHaveBeenCalled();
+        dirty.value = false;
+        return null;
+      },
+      focus: vi.fn(),
+      cancel: vi.fn(),
+    });
+    useWorkspaceNavigationActions().navigateToModTable('M:/B', 'weapons');
+    await vi.waitFor(() => expect(mocks.navigation.navigateToModTable).toHaveBeenCalledWith('M:/B', 'weapons'));
+    expect(dirty.value).toBe(false);
   });
 });

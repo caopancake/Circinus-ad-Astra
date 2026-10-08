@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { Ref } from 'vue';
+import { shallowReactive, type Ref } from 'vue';
 
 interface DraftSessionRegistration {
   dirty: Readonly<Ref<boolean>>;
@@ -13,8 +13,8 @@ interface DraftSessionRegistration {
  * Consumers must never union multiple sources on their own.
  */
 export const useDraftSessionsStore = defineStore('draft-sessions', () => {
-  const registrations = new Map<number, DraftSessionRegistration>();
-  const dirtySources = new Set<(modRoot: string) => boolean>();
+  const registrations = shallowReactive(new Map<number, DraftSessionRegistration>());
+  const dirtySources = shallowReactive(new Set<(modRoot: string) => boolean>());
   let nextRegistrationId = 0;
 
   function registerDraftSession(modRoot: Readonly<Ref<string | null>>, dirty: Readonly<Ref<boolean>>): () => void {

@@ -1,55 +1,85 @@
-import { computed, getCurrentInstance, inject, nextTick, onScopeDispose, provide, shallowReactive, type InjectionKey, type Ref } from 'vue';
+import {
+  computed,
+  getCurrentInstance,
+  inject,
+  nextTick,
+  onScopeDispose,
+  provide,
+  ref,
+  shallowReactive,
+  type InjectionKey,
+  type Ref,
+} from 'vue';
 import { AppError } from '@/shared/lib/errors';
 
-interface FieldInput {
-  dirty: Ref<boolean>;
+export interface FieldInput {
+  key: string;
+  dirty: Readonly<Ref<boolean>>;
   label: string;
-  commit: () => boolean;
-  focus: () => void;
-  reset: () => void;
+  commit: () => string | null;
+  focus: () => void | Promise<void>;
+  cancel: () => void;
 }
 
-const fieldInputsKey: InjectionKey<ReturnType<typeof createFieldInputs>> = Symbol('field-inputs');
+export type FieldInputs = ReturnType<typeof createFieldInputs>;
+const fieldInputsKey: InjectionKey<FieldInputs> = Symbol('field-inputs');
 
-function createFieldInputs() {
+export function createFieldInputs(targetKey: Readonly<Ref<string | null>> = ref(null)) {
   const fields = shallowReactive(new Set<FieldInput>());
   const dirty = computed(() => [...fields].some((field) => field.dirty.value));
+  let generation = 0;
 
   function register(field: FieldInput) {
     fields.add(field);
     return () => fields.delete(field);
   }
 
-  function commit(): Promise<void> | undefined {
+  function commit(): Promise<boolean> | undefined {
     const pending = [...fields].filter((field) => field.dirty.value);
     if (pending.length === 0) return;
     return commitPending(pending);
   }
 
   async function commitPending(pending: FieldInput[]) {
+    const key = targetKey.value;
+    const started = generation;
     for (const field of pending) {
-      if (field.commit()) {
-        await nextTick();
-        continue;
+      if (generation !== started || targetKey.value !== key) return false;
+      if (!fields.has(field) || !field.dirty.value) continue;
+      const error = field.commit();
+      if (error !== null) {
+        await field.focus();
+        if (generation !== started || targetKey.value !== key) return false;
+        throw new AppError(`${field.label}：${error}`, { action: 'commit-field-inputs' });
       }
-      field.focus();
-      throw new AppError(`${field.label} JSON 输入未完成，请修正后保存`, { action: 'commit-field-inputs' });
+      await nextTick();
+    }
+    return generation === started && targetKey.value === key;
+  }
+
+  function cancel(prefix?: string) {
+    if (prefix === undefined) generation++;
+    for (const field of fields) {
+      if (prefix === undefined || field.key === prefix || field.key.startsWith(`${prefix}/`)) field.cancel();
     }
   }
-
-  function reset() {
-    for (const field of fields) field.reset();
+  function release() {
+    cancel();
+    fields.clear();
   }
-  return { dirty, register, commit, reset };
+  return { targetKey, dirty, register, commit, cancel, release };
 }
 
-export function provideFieldInputs() {
-  const state = createFieldInputs();
+export function provideFieldInputs(state = createFieldInputs()) {
   if (getCurrentInstance()) provide(fieldInputsKey, state);
   return state;
 }
 
+export function useFieldInputs() {
+  return inject(fieldInputsKey, null);
+}
+
 export function registerFieldInput(field: FieldInput) {
-  const state = inject(fieldInputsKey, null);
+  const state = useFieldInputs();
   if (state) onScopeDispose(state.register(field));
 }

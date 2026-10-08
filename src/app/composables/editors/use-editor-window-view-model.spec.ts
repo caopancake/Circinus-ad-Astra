@@ -449,6 +449,7 @@ describe('useEditorWindowViewModel external updates', () => {
     });
 
     viewModel.loadPendingExternalSpec();
+    mocks.feedback.confirmWarning.mock.calls.at(-1)![0].onConfirm();
     expect(viewModel.draftValue.value).toEqual({ hullId: 'XY', hullName: 'Remote' });
     expect(viewModel.draftDirty.value).toBe(false);
     expect(viewModel.externalUpdateNotice.value).toBe('');
@@ -589,6 +590,7 @@ describe.each(['ship', 'weapon'] as const)('%s draft resource lifecycle', (kind)
     await flushPromises();
     expectImage(vm, 'local.png');
     vm.loadPendingExternalSpec();
+    mocks.feedback.confirmWarning.mock.calls.at(-1)![0].onConfirm();
     await flushPromises();
     expectImage(vm, 'pending.png');
     expect(vm.draftDirty.value).toBe(false);

@@ -6,7 +6,7 @@
 
 ## 参考
 
-`src/orchestrators/table-save.orchestrator.ts`：保存编排 owner，拥有目标捕获、noop 判定、patch 构造与保存后提交。
+`src/orchestrators/table-save.orchestrator.ts`：保存编排 owner，以 `saveActiveTableChanges` 拥有输入提交、快照捕获、关联选择、写入与保存后接纳。
 `src/services/write.service.ts`：写入能力包装，提交 patches、版本凭据与关联动作。
 `src/shared/api/write-api.ts`：CSV 保存 wire API。
 `src/domain/tables/associated-spec-candidates.ts`：关联 spec 候选 owner。
@@ -29,15 +29,15 @@
 ### 捕获保存目标
 
 1. 用户触发保存或 Ctrl+S 进入保存编排。
-2. 编排结束单元格编辑并确认活动 Mod 与表。
-3. 校验 manifest 的 `modRoot` 与 session 与当前运行态一致。
-4. 收集关联 spec 候选并返回捕获目标。
+2. 编排捕获完整目标并持有准备与保存状态。
+3. 所属输入集合逐项提交原始输入，编排复核目标、session 与 tables 状态。
+4. 编排捕获独立 patches、版本凭据、关联候选与历史身份集合。
 
 ### 提交保存
 
-1. 目标为空或已在保存中时返回 noop。
-2. 当前表无 dirty 时返回 noop。
-3. 从 dirty 构造 patches：upsert 剥离内部行键，删除行动作携带空行。
+1. 目标为空或当前表无 dirty 时返回 noop；进行中的保存由同一 Promise 表达。
+2. app 层选择回调展示快照中的关联候选，返回选定动作或取消。
+3. 编排复核目标并消费同一快照中的 patches、关联动作与版本。
 4. 调用排他写提交 patches 与关联动作。
 5. 后端校验 session/root，合成 CSV 与关联目标，构建并应用原子 changeset。
 6. 返回写结果、rowKey map 与结构化失效。
@@ -54,6 +54,8 @@
 
 - CSV patch 必须携带读取基线，恢复行必须携带 insertAt；正式 rowKey 删除必须命中实际行，未知键必须返回冲突。
 - upsert patch 必须构造提交时的独立行快照，并剥离内部行键字段。
+- 保存快照必须在活动输入提交后、关联选择前固定；patches、关联行内容、版本与历史捕获必须属于同一次提交。
+- 关联选择必须由 app 层提供可等待回调，取消必须结束准备状态；同一保存面重复触发必须复用进行中的请求。
 - 删除 patch 必须携带删除动作标记，严禁以空 upsert 表达删除。
 - 保存请求期间的新编辑必须保留，original 必须以实际提交 patches 更新，dirty 必须按该基线重算。
 - 保存期间的查询与自身失效必须保留前端草稿；写后 refresh 必须保留与已写盘 after 快照相符的后端行身份。

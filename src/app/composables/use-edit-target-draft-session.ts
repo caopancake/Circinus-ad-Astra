@@ -1,5 +1,5 @@
 import { computed, ref, type Ref } from 'vue';
-import { provideFieldInputs } from '@/shared/runtime/field-inputs';
+import { createFieldInputs, provideFieldInputs, type FieldInputs } from '@/shared/runtime/field-inputs';
 import { useDraftSession, type DraftSession, type DraftSessionOptions } from '@/app/composables/use-draft-session';
 import { deepClone } from '@/shared/lib/starsector';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
@@ -42,6 +42,7 @@ export interface EditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, TS
   pendingExternalValue: DraftSession<TValue>['pendingExternalValue'];
   revision: DraftSession<TValue>['revision'];
   saving: Ref<boolean>;
+  inputs: FieldInputs;
   applyExternalForTarget: (target: TTarget, value: TValue, versions?: import('@/shared/types').FileVersion[]) => void;
   clearTarget: () => void;
   dispose: () => void;
@@ -59,11 +60,11 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
   options: EditTargetDraftSessionOptions<TValue, TTarget, TLoadMeta, TSaveMeta>,
 ): EditTargetDraftSession<TValue, TTarget, TLoadMeta, TSaveMeta> {
   const draftSession = useDraftSession(options.emptyValue, options);
-  const fieldInputs = provideFieldInputs();
   const clone = options.clone ?? deepClone;
   const equals = options.equals ?? stableDeepEqual;
   const currentTarget = ref<TTarget | null>(null) as Ref<TTarget | null>;
   const currentTargetKey = ref<string | null>(null);
+  const fieldInputs = provideFieldInputs(createFieldInputs(currentTargetKey));
   const loading = ref(false);
   const saving = ref(false);
   let disposed = false;
@@ -83,6 +84,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
   async function loadTargetSnapshot(target: TTarget, mode: 'base' | 'external'): Promise<EditTargetSnapshot<TValue, TLoadMeta> | null> {
     const requestId = ++loadRequestId;
     const key = options.targetKey(target);
+    if (currentTargetKey.value !== key) fieldInputs.cancel();
     currentTarget.value = target;
     currentTargetKey.value = key;
     loading.value = true;
@@ -93,7 +95,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
         baseVersions = snapshot.baseVersions ?? [];
         pendingVersions = null;
         draftSession.loadBase(snapshot.value);
-        fieldInputs.reset();
+        fieldInputs.cancel();
       } else {
         if (draftSession.dirty.value || fieldInputs.dirty.value) pendingVersions = snapshot.baseVersions ?? [];
         else baseVersions = snapshot.baseVersions ?? [];
@@ -115,7 +117,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
     saving.value = true;
     try {
       const fieldCommit = fieldInputs.commit();
-      if (fieldCommit) await fieldCommit;
+      if (fieldCommit && !(await fieldCommit)) return null;
       if (!isCurrentSave(requestId, key)) return null;
       const submittedDraft = clone(draftSession.draftValue.value);
       const result = await options.save(target, submittedDraft, deepClone(baseVersions));
@@ -152,10 +154,11 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
       currentTargetKey.value = options.targetKey(target);
     }
     draftSession.loadBase(value);
+    fieldInputs.cancel();
   }
 
   function clearTarget(): void {
-    fieldInputs.reset();
+    fieldInputs.cancel();
     loadRequestId++;
     saveRequestId++;
     currentTarget.value = null;
@@ -167,6 +170,9 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
 
   function dispose(): void {
     disposed = true;
+    fieldInputs.release();
+    currentTarget.value = null;
+    currentTargetKey.value = null;
     loadRequestId++;
     saveRequestId++;
   }
@@ -194,6 +200,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
     pendingExternalValue: draftSession.pendingExternalValue,
     revision: draftSession.revision,
     saving,
+    inputs: fieldInputs,
     applyExternalForTarget,
     clearTarget,
     dispose,
@@ -202,13 +209,13 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
       draftSession.loadPendingExternal();
       if (pendingVersions) baseVersions = pendingVersions;
       pendingVersions = null;
-      fieldInputs.reset();
+      fieldInputs.cancel();
     },
     loadTarget,
     refreshTarget,
     resetDraft: () => {
       draftSession.resetDraft();
-      fieldInputs.reset();
+      fieldInputs.cancel();
     },
     saveDraft,
     setDraft: draftSession.setDraft,

@@ -333,6 +333,9 @@ describe('configuration page session baselines', () => {
       .find((button) => button.text() === '载入外部版本')!
       .trigger('click');
     await flushPromises();
+    expect((input().element as HTMLTextAreaElement).value).toBe('local');
+    await mocks.feedback.confirmWarning.mock.calls.at(-1)![0].onConfirm();
+    await flushPromises();
     expect((input().element as HTMLTextAreaElement).value).toBe('external');
     await input().setValue('accepted edit');
     expect((await save(kind)).base).toEqual(versions('M:/A', 'v2'));

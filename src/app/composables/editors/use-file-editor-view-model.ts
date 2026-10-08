@@ -11,6 +11,7 @@ import { isAbsoluteFsPath, joinRootRelativePath, normalizeFsPath, pathBelongsToR
 import type { UnlistenFn } from '@/windows/tauri.events';
 import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
 import { useTextHistory } from '@/app/composables/use-text-history';
+import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 
 export interface FileEditorViewModelParams {
   mode: 'session' | 'recovery';
@@ -65,6 +66,7 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
     targetKey: (target) => fileEditorTargetKey(target),
   });
   const textHistory = useTextHistory();
+  const { confirmDiscard } = useFieldInputActions(draftSession.inputs);
   let unlistenFocusLine: UnlistenFn | null = null;
   let unlistenTextApplied: UnlistenFn | null = null;
   let unlistenProjectInvalidated: UnlistenFn | null = null;
@@ -180,8 +182,14 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
   }
 
   function loadPendingExternalText() {
-    draftSession.loadPendingExternal();
-    textHistory.clear();
+    confirmDiscard(
+      () => {
+        draftSession.loadPendingExternal();
+        textHistory.clear();
+      },
+      draftSession.dirty.value,
+      () => draftSession.currentTargetKey.value,
+    );
   }
 
   function updateText(nextText: string) {

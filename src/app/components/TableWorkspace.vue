@@ -7,9 +7,16 @@
       </div>
       <div class="top-actions">
         <div class="top-action-group">
-          <n-input v-model:value="tables.searchText" class="top-search-input" clearable placeholder="搜索 ID / 名称" />
+          <n-input
+            :value="tables.searchText"
+            class="top-search-input"
+            clearable
+            placeholder="搜索 ID / 名称"
+            @update:value="csvTable.setSearchText"
+          />
           <n-select
-            v-model:value="tables.currentFactionOptionValue"
+            :value="tables.currentFactionOptionValue"
+            @update:value="csvTable.setFactionFilter"
             class="top-faction-select"
             :options="factionOptions"
             placeholder="势力"
@@ -35,7 +42,7 @@
       </div>
     </header>
     <section class="content-grid">
-      <DataTable :csv-table="csvTable" />
+      <DataTable :key="csvTable.targetKey.value" :csv-table="csvTable" />
       <DetailPane
         :query-row-preview="csvTable.querySelectedRowPreview"
         :source-index="csvTable.sourceIndex.value"

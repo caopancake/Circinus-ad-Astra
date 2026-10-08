@@ -63,10 +63,12 @@
     </n-popover>
     <n-input
       v-if="allowTextInput"
+      ref="textInput"
       class="color-picker-text-input"
       :value="textDraft"
       size="small"
       :status="textValid ? undefined : 'error'"
+      :disabled="panelOpen"
       placeholder="#RRGGBB / rgba(...) / [r,g,b,a]"
       @update:value="updateTextDraft"
       @blur="commitTextDraft"
@@ -78,6 +80,9 @@
 <script setup lang="ts">
 import { computed, onUnmounted, reactive, ref, useTemplateRef, watch } from 'vue';
 import type { JsonValue } from '@/shared/types';
+import { registerFieldInput } from '@/shared/runtime/field-inputs';
+import { focusFieldInput } from '@/shared/runtime/focus-field-input';
+import { stableDeepEqual } from '@/shared/lib/stable-compare';
 
 type ChannelMode = 'rgb' | 'rgba';
 type ChannelKey = 'r' | 'g' | 'b' | 'a';
@@ -102,6 +107,7 @@ const props = withDefaults(
     channels?: ChannelMode;
     output?: ColorOutput;
     label?: string;
+    inputKey?: string;
     defaultValue?: number[];
     allowTextInput?: boolean;
   }>(),
@@ -109,6 +115,7 @@ const props = withDefaults(
     channels: 'rgba',
     output: 'rgba-array',
     label: '',
+    inputKey: undefined,
     defaultValue: () => [128, 128, 128, 255],
     allowTextInput: true,
   },
@@ -119,6 +126,8 @@ const modelValue = defineModel<JsonValue | number[]>('modelValue', { default: ()
 const panelOpen = ref(false);
 const svRef = useTemplateRef<HTMLElement>('svRef');
 const textDraft = ref('');
+const textBaseline = ref('');
+const textInput = ref<{ inputElRef: HTMLInputElement | null; focus: () => void } | null>(null);
 const textValid = ref(true);
 const draft = reactive<HsvDraft>({ h: 0, s: 0, v: 0, a: 255 });
 const channelKeys: ChannelKey[] = ['r', 'g', 'b', 'a'];
@@ -129,13 +138,17 @@ const effectiveOutput = computed<ColorOutput>(() =>
 const currentColor = computed<RgbaColor>(() => parseColor(modelValue.value, arrayToRgba(props.defaultValue, props.defaultValue))!);
 const hueRgb = computed(() => hsvToRgb(draft.h, 100, 100));
 const draftColor = computed<RgbaColor>(() => ({ ...hsvToRgb(draft.h, draft.s, draft.v), a: clampChannel(draft.a) }));
+const panelBaseline = ref<RgbaColor>({ ...draftColor.value });
+const textDirty = computed(() => textDraft.value !== textBaseline.value);
+const inputDirty = computed(() => textDirty.value || (panelOpen.value && !stableDeepEqual(draftColor.value, panelBaseline.value)));
 
 watch(
   currentColor,
   (color) => {
     if (!panelOpen.value) loadDraft(color);
-    if (!document.activeElement?.closest?.('.color-picker-text-input')) {
+    if (!textDirty.value) {
       textDraft.value = String(formatColor(color, effectiveOutput.value));
+      textBaseline.value = textDraft.value;
       textValid.value = true;
     }
   },
@@ -143,7 +156,9 @@ watch(
 );
 
 function openPanel() {
+  if (commitTextDraft() !== null) return;
   loadDraft(currentColor.value);
+  panelBaseline.value = { ...draftColor.value };
   panelOpen.value = true;
 }
 
@@ -154,7 +169,7 @@ function cancelPanel() {
 }
 
 function confirmPanel() {
-  emitColor(draftColor.value);
+  if (!stableDeepEqual(draftColor.value, panelBaseline.value)) emitColor(draftColor.value);
   panelOpen.value = false;
   stopSvDrag();
 }
@@ -176,6 +191,9 @@ function channelValue(channel: ChannelKey): number {
 function emitColor(color: RgbaColor) {
   const normalized = { ...color, a: props.channels === 'rgb' ? 255 : color.a };
   modelValue.value = formatColor(normalized, effectiveOutput.value);
+  textDraft.value = String(modelValue.value);
+  textBaseline.value = textDraft.value;
+  textValid.value = true;
 }
 
 function loadDraft(color: RgbaColor) {
@@ -213,6 +231,7 @@ function setSvFromEvent(event: Event | PointerLike) {
 
 function stopSvDrag() {
   window.removeEventListener('pointermove', setSvFromEvent);
+  window.removeEventListener('pointerup', stopSvDrag);
 }
 
 function updateTextDraft(value: string) {
@@ -220,15 +239,40 @@ function updateTextDraft(value: string) {
   textValid.value = parseColor(value, null) !== null;
 }
 
-function commitTextDraft() {
+function commitTextDraft(): string | null {
+  if (!textDirty.value) return null;
   const parsed = parseColor(textDraft.value, null);
   if (!parsed) {
     textValid.value = false;
-    return;
+    return '请输入有效颜色';
   }
   textValid.value = true;
   emitColor(parsed);
+  return null;
 }
+
+registerFieldInput({
+  key: props.inputKey ?? props.label,
+  label: props.label || '颜色',
+  dirty: inputDirty,
+  commit: () => {
+    if (panelOpen.value) {
+      confirmPanel();
+      return null;
+    }
+    return commitTextDraft();
+  },
+  focus: async () => {
+    await focusFieldInput(textInput.value?.inputElRef ?? null);
+    textInput.value?.focus();
+  },
+  cancel: () => {
+    cancelPanel();
+    textDraft.value = String(formatColor(currentColor.value, effectiveOutput.value));
+    textBaseline.value = textDraft.value;
+    textValid.value = true;
+  },
+});
 
 function arrayToRgba(value: unknown, fallback: number[]): RgbaColor {
   const source = Array.isArray(value) ? value : fallback;
@@ -268,7 +312,9 @@ function parseArrayString(value: string): RgbaColor | null {
   if (!value.startsWith('[') || !value.endsWith(']')) return null;
   try {
     const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? arrayToRgba(parsed, props.defaultValue) : null;
+    if (!Array.isArray(parsed) || (parsed.length !== 3 && parsed.length !== 4)) return null;
+    if (!parsed.every((channel) => typeof channel === 'number' && Number.isFinite(channel))) return null;
+    return arrayToRgba(parsed, props.defaultValue);
   } catch {
     return null;
   }

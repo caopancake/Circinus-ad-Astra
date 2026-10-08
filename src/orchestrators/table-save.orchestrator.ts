@@ -13,80 +13,97 @@ import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestra
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { commitCsvTableSaveDraft } from '@/domain/tables/csv-table-draft';
+import { deepClone } from '@/shared/lib/starsector';
 
 export type TableSaveResult = 'saved' | 'noop' | 'cancelled';
 
-export interface CapturedTableSaveTarget {
-  associatedSpecCandidates: AssociatedSpecCandidate[];
+interface CapturedTableSaveTarget {
   manifest: ProjectManifest;
   modRoot: string;
   state: ModTableState;
   table: TableKey;
 }
 
-export function captureActiveTableSaveTarget(manifest: ProjectManifest | null): CapturedTableSaveTarget | null {
+interface TableSaveOptions {
+  manifest: ProjectManifest | null;
+  selectAssociatedSpecs: (candidates: AssociatedSpecCandidate[]) => Promise<AssociatedSpecChange[] | null>;
+  feedback?: AppFeedback;
+}
+
+const pendingSaves = new WeakMap<ReturnType<typeof useTablesStore>, Promise<TableSaveResult>>();
+
+export function saveActiveTableChanges(options: TableSaveOptions): Promise<TableSaveResult> {
+  const tables = useTablesStore();
+  const pending = pendingSaves.get(tables);
+  if (pending) return pending;
+  const target = captureActiveTableSaveTarget(options.manifest);
+  if (!target) return Promise.resolve('noop');
+  tables.setSaving(true);
+  const saving = saveTarget(target, options).finally(() => {
+    tables.setSaving(false);
+    pendingSaves.delete(tables);
+  });
+  pendingSaves.set(tables, saving);
+  return saving;
+}
+
+function captureActiveTableSaveTarget(manifest: ProjectManifest | null): CapturedTableSaveTarget | null {
   const tables = useTablesStore();
   const modRoot = tables.activeModRoot;
   const state = tables.getActiveModTableState();
   if (!manifest || !modRoot || !state || manifest.modRoot !== modRoot) return null;
 
-  tables.finishCellEdit();
   const table = state.currentTab;
-  const associatedSpecCandidates = getAssociatedSpecCandidates(state, table, manifest.associatedSpecTables, resolveTableRowKey);
-  return { associatedSpecCandidates, manifest, modRoot, state, table };
+  return { manifest, modRoot, state, table };
 }
 
-export async function saveCapturedTableChanges(
-  target: CapturedTableSaveTarget | null,
-  associatedSpecs: AssociatedSpecChange[],
-  feedback?: AppFeedback,
-): Promise<TableSaveResult> {
+async function saveTarget(target: CapturedTableSaveTarget, options: TableSaveOptions): Promise<TableSaveResult> {
   const tables = useTablesStore();
-  if (!target || tables.saving) return 'noop';
-  if (!isTableSaveTargetCurrent(target)) return 'noop';
   const state = target.state;
+  const pending = tables.getTableInputs(target.modRoot, target.table).commit();
+  if (pending && !(await pending)) return 'cancelled';
+  if (!isTableSaveTargetCurrent(target)) return 'noop';
+  const { manifest, modRoot, table } = target;
+  if (Object.keys(state.dirty[table]).length === 0) return 'noop';
 
-  tables.setSaving(true);
-  try {
-    const { manifest, modRoot, table } = target;
-    if (Object.keys(state.dirty[table]).length === 0) return 'noop';
-
-    const csvEditHistory = useTablesEditHistoryStore();
-    const submittedHistory = csvEditHistory.captureSaveHistory(modRoot, table);
-    const patches = buildCurrentTablePatches(state, table);
-    const result = await runConfirmedJsonWrite(feedback, (options) =>
-      writeCsvPatch(manifest.sessionId, modRoot, table, patches, associatedSpecs, options, state.baseVersions[table]),
-    );
-    if (!result) return 'cancelled';
-    recordLogBestEffort({
-      level: 'info',
-      code: 'tables.csv_saved',
-      message: 'csv saved',
-      path: null,
-      line: null,
-      fields: {
-        modRoot,
-        sessionId: manifest.sessionId,
-        table,
-        patches: String(patches.length),
-        changes: String(result.changes.length),
-        associatedSpecs: String(associatedSpecs.length),
-      },
-    });
+  const csvEditHistory = useTablesEditHistoryStore();
+  const submittedHistory = csvEditHistory.captureSaveHistory(modRoot, table);
+  const patches = buildCurrentTablePatches(state, table);
+  const baseVersions = deepClone(state.baseVersions[table]);
+  const candidates = deepClone(getAssociatedSpecCandidates(state, table, manifest.associatedSpecTables, resolveTableRowKey));
+  const associatedSpecs = candidates.length > 0 ? await options.selectAssociatedSpecs(candidates) : [];
+  if (associatedSpecs === null) return 'cancelled';
+  if (!isTableSaveTargetCurrent(target)) return 'noop';
+  const result = await runConfirmedJsonWrite(options.feedback, (writeOptions) =>
+    writeCsvPatch(manifest.sessionId, modRoot, table, patches, associatedSpecs, writeOptions, baseVersions),
+  );
+  if (!result) return 'cancelled';
+  recordLogBestEffort({
+    level: 'info',
+    code: 'tables.csv_saved',
+    message: 'csv saved',
+    path: null,
+    line: null,
+    fields: {
+      modRoot,
+      sessionId: manifest.sessionId,
+      table,
+      patches: String(patches.length),
+      changes: String(result.changes.length),
+      associatedSpecs: String(associatedSpecs.length),
+    },
+  });
+  if (!isTableSaveTargetCurrent(target)) return 'saved';
+  if (result.changes.length > 0) {
+    await completeSavedWrite({ modRoot, result, label: `保存 ${table} CSV`, sessionId: manifest.sessionId }, useProjectStore());
     if (!isTableSaveTargetCurrent(target)) return 'saved';
-    if (result.changes.length > 0) {
-      await completeSavedWrite({ modRoot, result, label: `保存 ${table} CSV`, sessionId: manifest.sessionId }, useProjectStore());
-      if (!isTableSaveTargetCurrent(target)) return 'saved';
-      commitCsvTableSaveDraft(state, table, patches, result.keyMap);
-      state.baseVersions[table] = result.baseVersions;
-      csvEditHistory.applySavedRowKeyMap(modRoot, table, result.keyMap);
-      csvEditHistory.commitSaveHistory(modRoot, table, submittedHistory);
-      if (Object.keys(state.dirty[table]).length === 0) csvEditHistory.clearCsvEditHistory(modRoot, table);
-    }
-    return 'saved';
-  } finally {
-    tables.setSaving(false);
+    commitCsvTableSaveDraft(state, table, patches, result.keyMap);
+    state.baseVersions[table] = result.baseVersions;
+    csvEditHistory.applySavedRowKeyMap(modRoot, table, result.keyMap);
+    csvEditHistory.commitSaveHistory(modRoot, table, submittedHistory);
+    if (Object.keys(state.dirty[table]).length === 0) csvEditHistory.clearCsvEditHistory(modRoot, table);
   }
+  return 'saved';
 }
 
 function isTableSaveTargetCurrent(target: CapturedTableSaveTarget): boolean {
@@ -103,7 +120,7 @@ function buildCurrentTablePatches(state: ModTableState, table: TableKey): CsvRow
     const row = state.tables[table].find(
       (candidate, index) => isLoadedCsvTableRow(candidate) && resolveTableRowKey(table, candidate, index) === rowKey,
     );
-    const cleanRow = Object.fromEntries(Object.entries(row ?? {}).filter(([key]) => !isInternalJsonFieldKey(key)));
+    const cleanRow = deepClone(Object.fromEntries(Object.entries(row ?? {}).filter(([key]) => !isInternalJsonFieldKey(key))));
     return { rowKey, action: 'upsert', row: cleanRow, ...(typeof row?._insertAt === 'number' ? { insertAt: row._insertAt } : {}) };
   });
 }

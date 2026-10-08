@@ -9,8 +9,7 @@ const mocks = vi.hoisted(() => ({
   scanDirectoryGameOverview: vi.fn(),
   openDirectoryTarget: vi.fn(),
   openModFromOverview: vi.fn(),
-  captureActiveTableSaveTarget: vi.fn(),
-  saveCapturedTableChanges: vi.fn(),
+  saveActiveTableChanges: vi.fn(),
   captureWorkspaceCloseTarget: vi.fn(),
   closeWorkspaceRuntime: vi.fn(async () => {}),
   removeLoadedModRuntime: vi.fn(async () => {}),
@@ -25,8 +24,7 @@ vi.mock('@/services/session.service', () => ({
 }));
 
 vi.mock('@/orchestrators/table-save.orchestrator', () => ({
-  captureActiveTableSaveTarget: mocks.captureActiveTableSaveTarget,
-  saveCapturedTableChanges: mocks.saveCapturedTableChanges,
+  saveActiveTableChanges: mocks.saveActiveTableChanges,
 }));
 
 vi.mock('@/orchestrators/directory-opening.orchestrator', () => ({
@@ -167,26 +165,24 @@ describe('useWorkspaceShellActions', () => {
   });
 
   it('skips saving when there is no captured table target', async () => {
-    mocks.captureActiveTableSaveTarget.mockReturnValue(null);
+    mocks.saveActiveTableChanges.mockResolvedValue('noop');
     const feedback = feedbackStub();
     const actions = useWorkspaceShellActions(feedback);
     await actions.saveChanges();
-    expect(mocks.saveCapturedTableChanges).not.toHaveBeenCalled();
+    expect(mocks.saveActiveTableChanges).toHaveBeenCalledTimes(1);
   });
 
   it('reports the save result of the active table', async () => {
-    mocks.captureActiveTableSaveTarget.mockReturnValue({ modRoot: 'M:/mod', associatedSpecCandidates: [] });
-    mocks.saveCapturedTableChanges.mockResolvedValue('saved');
+    mocks.saveActiveTableChanges.mockResolvedValue('saved');
     const feedback = feedbackStub();
     const actions = useWorkspaceShellActions(feedback);
     await actions.saveChanges();
-    expect(mocks.saveCapturedTableChanges).toHaveBeenCalledWith(expect.anything(), [], feedback);
+    expect(mocks.saveActiveTableChanges).toHaveBeenCalledWith({ manifest: null, selectAssociatedSpecs: expect.any(Function), feedback });
     expect(feedback.success).toHaveBeenCalledWith('当前 CSV 表已保存');
   });
 
   it('informs when there is nothing to save', async () => {
-    mocks.captureActiveTableSaveTarget.mockReturnValue({ modRoot: 'M:/mod', associatedSpecCandidates: [] });
-    mocks.saveCapturedTableChanges.mockResolvedValue('noop');
+    mocks.saveActiveTableChanges.mockResolvedValue('noop');
     const feedback = feedbackStub();
     const actions = useWorkspaceShellActions(feedback);
     await actions.saveChanges();

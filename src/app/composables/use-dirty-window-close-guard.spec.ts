@@ -1,6 +1,9 @@
 import { mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref, type Ref } from 'vue';
+import { h, ref, type Ref } from 'vue';
+import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
+import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
+import { editorUiStubs } from '@/test/ui-stubs';
 
 const mocks = vi.hoisted(() => {
   let closeRequestHandler: ((event: { preventDefault: () => void }) => void | Promise<void>) | null = null;
@@ -141,5 +144,29 @@ describe('useDirtyWindowCloseGuard', () => {
     const { prevented } = closeRequest();
     expect(prevented).toBe(false);
     expect(mocks.feedback.choose).not.toHaveBeenCalled();
+  });
+
+  it('guards an unfinished JSON input while the formal draft still equals its baseline', async () => {
+    mocks.feedback.choose.mockResolvedValue(null);
+    let guard!: ReturnType<typeof useDirtyWindowCloseGuard>;
+    const wrapper = mount(
+      {
+        setup() {
+          const session = useEditTargetDraftSession({ emptyValue: {}, load: () => ({ value: {} }), targetKey: (key: string) => key });
+          session.loadBaseForTarget('one', {});
+          guard = useDirtyWindowCloseGuard({ content: '未提交输入', title: '关闭？', dirty: session.dirty });
+          return () =>
+            h(JsonValueInput<'object'>, { value: session.draftValue.value, shape: 'object', label: '规格', onUpdate: session.setDraft });
+        },
+      },
+      { global: { stubs: editorUiStubs } },
+    );
+    await guard.install();
+    await wrapper.get('textarea').setValue('{');
+    expect(closeRequest().prevented).toBe(true);
+    await vi.waitFor(() => expect(mocks.feedback.choose).toHaveBeenCalledTimes(1));
+    expect(mocks.destroyCurrentWindow).not.toHaveBeenCalled();
+    guard.dispose();
+    wrapper.unmount();
   });
 });

@@ -56,7 +56,7 @@ function isSchemaComponent(current) {
 
 /** @param {string} text @param {import('../../shared/classify.mjs').FrontendPathClass} current @returns {boolean} */
 function isSchemaFieldRenderer(text, current) {
-  return isSchemaComponent(current) && /\bfield\s*:\s*FieldSchema\b/.test(text);
+  return isSchemaComponent(current) && /\bfield\s*:\s*FieldSchema\b/.test(text) && /v-(?:else-)?if="[^"]*field\.type/.test(text);
 }
 
 /** @param {string} text @param {import('../../shared/classify.mjs').FrontendPathClass} current @returns {boolean} */

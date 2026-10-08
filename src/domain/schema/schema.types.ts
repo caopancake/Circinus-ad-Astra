@@ -19,6 +19,8 @@ export const FIELD_TYPES = [
 
 export type FieldType = (typeof FIELD_TYPES)[number];
 
+export type SchemaFieldUpdate = { kind: 'set'; value: unknown } | { kind: 'remove' };
+
 export const FIELD_TYPE_SET: ReadonlySet<string> = new Set(FIELD_TYPES);
 
 export interface FieldSchema {

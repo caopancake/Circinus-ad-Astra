@@ -1,10 +1,13 @@
 <template>
-  <div class="csv-cell-picker" :style="pickerStyle" tabindex="-1" @mousedown.stop @keydown.esc.prevent="$emit('close')">
+  <div class="csv-cell-picker" :style="pickerStyle" tabindex="-1" @mousedown.stop @keydown.esc.stop.prevent="$emit('cancel')">
+    <input ref="searchRef" v-model="query" class="csv-cell-picker-search" placeholder="搜索选项" />
+    <button class="csv-cell-picker-action" type="button" @click="toggleCustomMode">自定义值</button>
     <input
-      ref="searchRef"
-      v-model="query"
-      class="csv-cell-picker-search"
-      placeholder="搜索或输入自定义值"
+      v-if="customMode"
+      :value="customText"
+      class="csv-cell-picker-custom"
+      placeholder="输入自定义值"
+      @input="updateCustom"
       @keydown.enter.prevent="submitCustom"
     />
     <button v-if="!multiple && selectedValues.size > 0" class="csv-cell-picker-clear" type="button" @click="clearValue">清除当前值</button>
@@ -26,39 +29,40 @@
         </button>
       </template>
     </div>
+    <button v-if="multiple" class="csv-cell-picker-action" type="button" @click="$emit('commit', captureValues())">确认选择</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watchEffect } from 'vue';
 import { groupSelectOptions, type SelectOption } from '@/domain/schema/schema-options';
-import { useProjectStore } from '@/stores/project.store';
 import { useSchemaSelectMedia } from '@/app/composables/tables/use-schema-select-media';
+import { useCsvFloatingPanel } from '@/app/composables/tables/use-csv-floating-panel';
 
 const props = defineProps<{
   anchor: { height: number; left: number; top: number; width: number };
   multiple: boolean;
+  sessionId: string;
   options: SelectOption[];
   values: string[];
 }>();
 
 const emit = defineEmits<{
-  close: [];
+  cancel: [];
+  commit: [values: string[]];
+  'pending-custom': [dirty: boolean];
   update: [values: string[]];
 }>();
 
-const project = useProjectStore();
 const { schemaSelectSprite, ensureSchemaSelectSprites } = useSchemaSelectMedia();
-const sessionId = computed(() => project.activeSessionId ?? undefined);
 
 function optionSprite(option: SelectOption): string | undefined {
-  return schemaSelectSprite(sessionId.value ?? undefined, option.resourceRef);
+  return schemaSelectSprite(props.sessionId, option.resourceRef);
 }
 
 watchEffect(
   () => {
-    const sid = sessionId.value;
-    if (!sid) return;
+    const sid = props.sessionId;
     const resources = props.options.flatMap((option) => (option.resourceRef ? [option.resourceRef] : []));
     if (resources.length > 0) void ensureSchemaSelectSprites(sid, resources);
   },
@@ -66,25 +70,15 @@ watchEffect(
 );
 
 const query = ref('');
+const customMode = ref(false);
+const customText = ref('');
 const searchRef = useTemplateRef<HTMLInputElement>('searchRef');
 const selectedValues = computed(() => new Set(props.values));
 
 // Mirrors the .csv-cell-picker max-height in tables.css.
 const PICKER_MAX_HEIGHT = 320;
 
-const pickerStyle = computed(() => {
-  const top = props.anchor.top + props.anchor.height + 2;
-  const spaceBelow = window.innerHeight - top;
-  // Open upward when the downward panel would be clipped by the window edge.
-  const flipUp = spaceBelow < PICKER_MAX_HEIGHT && props.anchor.top - 2 > spaceBelow;
-  return {
-    bottom: flipUp ? `${window.innerHeight - props.anchor.top + 2}px` : undefined,
-    left: `${props.anchor.left}px`,
-    minWidth: `${Math.max(props.anchor.width, 220)}px`,
-    top: flipUp ? undefined : `${top}px`,
-    width: `${Math.min(Math.max(props.anchor.width, 300), 600)}px`,
-  };
-});
+const pickerStyle = useCsvFloatingPanel(() => props.anchor, PICKER_MAX_HEIGHT);
 const groups = computed(() => groupSelectOptions(props.options));
 const filteredGroups = computed(() => {
   const needle = query.value.trim().toLowerCase();
@@ -107,14 +101,12 @@ onUnmounted(() => {
 });
 
 function clearValue() {
-  emit('update', ['']);
-  emit('close');
+  emit('commit', ['']);
 }
 
 function selectOption(value: string) {
   if (!props.multiple) {
-    emit('update', [value]);
-    emit('close');
+    emit('commit', [value]);
     return;
   }
   const next = new Set(props.values);
@@ -124,21 +116,43 @@ function selectOption(value: string) {
 }
 
 function submitCustom() {
-  const trimmed = query.value.trim();
-  if (!trimmed) return;
+  const values = captureValues();
+  if (props.multiple) emit('update', values);
+  else emit('commit', values);
+}
+
+function captureValues(): string[] {
+  const trimmed = customText.value.trim();
+  cancelCustom();
+  if (!trimmed) return props.values;
   if (props.multiple) {
     const next = new Set(props.values);
     next.add(trimmed);
-    emit('update', [...next]);
-  } else {
-    emit('update', [trimmed]);
-    emit('close');
+    return [...next];
   }
+  return [trimmed];
 }
+
+function updateCustom(event: Event) {
+  customText.value = (event.target as HTMLInputElement).value;
+  emit('pending-custom', customText.value.trim() !== '');
+}
+
+function toggleCustomMode() {
+  if (customMode.value) cancelCustom();
+  customMode.value = !customMode.value;
+}
+
+function cancelCustom() {
+  customText.value = '';
+  emit('pending-custom', false);
+}
+
+defineExpose({ captureValues, cancelCustom });
 
 function handleDocumentMouseDown(event: MouseEvent) {
   const target = event.target as { closest?: (selector: string) => unknown } | null;
   if (target?.closest?.('.csv-cell-picker')) return;
-  emit('close');
+  emit('commit', captureValues());
 }
 </script>

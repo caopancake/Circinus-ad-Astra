@@ -1,4 +1,4 @@
-export type { JsonValue, RowData } from '@/shared/types/json.types';
+export type { JsonInputShape, JsonInputValue, JsonValue, RowData } from '@/shared/types/json.types';
 export type { CreatedMod, CreateModRequest, NewModDestination, NewModTemplate } from '@/shared/types/mod-creation.types';
 export type { AccentPreset, AppSettings, AppTheme, EditMode, LogLevel } from '@/shared/types/settings.types';
 export { ACCENT_PRESET_VALUES, APP_THEMES, EDIT_MODES, LOG_LEVELS } from '@/shared/types/settings.types';
@@ -37,6 +37,8 @@ export type {
 } from '@/shared/types/config-entity.types';
 export type {
   CsvDirtyRow,
+  CsvCellTarget,
+  CsvTableTarget,
   CsvFactionFilter,
   CsvGridRowSlot,
   CsvLoadedRowSlot,

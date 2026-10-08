@@ -249,11 +249,7 @@
               </div>
             </n-collapse-item>
             <n-collapse-item title="内置装备" name="builtins">
-              <ObjectEditor
-                :model-value="localShip.builtInWeapons"
-                @update:model-value="builtInWeaponsUpdated"
-                @invalid-json="feedback.warning('builtInWeapons JSON 无效，已保留输入内容')"
-              />
+              <JsonValueInput :value="localShip.builtInWeapons" label="builtInWeapons" shape="object" @update="builtInWeaponsUpdated" />
               <label>builtInMods</label><n-dynamic-tags v-model:value="builtInMods" /> <label>builtInWings</label
               ><n-dynamic-tags v-model:value="builtInWings" />
             </n-collapse-item>
@@ -276,7 +272,7 @@ import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import EditorFooter from '@/app/components/editors/common/EditorFooter.vue';
 import EditorHeader from '@/app/components/editors/common/EditorHeader.vue';
 import EditorInspector from '@/app/components/editors/common/EditorInspector.vue';
-import ObjectEditor from '@/app/components/editors/common/ObjectEditor.vue';
+import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
 import type { RowData } from '@/shared/types';
 import { arr, deepClone, num, str } from '@/shared/lib/starsector';
 import { entryKey } from '@/shared/lib/entry-keys';
@@ -1456,8 +1452,8 @@ function deleteSelected() {
   draw();
   return true;
 }
-function builtInWeaponsUpdated(value: unknown) {
-  localShip.value.builtInWeapons = value as RowData;
+function builtInWeaponsUpdated(value: RowData) {
+  localShip.value.builtInWeapons = value;
   commitDraft();
 }
 async function pickShipSprite() {

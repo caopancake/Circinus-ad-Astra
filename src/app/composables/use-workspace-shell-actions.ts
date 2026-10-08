@@ -5,7 +5,7 @@ import { useSettingsStore } from '@/stores/settings.store';
 import { openEditorWindow } from '@/windows/editor.window';
 import { useProjectStore } from '@/stores/project.store';
 import { pickDirectory, scanDirectoryGameOverview } from '@/services/session.service';
-import { captureActiveTableSaveTarget, saveCapturedTableChanges } from '@/orchestrators/table-save.orchestrator';
+import { saveActiveTableChanges } from '@/orchestrators/table-save.orchestrator';
 import { useTablesStore } from '@/stores/tables.store';
 import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
@@ -103,43 +103,33 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   }
 
   async function saveChanges() {
+    if (tables.saving) return;
     try {
-      const target = captureActiveTableSaveTarget(project.activeManifest);
-      if (!target) return;
-      const candidates = target.associatedSpecCandidates;
-      if (candidates.length > 0) {
-        const selectedAssociatedSpecKeys = ref<Set<string>>(new Set(candidates.map((candidate) => candidate.key)));
-        feedback.confirmWarning({
-          title: '保存 CSV',
-          content: () => renderAssociatedSpecDialog(candidates, selectedAssociatedSpecKeys),
-          actionText: '保存',
-          onConfirm: async () => {
-            try {
-              const selected = candidates
-                .filter((candidate) => selectedAssociatedSpecKeys.value.has(candidate.key))
-                .map(({ action, id, previousId, row }) => ({
-                  action,
-                  id,
-                  previousId,
-                  row,
-                }));
-              const result = await saveCapturedTableChanges(target, selected, feedback);
-              showSaveResult(result);
-            } catch (err) {
-              feedback.error(err, '保存 CSV 失败');
-            }
-          },
-        });
-        return;
-      }
-      const result = await saveCapturedTableChanges(target, [], feedback);
+      const result = await saveActiveTableChanges({ manifest: project.activeManifest, selectAssociatedSpecs, feedback });
       showSaveResult(result);
     } catch (err) {
       feedback.error(err, '保存 CSV 失败');
     }
   }
 
+  async function selectAssociatedSpecs(candidates: AssociatedSpecCandidate[]) {
+    const selectedKeys = ref(new Set(candidates.map((candidate) => candidate.key)));
+    const choice = await feedback.choose({
+      title: '保存 CSV',
+      content: () => renderAssociatedSpecDialog(candidates, selectedKeys),
+      choices: [{ label: '保存', value: 'save', type: 'primary' }],
+    });
+    if (choice !== 'save') return null;
+    return candidates
+      .filter((candidate) => selectedKeys.value.has(candidate.key))
+      .map(({ action, id, previousId, row }) => ({ action, id, previousId, row }));
+  }
+
   function undoCurrentTableEdit() {
+    return runTableAction(applyUndo);
+  }
+
+  function applyUndo() {
     const label = tables.undoCurrentTableEdit();
     if (label === null) {
       feedback.error('撤销 CSV 编辑失败');
@@ -156,6 +146,10 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   }
 
   function redoCurrentTableEdit() {
+    return runTableAction(applyRedo);
+  }
+
+  function applyRedo() {
     const label = tables.redoCurrentTableEdit();
     if (label === null) {
       feedback.error('重做 CSV 编辑失败');
@@ -173,7 +167,10 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
 
   async function addNewRow() {
     if (!project.activeManifest) return;
+    const root = tables.activeModRoot;
+    const table = tables.currentTab;
     try {
+      if ((await commitCurrentInput()) === false || root !== tables.activeModRoot || table !== tables.currentTab) return;
       const created = await tables.addNewRow();
       recordLogBestEffort({
         level: 'info',
@@ -195,7 +192,16 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
 
   async function deleteSelectedRow() {
     if (!project.activeManifest || !tables.selectedRowKey) return;
+    const root = tables.activeModRoot;
+    const table = tables.currentTab;
+    const rowKey = tables.selectedRowKey;
     try {
+      const target = tables.editing;
+      if (target?.rowKey === tables.selectedRowKey) {
+        tables.getTableInputs(target.modRoot, target.table).cancel();
+        tables.setActiveCell(null, target.modRoot);
+      } else if ((await commitCurrentInput()) === false) return;
+      if (root !== tables.activeModRoot || table !== tables.currentTab || rowKey !== tables.selectedRowKey) return;
       const deleted = await tables.deleteSelected();
       recordLogBestEffort({
         level: 'info',
@@ -213,6 +219,26 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
     } catch (err) {
       feedback.error(err, '删除 CSV 行失败');
     }
+  }
+
+  function commitCurrentInput() {
+    const root = tables.activeModRoot;
+    return root ? tables.getTableInputs(root, tables.currentTab).commit() : undefined;
+  }
+
+  function runTableAction(action: () => void) {
+    const pending = commitCurrentInput();
+    if (!pending) {
+      action();
+      return;
+    }
+    const root = tables.activeModRoot;
+    const table = tables.currentTab;
+    return pending
+      .then((accepted) => {
+        if (accepted && tables.activeModRoot === root && tables.currentTab === table) action();
+      })
+      .catch((error: unknown) => feedback.error(error));
   }
 
   function handleDetailAction(action: TableDetailAction) {

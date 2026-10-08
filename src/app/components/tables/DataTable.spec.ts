@@ -3,6 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ref } from 'vue';
 import DataTable from './DataTable.vue';
 import type { CsvTableViewModel } from '@/app/composables/tables/use-csv-table-view-model';
+import { createFieldInputs } from '@/shared/runtime/field-inputs';
+import { createPinia, setActivePinia } from 'pinia';
+import { initializeSettingsStore } from '@/stores/settings.store';
+
+vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ choose: vi.fn() }) }));
 
 let wrapper: VueWrapper | null = null;
 
@@ -13,6 +18,7 @@ afterEach(() => {
 
 function tableVmFixture(overrides: { tables?: Record<string, unknown>; loadExternalTableUpdate?: () => void } = {}): CsvTableViewModel {
   return {
+    target: ref({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }),
     gridModel: ref({ columns: [], rows: [], totalWidthPx: 0, performanceSample: {}, sourceIndex: {} }),
     effectiveColumns: ref([]),
     effectiveTotalWidthPx: ref(0),
@@ -26,13 +32,26 @@ function tableVmFixture(overrides: { tables?: Record<string, unknown>; loadExter
       isDirty: () => false,
       selectedRowKey: null,
       selectRowByKey: vi.fn(),
-      updateCellValueByKey: vi.fn(),
+      getTableInputs: () => createFieldInputs(),
+      updateCellValue: vi.fn(),
+      setActiveCell: vi.fn(),
       ...overrides.tables,
     },
   } as unknown as CsvTableViewModel;
 }
 
 function mountTable(vm: CsvTableViewModel) {
+  setActivePinia(createPinia());
+  initializeSettingsStore({
+    theme: 'light',
+    accent: 'blue',
+    customAccent: '#3388cc',
+    historyLimit: 20,
+    editMode: 'smart',
+    starsectorRoot: null,
+    logDirectory: null,
+    logLevel: 'info',
+  });
   wrapper = mount(DataTable, {
     props: { csvTable: vm },
     global: {

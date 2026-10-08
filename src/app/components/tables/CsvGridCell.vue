@@ -12,13 +12,11 @@
         :row="row"
         :source-index="sourceIndex"
         @close="$emit('close-active-cell')"
-        @update-cell="forwardUpdateCell"
       />
       <CsvGridStaticCell v-else :column="column" :row="row" :source-index="sourceIndex" />
     </CsvCellFrame>
   </td>
 </template>
-
 <script setup lang="ts">
 import { computed, useTemplateRef } from 'vue';
 import type { CsvWindowRow } from '@/shared/types';
@@ -39,13 +37,8 @@ defineProps<{
 const frameRef = useTemplateRef('frameRef');
 const frameElement = computed(() => frameRef.value?.frameRef ?? null);
 
-const emit = defineEmits<{
+defineEmits<{
   'activate-cell': [row: CsvWindowRow, column: CsvGridColumn, event: MouseEvent];
   'close-active-cell': [];
-  'update-cell': [rowKey: string, column: string, value: string];
 }>();
-
-function forwardUpdateCell(rowKey: string, column: string, value: string) {
-  emit('update-cell', rowKey, column, value);
-}
 </script>

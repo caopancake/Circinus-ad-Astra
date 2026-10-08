@@ -25,7 +25,7 @@ vi.mock('@/app/composables/use-app-feedback', () => ({
     warning: vi.fn(),
     error: vi.fn(),
     confirmDanger: vi.fn(),
-    confirmWarning: vi.fn(),
+    confirmWarning: vi.fn((options: { onConfirm: () => void }) => options.onConfirm()),
     choose: vi.fn(async () => null),
   }),
 }));

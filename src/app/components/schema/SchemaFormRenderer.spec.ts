@@ -5,6 +5,11 @@ import type { RowData } from '@/shared/types';
 import type { FileSchema } from '@/domain/schema/schema.types';
 import SchemaFormRenderer from './SchemaFormRenderer.vue';
 import { editorUiStubs } from '@/test/ui-stubs';
+import { createPinia, setActivePinia } from 'pinia';
+import { vi } from 'vitest';
+import { initializeSettingsStore } from '@/stores/settings.store';
+
+vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ choose: vi.fn() }) }));
 
 const schema: FileSchema = {
   $schema: 'circinus-ad-astra/field-schema/v1',
@@ -16,6 +21,17 @@ const schema: FileSchema = {
 };
 
 function mountForm(modelValue: RowData) {
+  setActivePinia(createPinia());
+  initializeSettingsStore({
+    theme: 'light',
+    accent: 'blue',
+    customAccent: '#3388cc',
+    historyLimit: 20,
+    editMode: 'smart',
+    starsectorRoot: null,
+    logDirectory: null,
+    logLevel: 'info',
+  });
   return mount(SchemaFormRenderer, {
     props: { schema, modelValue },
     global: {
@@ -59,7 +75,7 @@ describe('SchemaFormRenderer', () => {
   it('writes field updates back into the model with dotted paths', async () => {
     const form = mountForm({ name: 'a' });
     const fields = form.findAllComponents({ name: 'SchemaFieldRenderer' });
-    fields[0]!.vm.$emit('update', 'renamed');
+    fields[0]!.vm.$emit('update', { kind: 'set', value: 'renamed' });
     await nextTick();
     expect(form.emitted('update:modelValue')?.at(-1)).toEqual([{ name: 'renamed' }]);
   });

@@ -9,6 +9,8 @@
 `src/domain/edit-session.ts`：编辑会话与撤销栈原语 owner，拥有 base/draft/dirty/revision/pending external 状态机与双栈状态工厂。
 `src/app/composables/use-draft-session.ts`：通用 Draft Session 适配器 owner，保持 Ref API。
 `src/app/composables/use-edit-target-draft-session.ts`：按目标管理的 Draft Session 适配器 owner。
+`src/shared/runtime/field-inputs.ts`：目标输入集合 owner，拥有登记顺序、提交接纳、取消与释放。
+`src/shared/runtime/raw-field-input.ts`：原始文本输入 owner，拥有原文、输入基线、转换与非法状态。
 `src/app/composables/config/use-config-editor-draft-session.ts`：配置目标 Draft Session 组合 owner。
 `src/stores/draft-sessions.store.ts`：未保存工作注册表 owner，按 `modRoot` 聚合会话登记与判定源。
 `src/orchestrators/table-save.orchestrator.spec.ts`：表保存编排行为测试。
@@ -18,7 +20,8 @@
 - identity 必须完整包含所属 Mod 与实体或文件目标；切换目标前必须显式处理 dirty。
 - dirty 时外部版本只暂存或提示，严禁覆盖；无 dirty 才能采用新 base。
 - 草稿严禁持久化、直接 query、直接 write 或直接写 history。
-- 未保存工作注册表是 Mod 级判定的唯一入口：配置草稿按会话登记，CSV 表格等机制以判定函数登记；消费方必须查询注册表，严禁自行对多来源做并集。
+- 未保存工作注册表必须响应式登记会话与判定源；配置会话必须聚合草稿与输入差异，CSV 判定源必须聚合全部表的草稿与输入差异；Mod 级消费方只允许查询该注册表。
+- 输入集合必须归属编辑目标；控件必须拥有原文、错误状态与取消动作，领域必须拥有形状与转换，会话必须拥有提交顺序与接纳权。
 - 切换或销毁 dirty 配置会话必须经统一确认；确认前不得改变选择、路由或工作区运行态。
 - 只允许以 save 显式返回的持久化快照提交 base；请求期间草稿继续变化时必须保留当前 draft、更新实际写盘 base，并暂存保存版本。
 
@@ -28,16 +31,17 @@
 
 1. ViewModel 为选定实体创建或切换 Draft Session。
 2. 表单双向赋值经适配器 setter 提交原语 draft，适配器投影 dirty。
-3. 主窗口存活期间按 `modRoot` 在注册表登记 dirty。
-4. 保存成功后以返回实体提交 base 并清除 dirty。
-5. 请求期间草稿继续变化时，保存结果更新 base 并进入 pending external，当前 draft 保留。
+3. 延迟提交控件登记原始输入，输入差异进入所属会话 dirty。
+4. 主窗口存活期间按 `modRoot` 在注册表登记 dirty。
+5. 保存先逐项提交输入，再捕获独立草稿与版本凭据。
+6. 保存成功后以返回实体提交 base；请求期间的新草稿与原始输入保留。
 
 ### 外部更新接入
 
 1. 外部刷新按目标身份与会话 revision 接入。
 2. 无 dirty 时直接采用新 base。
 3. 有 dirty 时外部版本仅暂存并提示可载入。
-4. 用户确认载入后替换 draft 并清除暂存。
+4. 用户确认放弃后替换 draft、取消所属原始输入并清除暂存。
 
 ### 未保存判定
 
@@ -54,6 +58,9 @@
 ## 规范
 
 - 未完成字段输入必须参与 dirty、关闭确认和外部版本暂存；读取代次与本地保存代次必须共同决定迟到结果的接纳。
+- 原始输入提交必须按登记顺序执行，每项成功后必须等待消费者投影；失败必须保留原文、定位字段并以 `commit-field-inputs` 动作上抛一次错误。
+- 输入取消、目标变化与集合释放必须撤销当前提交接纳权；卸载必须解除登记，销毁会话必须释放集合与目标身份。
+- 字段删除只允许取消对应稳定身份的输入子树；明确基线替换必须取消所属集合输入。
 - 目标必须捕获 sessionId、modRoot、实体种类、ID 与实际路径；保存必须消费捕获目标，重命名必须在同一会话交接目标并保留后续输入。
 - 保存必须提交发起保存时的独立草稿快照，严禁提交可变引用。
 - 表单双向绑定必须经唯一适配器 setter 提交 draft，严禁直接替换投影状态或以深度 watch 同步业务副作用。

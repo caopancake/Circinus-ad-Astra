@@ -3,7 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CsvCellTextEditor from './CsvCellTextEditor.vue';
 
 function mountEditor(anchor: { height: number; left: number; top: number; width: number }, value = '原文') {
-  return mount(CsvCellTextEditor, { props: { anchor, value } });
+  const wrapper = mount(CsvCellTextEditor, {
+    props: {
+      anchor,
+      value,
+      onUpdate: (text: string) => {
+        void wrapper.setProps({ value: text });
+      },
+    },
+  });
+  return wrapper;
 }
 
 function outsideMouseDown() {
@@ -48,7 +57,7 @@ describe('CsvCellTextEditor', () => {
     await wrapper.find('textarea').trigger('keydown.enter.ctrl');
 
     expect(wrapper.emitted('commit')).toEqual([['第一行\n第二行']]);
-    expect(wrapper.emitted('close')).toHaveLength(1);
+    expect(wrapper.emitted('commit')).toHaveLength(1);
     wrapper.unmount();
   });
 
@@ -59,7 +68,7 @@ describe('CsvCellTextEditor', () => {
     await wrapper.find('textarea').trigger('keydown.esc');
 
     expect(wrapper.emitted('commit')).toBeUndefined();
-    expect(wrapper.emitted('close')).toHaveLength(1);
+    expect(wrapper.emitted('cancel')).toHaveLength(1);
     wrapper.unmount();
   });
 
@@ -70,7 +79,7 @@ describe('CsvCellTextEditor', () => {
     outsideMouseDown();
 
     expect(wrapper.emitted('commit')).toEqual([['外部提交']]);
-    expect(wrapper.emitted('close')).toHaveLength(1);
+    expect(wrapper.emitted('commit')).toHaveLength(1);
     wrapper.unmount();
   });
 
@@ -81,7 +90,7 @@ describe('CsvCellTextEditor', () => {
     outsideMouseDown();
 
     expect(wrapper.emitted('commit')).toBeUndefined();
-    expect(wrapper.emitted('close')).toHaveLength(1);
+    expect(wrapper.emitted('cancel')).toHaveLength(1);
     wrapper.unmount();
   });
 });

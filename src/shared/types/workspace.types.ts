@@ -1,5 +1,6 @@
 import type { GameModSummary, GameScanWarning } from '@/shared/types/query.types';
 import type { CsvDirtyRow, CsvFactionFilter, CsvTableRows, TableKey } from '@/shared/types/tables.types';
+import type { CsvCellTarget } from '@/shared/types/tables.types';
 
 export type WorkspaceColumnWidths = Record<string, Partial<Record<TableKey, Record<string, number>>>>;
 
@@ -38,7 +39,7 @@ export interface ModTableState {
   currentFaction: CsvFactionFilter;
   searchText: string;
   selectedRowKey: string | null;
-  editing: { tab: TableKey; rowKey: string; col: string; value: string } | null;
+  editing: CsvCellTarget | null;
   nextRowKey: number; // Per-mod row key counter to prevent collisions
 }
 

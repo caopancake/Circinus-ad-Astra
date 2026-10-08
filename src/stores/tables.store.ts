@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, shallowReactive } from 'vue';
+import { createFieldInputs, type FieldInputs } from '@/shared/runtime/field-inputs';
+import type { CsvCellTarget } from '@/shared/types';
 import {
   TABLE_KEYS,
   type CsvRowKeyMapping,
@@ -20,20 +22,16 @@ import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 import {
   applyCsvTableWindowDraft,
   applySavedCsvRowKeyMapDraft,
-  cancelCsvCellEditDraft,
   clearCsvTableExternalUpdateDraft,
   createCsvRowDraft,
   csvTableRowKey,
   deleteSelectedCsvRowDraft,
   discardCsvTableWindowForReloadDraft,
-  finishCsvCellEditDraft,
   hasCsvTableDraftChanges,
   markCsvTableExternalUpdateDraft,
   markCsvTableSavedDraft,
   replaceCsvTableDraft,
   setCsvCellValueDraft,
-  setCsvEditingValueDraft,
-  startCsvCellEditDraft,
   csvRowTargetOf,
   type CsvDraftResult,
   type CsvRowTarget,
@@ -98,6 +96,7 @@ export const useTablesStore = defineStore('tables', () => {
   const csvEditHistory = useTablesEditHistoryStore();
   const workspace = useWorkspaceStore();
   const stateMap = reactive<Map<string, ModTableState>>(new Map());
+  const inputMap = shallowReactive(new Map<string, Map<TableKey, FieldInputs>>());
   const saving = ref(false);
   // Active mod identity is owned by the workspace store; tables projects it
   // onto its per-Mod table state instead of keeping its own copy in sync.
@@ -181,7 +180,7 @@ export const useTablesStore = defineStore('tables', () => {
   const hasCurrentTableChanges = computed(() => {
     const state = getActiveState();
     if (!state) return false;
-    return Object.keys(state.dirty[state.currentTab]).length > 0 || state.editing?.tab === state.currentTab;
+    return hasTableDirtyChanges(state.currentTab);
   });
   const hasCurrentTableExternalUpdate = computed(() => {
     const state = getActiveState();
@@ -193,7 +192,7 @@ export const useTablesStore = defineStore('tables', () => {
   const canRedoCurrentTableEdit = computed(() =>
     activeModRoot.value ? csvEditHistory.canRedoCsvEdit(activeModRoot.value, currentTab.value) : false,
   );
-  const hasAnyTableChanges = computed(() => hasAnyTableDirtyChanges.value || editing.value !== null);
+  const hasAnyTableChanges = computed(() => (activeModRoot.value ? hasModDirtyChanges(activeModRoot.value) : false));
 
   // --- Per-Mod lifecycle ---
 
@@ -201,12 +200,15 @@ export const useTablesStore = defineStore('tables', () => {
     const state = createModTableState();
     applyManifestSummaries(state, manifest);
     stateMap.set(modRoot, state);
+    inputMap.get(modRoot)?.forEach((inputs) => inputs.release());
+    inputMap.set(
+      modRoot,
+      new Map(TABLE_KEYS.map((table) => [table, createFieldInputs(ref(JSON.stringify([manifest.sessionId, modRoot, table])))])),
+    );
   }
 
   function hydrateWithoutActivate(modRoot: string, manifest: ProjectManifest) {
-    const state = createModTableState();
-    applyManifestSummaries(state, manifest);
-    stateMap.set(modRoot, state);
+    hydrate(modRoot, manifest);
   }
 
   function activateFor(modRoot: string | null, manifest?: ProjectManifest | null) {
@@ -215,13 +217,15 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   function removeModState(modRoot: string) {
+    inputMap.get(modRoot)?.forEach((inputs) => inputs.release());
+    inputMap.delete(modRoot);
     stateMap.delete(modRoot);
   }
 
   function hasModDirtyChanges(modRoot: string): boolean {
     const state = stateMap.get(modRoot);
     if (!state) return false;
-    return TABLE_KEYS.some((key) => Object.keys(state.dirty[key]).length > 0);
+    return TABLE_KEYS.some((key) => Object.keys(state.dirty[key]).length > 0 || inputMap.get(modRoot)?.get(key)?.dirty.value);
   }
 
   // Table unsaved state joins the unsaved-work registry for unified Mod-level queries.
@@ -233,24 +237,25 @@ export const useTablesStore = defineStore('tables', () => {
     return getActiveState()?.tables[tab] ?? [];
   }
 
-  function switchTab(tab: TableKey) {
-    finishCellEdit();
-    currentTab.value = tab;
-    selectedRowKey.value = null;
-    searchText.value = '';
-    currentFaction.value = DEFAULT_CSV_FACTION_FILTER;
+  function switchTab(modRoot: string, tab: TableKey) {
+    const state = stateMap.get(modRoot)!;
+    if (state.currentTab === tab) return;
+    state.currentTab = tab;
+    state.selectedRowKey = null;
+    state.searchText = '';
+    state.currentFaction = DEFAULT_CSV_FACTION_FILTER;
   }
 
   function applyTableWindow(window: CsvTableWindow) {
     const state = getActiveState();
     if (!state) return;
-    applyCsvTableWindowDraft(state, window);
+    applyCsvTableWindowDraft(state, window, getTableInputs(activeModRoot.value!, window.table).dirty.value);
   }
 
   function hasTableDirtyChanges(tab: TableKey): boolean {
     const state = getActiveState();
     if (!state) return false;
-    return hasCsvTableDraftChanges(state, tab);
+    return hasCsvTableDraftChanges(state, tab) || getTableInputs(activeModRoot.value!, tab).dirty.value;
   }
 
   function markTableExternalUpdate(tab: TableKey) {
@@ -277,31 +282,18 @@ export const useTablesStore = defineStore('tables', () => {
     return csvDirtyCells(dirty.value[currentTab.value][rowKey])?.[col] !== undefined;
   }
 
-  function startCellEditByKey(rowKey: string, col: string, value: string) {
-    const state = getActiveState();
-    if (state) startCsvCellEditDraft(state, rowKey, col, value);
+  function getTableInputs(modRoot: string, table: TableKey): FieldInputs {
+    return inputMap.get(modRoot)!.get(table)!;
   }
 
-  function setEditingValue(value: string) {
-    const state = getActiveState();
-    if (state) setCsvEditingValueDraft(state, value);
+  function setActiveCell(target: CsvCellTarget | null, modRoot: string) {
+    const state = stateMap.get(modRoot);
+    if (state) state.editing = target;
   }
 
-  function finishCellEdit() {
-    const state = getActiveState();
-    if (!state) return;
-    pushCsvDraftResult(state.currentTab, finishCsvCellEditDraft(state));
-  }
-
-  function updateCellValueByKey(rowKey: string, col: string, value: string) {
-    const state = getActiveState();
-    if (!state) return;
-    pushCsvDraftResult(state.currentTab, setCsvCellValueDraft(state, state.currentTab, rowKey, col, value));
-  }
-
-  function cancelCellEdit() {
-    const state = getActiveState();
-    if (state) cancelCsvCellEditDraft(state);
+  function updateCellValue(target: CsvCellTarget, value: string) {
+    const state = stateMap.get(target.modRoot)!;
+    pushCsvDraftResult(target.table, setCsvCellValueDraft(state, target.table, target.rowKey, target.column, value), target.modRoot);
   }
 
   function undoCurrentTableEdit(): string | null {
@@ -345,6 +337,7 @@ export const useTablesStore = defineStore('tables', () => {
   function discardTableDraftForReload(tab: TableKey) {
     const state = getActiveState();
     if (!state) return;
+    getTableInputs(activeModRoot.value!, tab).cancel();
     discardCsvTableWindowForReloadDraft(state, tab);
   }
 
@@ -360,8 +353,7 @@ export const useTablesStore = defineStore('tables', () => {
     applySavedCsvRowKeyMapDraft(state, tab, keyMap);
   }
 
-  function pushCsvDraftResult(table: TableKey, result: CsvDraftResult) {
-    const modRoot = activeModRoot.value;
+  function pushCsvDraftResult(table: TableKey, result: CsvDraftResult, modRoot = activeModRoot.value) {
     if (!modRoot || !result.historyOperation || !result.historyLabel) return;
     csvEditHistory.pushCsvDraftOperation(modRoot, table, result.historyOperation, result.historyLabel);
   }
@@ -396,9 +388,9 @@ export const useTablesStore = defineStore('tables', () => {
     visibleColumns,
     activateFor,
     addNewRow,
-    cancelCellEdit,
     deleteSelected,
-    finishCellEdit,
+    getTableInputs,
+    setActiveCell,
     getActiveModTableState,
     getModTableState,
     hasModDirtyChanges,
@@ -414,14 +406,12 @@ export const useTablesStore = defineStore('tables', () => {
     selectRowByKey,
     setSaving,
     clearTableExternalUpdate,
-    startCellEditByKey,
-    setEditingValue,
     switchTab,
     applySavedRowKeyMapForMod,
     applyTableWindow,
     hasTableDirtyChanges,
     tableRowKey,
     undoCurrentTableEdit,
-    updateCellValueByKey,
+    updateCellValue,
   };
 });

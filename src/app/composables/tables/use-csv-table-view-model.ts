@@ -13,6 +13,7 @@ import type { SelectOption } from '@/domain/schema/schema-options';
 import { hasSourceInvalidation, hasTableInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/services/resource-cache.service';
 import type { CsvRowPreviewTarget, ResourceRef } from '@/shared/types';
+import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 
 export function useCsvTableViewModel() {
   const tables = useTablesStore();
@@ -25,6 +26,43 @@ export function useCsvTableViewModel() {
   let windowRequestId = 0;
   let sourceOptionsRequestId = 0;
   let lastWidthTable = '';
+  let disposed = false;
+  const target = computed(() =>
+    project.activeSessionId && tables.activeModRoot
+      ? {
+          sessionId: project.activeSessionId,
+          modRoot: tables.activeModRoot,
+          table: tables.currentTab,
+        }
+      : null,
+  );
+  const targetKey = computed(() => (target.value ? JSON.stringify(target.value) : ''));
+  const { confirmDiscard } = useFieldInputActions(null);
+
+  async function commitTableInput() {
+    const current = target.value;
+    if (!current) return;
+    const pending = tables.getTableInputs(current.modRoot, current.table).commit();
+    return pending ? await pending : true;
+  }
+
+  async function setSearchText(text: string) {
+    const key = targetKey.value;
+    try {
+      if ((await commitTableInput()) && key === targetKey.value) tables.searchText = text;
+    } catch (error) {
+      feedback.error(error);
+    }
+  }
+
+  async function setFactionFilter(value: string) {
+    const key = targetKey.value;
+    try {
+      if ((await commitTableInput()) && key === targetKey.value) tables.currentFactionOptionValue = value;
+    } catch (error) {
+      feedback.error(error);
+    }
+  }
 
   const gridModel = computed(() =>
     createCsvGridModel(
@@ -114,6 +152,9 @@ export function useCsvTableViewModel() {
     void reloadVisibleSourceOptions();
   });
   onUnmounted(() => {
+    disposed = true;
+    windowRequestId++;
+    sourceOptionsRequestId++;
     stopQueryInvalidation();
     stopResourceInvalidation();
   });
@@ -133,9 +174,16 @@ export function useCsvTableViewModel() {
     lockColumnWidthsForLoadedModel();
   }
 
-  async function loadExternalTableUpdate() {
-    tables.discardTableDraftForReload(tables.currentTab);
-    await reloadCurrentTableWindow();
+  function loadExternalTableUpdate() {
+    const captured = targetKey.value;
+    confirmDiscard(
+      () => {
+        if (disposed || targetKey.value !== captured) return;
+        void reloadCurrentTableWindow();
+      },
+      tables.hasTableDirtyChanges(tables.currentTab),
+      () => targetKey.value,
+    );
   }
 
   function lockColumnWidthsForLoadedModel() {
@@ -256,6 +304,10 @@ export function useCsvTableViewModel() {
 
   return {
     tables,
+    target,
+    targetKey,
+    setSearchText,
+    setFactionFilter,
     gridModel,
     effectiveColumns,
     effectiveTotalWidthPx,

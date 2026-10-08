@@ -13,6 +13,7 @@
 - 查询、订阅、项目失效与会话清理必须分别授权；项目失效归 ProjectSession 刷新编排，会话清理归工作区生命周期编排。
 - 组件必须经 ViewModel/composable 消费状态与动作；ViewModel 严禁直连 `shared/api`。组件直连后端会让错误语义、失效与权限校验脱离编排边界。
 - draft 提交为显式模型：交互与输入在动作边界提交 draft 并记录撤销，严禁深度同步 watch 携带业务副作用。
+- 延迟提交输入必须登记到所属目标会话；原文与正式草稿必须分别拥有状态，保存、关闭、替换与外部更新必须消费同一输入集合。
 - 状态、缓存、历史与窗口上下文按 `modRoot` 隔离；跨窗口与外部更新必须携带完整 session、Mod 与目标身份。
 - 领域文件按业务域归位（`domain/editors`、`domain/tables`、`domain/schema`、`domain/config`、`domain/settings`、`domain/workspace`），不按技术角色分桶；改动半径必须与业务边界重合。
 

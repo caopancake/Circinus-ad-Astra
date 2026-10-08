@@ -208,11 +208,7 @@
               <label>最大无人机数</label><n-input-number :value="localSystem.maxDrones" @update:value="setField('maxDrones', $event)" />
             </div>
             <h4 class="system-editor-heading">无人机行为定义</h4>
-            <ObjectEditor
-              :model-value="localSystem.droneBehavior ?? []"
-              @update:model-value="droneBehaviorUpdated"
-              @invalid-json="feedback.warning('无人机行为 JSON 无效，已保留输入内容')"
-            />
+            <JsonValueInput :value="localSystem.droneBehavior ?? []" label="droneBehavior" shape="array" @update="droneBehaviorUpdated" />
           </n-collapse-item>
 
           <n-collapse-item title="伤害（AI 理解用）" name="damage">
@@ -230,7 +226,7 @@
           </n-collapse-item>
 
           <n-collapse-item title="AI 提示" name="aiHints">
-            <ObjectEditor v-model="aiHintsJson" @invalid-json="feedback.warning('aiHints JSON 无效，已保留输入内容')" />
+            <JsonValueInput :value="aiHintsJson" label="aiHints" shape="object" @update="aiHintsJson = $event" />
           </n-collapse-item>
 
           <n-collapse-item title="额外字段" name="extra">
@@ -250,13 +246,13 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import ColorPicker from '@/shared/ui/ColorPicker.vue';
 import JsonFieldEditor from '@/shared/ui/JsonFieldEditor.vue';
 import EditorFooter from '@/app/components/editors/common/EditorFooter.vue';
 import EditorHeader from '@/app/components/editors/common/EditorHeader.vue';
-import ObjectEditor from '@/app/components/editors/common/ObjectEditor.vue';
-import type { RowData } from '@/shared/types';
+import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
+import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
+import type { JsonValue, RowData } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
 import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import { normalizeSystemSpec } from '@/domain/editors/lib/normalize';
@@ -275,9 +271,9 @@ const props = defineProps<{
   externalUpdateNotice: string;
 }>();
 const emit = defineEmits<{ close: []; 'save-requested': []; 'draft-changed': [system: RowData]; 'load-external': [] }>();
-const feedback = useAppFeedback();
 
 const localSystem = ref<RowData>(normalizeSystemSpec(props.system || { id: props.systemId, type: 'STAT_MOD' }));
+const { commitBefore } = useFieldInputActions();
 const expandedSections = ref(['basic']);
 const { bindObjectField } = useObjectField(localSystem, { onCommit: commitDraft });
 
@@ -355,8 +351,7 @@ function setField(key: string, value: RowData[string]) {
   commitDraft();
 }
 
-function droneBehaviorUpdated(value: unknown) {
-  if (!Array.isArray(value)) return;
+function droneBehaviorUpdated(value: JsonValue[]) {
   localSystem.value.droneBehavior = value;
   commitDraft();
 }
@@ -386,8 +381,10 @@ function onExtraUpdate(nextExtra: RowData) {
 }
 
 function onTypeChange(newType: string) {
-  localSystem.value.type = newType;
-  commitDraft();
+  void commitBefore(() => {
+    localSystem.value.type = newType;
+    commitDraft();
+  });
 }
 
 watch(

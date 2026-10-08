@@ -188,12 +188,14 @@
                 <label>visualRecoil</label
                 ><n-input-number :value="localWeapon.visualRecoil" @update:value="setField('visualRecoil', $event)" />
               </div>
-              <ObjectEditor
-                v-model="muzzleFlashSpec"
-                title="muzzleFlashSpec"
-                @invalid-json="feedback.warning('muzzleFlashSpec JSON 无效，已保留输入内容')"
+              <JsonValueInput
+                :value="muzzleFlashSpec"
+                label="muzzleFlashSpec"
+                show-label
+                shape="object"
+                @update="muzzleFlashSpec = $event"
               />
-              <ObjectEditor v-model="smokeSpec" title="smokeSpec" @invalid-json="feedback.warning('smokeSpec JSON 无效，已保留输入内容')" />
+              <JsonValueInput :value="smokeSpec" label="smokeSpec" show-label shape="object" @update="smokeSpec = $event" />
             </n-collapse-item>
             <n-collapse-item v-if="localWeapon.specClass === 'projectile'" title="弹体" name="proj">
               <div class="form-grid">
@@ -248,12 +250,12 @@
 
 <script setup lang="ts">
 import { computed, ref, useTemplateRef, watch } from 'vue';
-import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import ColorPicker from '@/shared/ui/ColorPicker.vue';
 import EditorFooter from '@/app/components/editors/common/EditorFooter.vue';
 import EditorHeader from '@/app/components/editors/common/EditorHeader.vue';
 import EditorInspector from '@/app/components/editors/common/EditorInspector.vue';
-import ObjectEditor from '@/app/components/editors/common/ObjectEditor.vue';
+import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
+import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 import type { RowData } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
 import { normalizeWeaponSpec } from '@/domain/editors/lib/normalize';
@@ -307,11 +309,11 @@ const emit = defineEmits<{
   'edit-projectile': [id: string];
   preview: [id: string];
 }>();
-const feedback = useAppFeedback();
 const editorWindowRef = useTemplateRef<HTMLElement>('editorWindowRef');
 const stageRef = useTemplateRef<HTMLElement>('stageRef');
 const canvasRef = useTemplateRef<HTMLCanvasElement>('canvasRef');
 const localWeapon = ref<RowData>(normalizeWeaponSpec(props.weapon));
+const { commitBefore } = useFieldInputActions();
 const viewMode = ref<WeaponViewMode>('turret');
 const expandedSections = ref<string[]>(['basic']);
 const localSpriteData = ref<Record<string, string>>({ ...(props.spriteData || {}) });
@@ -431,6 +433,13 @@ function setView(v: WeaponViewMode) {
   draw();
 }
 function setField(key: string, value: RowData[string]) {
+  if (key === 'specClass') {
+    void commitBefore(() => {
+      localWeapon.value[key] = value;
+      commitDraft();
+    });
+    return;
+  }
   localWeapon.value[key] = value;
   commitDraft();
 }
