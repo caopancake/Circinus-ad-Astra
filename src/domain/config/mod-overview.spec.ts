@@ -4,6 +4,7 @@ import { buildConfigModOverview } from './mod-overview';
 
 function manifestFixture(): ProjectManifest {
   return {
+    baseVersions: [],
     sessionId: 's1',
     modRoot: 'C:/mods/alpha',
     starsectorRoot: 'D:/games/starsector',

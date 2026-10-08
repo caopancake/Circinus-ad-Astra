@@ -99,6 +99,7 @@ pub type ProjectSessionId = String;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectManifest {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub starsector_root: Option<String>,
@@ -210,6 +211,7 @@ pub struct EntitySummaries {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CsvTableWindow {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub table: CsvTableKey,
     pub header: Vec<String>,
     pub total_rows: usize,
@@ -290,6 +292,7 @@ pub enum EntityKind {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EntityData {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub kind: EntityKind,
     pub id: String,
     pub data: Value,
@@ -406,7 +409,14 @@ pub struct HullReferencesResult {
     pub groups: Vec<HullReferenceGroup>,
     pub hull_names: BTreeMap<String, String>,
     pub sprites: BTreeMap<String, ResourceRef>,
-    pub built_in_weapon_slots: BTreeMap<String, Vec<String>>,
+    pub built_in_weapon_slots: BTreeMap<String, Vec<HullWeaponSlot>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HullWeaponSlot {
+    pub id: String,
+    pub origin: ResourceSource,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -453,6 +463,7 @@ mod tests {
     #[test]
     fn entity_data_serializes_empty_resource_refs_explicitly() {
         let entity = EntityData {
+            base_versions: Vec::new(),
             kind: EntityKind::Projectile,
             id: "demo_projectile".to_string(),
             data: Value::Object(Map::new()),
@@ -467,7 +478,7 @@ mod tests {
                 "kind": "projectile",
                 "id": "demo_projectile",
                 "data": {},
-                "resourceRefs": {}
+                "resourceRefs": {}, "baseVersions": []
             })
         );
     }

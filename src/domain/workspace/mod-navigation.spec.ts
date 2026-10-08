@@ -5,6 +5,7 @@ import { buildModNavigationSections, isModNavigationItemActive } from './mod-nav
 
 function manifestFixture(): ProjectManifest {
   return {
+    baseVersions: [],
     sessionId: 's1',
     modRoot: 'C:/mods/alpha',
     starsectorRoot: null,

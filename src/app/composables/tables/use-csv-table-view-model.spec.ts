@@ -105,6 +105,7 @@ import { useCsvTableViewModel } from './use-csv-table-view-model';
 
 function windowFixture(totalRows: number): CsvTableWindow {
   return {
+    baseVersions: [],
     table: 'ships',
     start: 0,
     header: ['id', 'name'],

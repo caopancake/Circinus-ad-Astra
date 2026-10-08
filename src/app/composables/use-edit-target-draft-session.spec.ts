@@ -79,7 +79,7 @@ describe('useEditTargetDraftSession save binding', () => {
     session.loadBaseForTarget(target, { a: 1 });
     session.setDraft({ a: 2 });
     const result = await session.saveDraft();
-    expect(save).toHaveBeenCalledWith(target, { a: 2 });
+    expect(save).toHaveBeenCalledWith(target, { a: 2 }, []);
     expect(result).toEqual({ value: { a: 2 } });
     expect(session.dirty.value).toBe(false);
     expect(session.draftValue.value).toEqual({ a: 2 });

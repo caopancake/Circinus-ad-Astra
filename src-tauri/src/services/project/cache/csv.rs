@@ -122,6 +122,9 @@ pub(crate) fn ensure_session_table_rows(
     table_state.rows = Some(rows);
     table_state.next_row_seq = next_row_seq;
     table_state.saved_text = None;
+    session
+        .source_versions
+        .insert(rel_path, crate::io::file_version(&path)?);
     Ok(())
 }
 
@@ -130,6 +133,18 @@ pub(crate) fn ensure_registered_table_rows(
     table: CsvTableKey,
 ) -> AppResult<()> {
     ensure_session_table_rows(session, table.as_str())
+}
+
+pub(crate) fn refresh_faction_annotations(session: &mut ProjectSession) {
+    for (key, table) in &mut session.csv_tables {
+        if CsvTableKey::from_key(key).is_some_and(|key| csv_table_spec(key).supports_faction_filter)
+            && let Some(rows) = &mut table.rows
+        {
+            for row in rows {
+                annotate_faction_rows(std::slice::from_mut(&mut row.row), &session.tag_map);
+            }
+        }
+    }
 }
 
 fn annotate_faction_rows(
@@ -186,7 +201,10 @@ mod tests {
     #[test]
     fn ensure_session_table_rows_rejects_unknown_table() {
         let mut session = ProjectSession {
+            source_entities: BTreeMap::new(),
+            source_versions: BTreeMap::new(),
             manifest: ProjectManifest {
+                base_versions: Vec::new(),
                 session_id: "test".to_string(),
                 mod_root: "mod".to_string(),
                 starsector_root: None,
@@ -233,7 +251,10 @@ mod tests {
         )
         .unwrap();
         let mut session = ProjectSession {
+            source_entities: BTreeMap::new(),
+            source_versions: BTreeMap::new(),
             manifest: ProjectManifest {
+                base_versions: Vec::new(),
                 session_id: "test".to_string(),
                 mod_root: root.to_string_lossy().to_string(),
                 starsector_root: None,

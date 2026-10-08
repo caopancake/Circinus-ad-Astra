@@ -1,4 +1,13 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { flushPromises, mount } from '@vue/test-utils';
+import { h } from 'vue';
+import { createPinia, setActivePinia } from 'pinia';
+import ShipEditor from '@/app/components/editors/ShipEditor.vue';
+import WeaponEditor from '@/app/components/editors/WeaponEditor.vue';
+import { installCanvas2DStub } from '@/test/canvas-stub';
+import { editorUiStubs } from '@/test/ui-stubs';
+import { invalidateQueryCacheByProject } from '@/services/query-cache.service';
+import { invalidateResourceCacheForSession } from '@/services/resource-cache.service';
 import type { ShipEditorEntityBundle } from '@/services/editor.service';
 import type { WriteResult } from '@/shared/types';
 
@@ -8,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   loadImportedSpecFile: vi.fn(),
   refreshBundleProjectiles: vi.fn(),
   refreshBundleResources: vi.fn(),
+  queryDraftEditorImages: vi.fn(),
   emitEditorSpecSaved: vi.fn(async () => {}),
   previewDraftHandler: { current: null as ((event: Record<string, unknown>) => void) | null },
   pickEditorSpecFile: vi.fn(async () => null as string | null),
@@ -29,6 +39,7 @@ vi.mock('@/services/editor.service', () => ({
   loadImportedSpecFile: mocks.loadImportedSpecFile,
   refreshBundleProjectiles: mocks.refreshBundleProjectiles,
   refreshBundleResources: mocks.refreshBundleResources,
+  queryDraftEditorImages: mocks.queryDraftEditorImages,
   saveEditorSpecByKind: mocks.saveEditorSpecByKind,
 }));
 
@@ -49,16 +60,6 @@ vi.mock('@/orchestrators/project-session-refresh.orchestrator', () => ({
   listenProjectSessionInvalidated: vi.fn(async () => async () => {}),
 }));
 
-vi.mock('@/services/query-cache.service', () => ({
-  hasEntityInvalidation: vi.fn(() => false),
-  subscribeQueryInvalidations: vi.fn(() => () => {}),
-}));
-
-vi.mock('@/services/resource-cache.service', () => ({
-  hasResourceInvalidation: vi.fn(() => false),
-  subscribeResourceInvalidations: vi.fn(() => () => {}),
-}));
-
 vi.mock('@/app/composables/use-app-feedback', () => ({
   useAppFeedback: () => mocks.feedback,
 }));
@@ -70,6 +71,8 @@ vi.mock('@/orchestrators/json-write-confirmation.orchestrator', () => ({
 
 vi.mock('@/shared/runtime/dialog.runtime', () => ({
   pickEditorSpecFile: mocks.pickEditorSpecFile,
+  pickImageFileDialog: vi.fn(async () => null),
+  pickFileDialog: vi.fn(async () => null),
 }));
 
 vi.mock('@/windows/current.window', () => ({
@@ -80,11 +83,21 @@ import { useEditorWindowViewModel } from './use-editor-window-view-model';
 import type { RowData } from '@/shared/types';
 
 function shipBundleFixture(isNew = false): ShipEditorEntityBundle {
-  return { kind: 'ship', ship: { hullId: 'XY', hullName: 'Test Ship' }, resourceRefs: [], shipSpriteData: '', isNew };
+  return {
+    baseVersions: [],
+    kind: 'ship',
+    ship: { hullId: 'XY', hullName: 'Test Ship' },
+    resourceRefs: [],
+    shipSpriteData: '',
+    isNew,
+  };
 }
 
 function writeResultFixture(): WriteResult {
   return {
+    baseVersions: [],
+    commitId: 1,
+    history: { revision: 1, undoStack: [], redoStack: [] },
     changes: [],
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
     keyMap: [],
@@ -92,8 +105,26 @@ function writeResultFixture(): WriteResult {
   };
 }
 
+const viewModels: ReturnType<typeof useEditorWindowViewModel>[] = [];
+beforeEach(() => {
+  mocks.queryDraftEditorImages.mockImplementation(async (_session: string, kind: string, _id: string, draft: RowData) => {
+    const field = kind === 'ship' ? 'spriteName' : 'turretSprite';
+    const path = draft[field];
+    return {
+      resourceRefs: path ? [{ source: 'mod', ownerKind: kind, ownerId: 'XY', key: kind === 'ship' ? 'sprite' : field, relPath: path }] : [],
+      shipSpriteData: kind === 'ship' ? (path ?? '') : '',
+      weaponSpriteData: kind === 'weapon' && path ? { [field]: path } : {},
+    };
+  });
+});
+afterEach(() => {
+  for (const vm of viewModels.splice(0)) vm.disposeEditorWindow();
+});
+
 function createViewModel(kind = 'ship', draftSnapshot: RowData | null = null) {
-  return useEditorWindowViewModel({ sessionId: 's1', modRoot: 'M:/mod', id: 'XY', kind: kind as never, draftSnapshot });
+  const vm = useEditorWindowViewModel({ sessionId: 's1', modRoot: 'M:/mod', id: 'XY', kind: kind as never, draftSnapshot });
+  viewModels.push(vm);
+  return vm;
 }
 
 async function initializedViewModel(kind = 'ship', bundle = shipBundleFixture()) {
@@ -133,6 +164,7 @@ describe('useEditorWindowViewModel save gating', () => {
 
   it('keeps the save disabled for read-only preview windows', async () => {
     mocks.queryEditorEntityBundle.mockResolvedValue({
+      baseVersions: [],
       kind: 'weapon-preview',
       weapon: {},
       weaponCsvRow: {},
@@ -149,6 +181,7 @@ describe('useEditorWindowViewModel save gating', () => {
 
   it('reloads a reused preview window with the latest draft snapshot', async () => {
     mocks.queryEditorEntityBundle.mockResolvedValue({
+      baseVersions: [],
       kind: 'weapon-preview',
       weapon: { id: 'XY', projectileSpecId: 'proj_a' },
       weaponCsvRow: {},
@@ -188,6 +221,67 @@ describe('useEditorWindowViewModel saving', () => {
     mocks.feedback.choose.mockResolvedValue(null);
   });
 
+  it.each(['ship', 'weapon'] as const)('refreshes %s draft images and discards an older response', async (kind) => {
+    const resource = {
+      source: 'mod' as const,
+      relPath: 'graphics/old.png',
+      ownerKind: kind,
+      ownerId: 'XY',
+      key: kind === 'ship' ? 'sprite' : 'turretSprite',
+    };
+    const bundle =
+      kind === 'ship'
+        ? {
+            ...shipBundleFixture(),
+            ship: { hullId: 'XY', spriteName: 'graphics/old.png' },
+            resourceRefs: [resource],
+            shipSpriteData: 'old',
+          }
+        : {
+            kind,
+            baseVersions: [],
+            isNew: false,
+            weapon: { id: 'XY', turretSprite: 'graphics/old.png' },
+            weaponCsvRow: {},
+            projectileSpecs: {},
+            projectileOptions: [],
+            resourceRefs: [resource],
+            weaponSpriteData: { turretSprite: 'old' },
+          };
+    mocks.queryEditorEntityBundle.mockResolvedValue(bundle);
+    const vm = createViewModel(kind);
+    await vm.initializeEditorWindow();
+    await vi.waitFor(() => expect(vm.loading.value).toBe(false));
+    const releases: Array<(images: unknown) => void> = [];
+    mocks.queryDraftEditorImages.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releases.push(resolve);
+        }),
+    );
+    const draft = (path: string): RowData => (kind === 'ship' ? { hullId: 'XY', spriteName: path } : { id: 'XY', turretSprite: path });
+    vm.updateEditorDraft(kind, draft('graphics/first.png'));
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    vm.updateEditorDraft(kind, draft('graphics/latest.png'));
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    releases[1]!({
+      resourceRefs: [{ ...resource, relPath: 'graphics/latest.png' }],
+      shipSpriteData: 'latest',
+      weaponSpriteData: { turretSprite: 'latest' },
+    });
+    await vi.waitFor(() =>
+      expect(kind === 'ship' ? vm.shipSpriteForEditor.value : vm.weaponEditorData.value?.weaponSpriteData.turretSprite).toBe('latest'),
+    );
+    releases[0]!({
+      resourceRefs: [{ ...resource, relPath: 'graphics/first.png' }],
+      shipSpriteData: 'first',
+      weaponSpriteData: { turretSprite: 'first' },
+    });
+    await Promise.resolve();
+    expect(kind === 'ship' ? vm.shipSpriteForEditor.value : vm.weaponEditorData.value?.weaponSpriteData.turretSprite).toBe('latest');
+    vm.disposeEditorWindow();
+  });
+
   it('writes the draft, broadcasts the saved event and commits the base', async () => {
     const result = writeResultFixture();
     mocks.saveEditorSpecByKind.mockResolvedValue(result);
@@ -203,6 +297,7 @@ describe('useEditorWindowViewModel saving', () => {
       'XY',
       { hullId: 'XY', hullName: 'Saved Name' },
       { preserveOriginalJson: true, confirmedSources: [] },
+      [],
     );
     expect(mocks.emitEditorSpecSaved).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'ship', sessionId: 's1', modRoot: 'M:/mod', id: 'XY', writeResult: result }),
@@ -274,6 +369,7 @@ describe('useEditorWindowViewModel missing specs', () => {
       'XY',
       { hullId: 'XY', hullName: 'Imported' },
       { preserveOriginalJson: true, confirmedSources: [] },
+      [],
     );
     expect(viewModel.draftDirty.value).toBe(false);
     expect(viewModel.shipEditorData.value?.isNew).toBe(false);
@@ -310,6 +406,7 @@ describe('useEditorWindowViewModel external updates', () => {
       modRoot: 'M:/mod',
       id: 'XY',
       spec: { hullId: 'XY', hullName: 'Other Window' },
+      writeResult: writeResultFixture(),
     });
 
     expect(viewModel.draftDirty.value).toBe(true);
@@ -325,6 +422,7 @@ describe('useEditorWindowViewModel external updates', () => {
       modRoot: 'M:/mod',
       id: 'XY',
       spec: { hullId: 'XY', hullName: 'External' },
+      writeResult: writeResultFixture(),
     });
     expect(viewModel.draftValue.value).toEqual({ hullId: 'XY', hullName: 'External' });
     expect(viewModel.draftDirty.value).toBe(false);
@@ -347,11 +445,270 @@ describe('useEditorWindowViewModel external updates', () => {
       modRoot: 'M:/mod',
       id: 'XY',
       spec: { hullId: 'XY', hullName: 'Remote' },
+      writeResult: writeResultFixture(),
     });
 
     viewModel.loadPendingExternalSpec();
     expect(viewModel.draftValue.value).toEqual({ hullId: 'XY', hullName: 'Remote' });
     expect(viewModel.draftDirty.value).toBe(false);
     expect(viewModel.externalUpdateNotice.value).toBe('');
+  });
+});
+
+describe.each(['ship', 'weapon'] as const)('%s draft resource lifecycle', (kind) => {
+  const field = kind === 'ship' ? 'spriteName' : 'turretSprite';
+  const spec = (path: string): RowData => ({ hullId: 'XY', id: 'XY', [field]: path });
+  const images = (path: string) => ({
+    resourceRefs: [{ source: 'mod', ownerKind: kind, ownerId: 'XY', key: kind === 'ship' ? 'sprite' : field, relPath: path }],
+    shipSpriteData: path,
+    weaponSpriteData: { [field]: path },
+  });
+  const bundle = (path: string) =>
+    kind === 'ship'
+      ? { ...shipBundleFixture(), ...images(path), ship: spec(path) }
+      : {
+          kind,
+          baseVersions: [],
+          isNew: false,
+          weapon: spec(path),
+          weaponCsvRow: {},
+          projectileSpecs: {},
+          projectileOptions: [],
+          ...images(path),
+        };
+
+  function invalidateDetail() {
+    invalidateQueryCacheByProject('s1', {
+      paths: [],
+      tables: [],
+      entities: [],
+      resources: [],
+      session: false,
+      queryScopes: [{ kind: 'entity-detail', entity: { kind, id: 'XY' }, table: null, source: null, resource: null }],
+    });
+  }
+
+  async function open() {
+    mocks.queryEditorEntityBundle.mockResolvedValue(bundle('old.png'));
+    const vm = createViewModel(kind);
+    await vm.initializeEditorWindow();
+    await flushPromises();
+    return vm;
+  }
+
+  function expectImage(vm: ReturnType<typeof createViewModel>, path: string) {
+    expect(vm.draftValue.value[field]).toBe(path);
+    const data = kind === 'ship' ? vm.shipEditorData.value! : vm.weaponEditorData.value!;
+    expect(data.resourceRefs[0]?.relPath).toBe(path);
+    expect(kind === 'ship' ? vm.shipSpriteForEditor.value : vm.weaponEditorData.value!.weaponSpriteData[field]).toBe(path);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.feedback.choose.mockResolvedValue(null);
+  });
+
+  it('keeps draft resources after a real detail cache invalidation', async () => {
+    const vm = await open();
+    vm.updateEditorDraft(kind, spec('new.png'));
+    await flushPromises();
+    expectImage(vm, 'new.png');
+    invalidateDetail();
+    await flushPromises();
+    expectImage(vm, 'new.png');
+    expect(vm.draftDirty.value).toBe(true);
+    expect(vm.externalUpdateNotice.value).toContain('外部版本已更新');
+    expect(mocks.queryDraftEditorImages).toHaveBeenLastCalledWith('s1', kind, 'XY', spec('new.png'));
+  });
+
+  it('uses edits made during a detail query and ignores its older image response', async () => {
+    const vm = await open();
+    vm.updateEditorDraft(kind, spec('new.png'));
+    await flushPromises();
+    let releaseDetail!: (value: unknown) => void;
+    mocks.queryEditorEntityBundle.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseDetail = resolve;
+        }),
+    );
+    invalidateDetail();
+    await flushPromises();
+    vm.updateEditorDraft(kind, spec('later.png'));
+    await flushPromises();
+    expectImage(vm, 'later.png');
+    let releaseImage!: (value: unknown) => void;
+    mocks.queryDraftEditorImages.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseImage = resolve;
+        }),
+    );
+    releaseDetail(bundle('old.png'));
+    await flushPromises();
+    expect(vm.draftValue.value[field]).toBe('later.png');
+    expect(vm.editorData.value).toMatchObject({ resourceRefs: [] });
+    vm.updateEditorDraft(kind, spec('latest.png'));
+    await flushPromises();
+    expectImage(vm, 'latest.png');
+    releaseImage(images('later.png'));
+    await flushPromises();
+    expectImage(vm, 'latest.png');
+  });
+
+  it('clears a failed resource projection and retries on resource invalidation', async () => {
+    const vm = await open();
+    mocks.queryDraftEditorImages.mockRejectedValueOnce(new Error('image failed'));
+    vm.updateEditorDraft(kind, spec('new.png'));
+    await flushPromises();
+    expect(vm.editorData.value).toMatchObject({ resourceRefs: [] });
+    expect(kind === 'ship' ? vm.shipSpriteForEditor.value : (vm.weaponEditorData.value!.weaponSpriteData[field] ?? '')).toBe('');
+    expect(mocks.feedback.error).toHaveBeenCalledTimes(1);
+    invalidateResourceCacheForSession('s1');
+    await flushPromises();
+    expectImage(vm, 'new.png');
+  });
+
+  it('loads resources for clean external saves and explicitly accepted pending data', async () => {
+    const vm = await open();
+    const external = (path: string) =>
+      mocks.specSavedHandler.current!({
+        kind,
+        sessionId: 's1',
+        modRoot: 'M:/mod',
+        id: 'XY',
+        spec: spec(path),
+        writeResult: writeResultFixture(),
+      });
+    external('external.png');
+    await flushPromises();
+    expectImage(vm, 'external.png');
+    vm.updateEditorDraft(kind, spec('local.png'));
+    await flushPromises();
+    external('pending.png');
+    await flushPromises();
+    expectImage(vm, 'local.png');
+    vm.loadPendingExternalSpec();
+    await flushPromises();
+    expectImage(vm, 'pending.png');
+    expect(vm.draftDirty.value).toBe(false);
+  });
+
+  it('resolves imported image fields through the draft query', async () => {
+    mocks.queryEditorEntityBundle.mockResolvedValue({ ...bundle('old.png'), isNew: true });
+    mocks.feedback.choose.mockResolvedValue('import');
+    mocks.pickEditorSpecFile.mockResolvedValue('M:/imported.spec');
+    mocks.loadImportedSpecFile.mockResolvedValue(spec('imported.png'));
+    const vm = createViewModel(kind);
+    await vm.initializeEditorWindow();
+    await flushPromises();
+    expectImage(vm, 'imported.png');
+    expect(vm.draftDirty.value).toBe(true);
+  });
+
+  it('keeps the actual canvas component on the draft image after refresh', async () => {
+    setActivePinia(createPinia());
+    installCanvas2DStub();
+    const sources: string[] = [];
+    vi.stubGlobal(
+      'Image',
+      class {
+        width = 64;
+        height = 32;
+        naturalWidth = 64;
+        naturalHeight = 32;
+        complete = true;
+        onload: (() => void) | null = null;
+        current = '';
+        get src() {
+          return this.current;
+        }
+        set src(path: string) {
+          this.current = path;
+          sources.push(path);
+          if (path) queueMicrotask(() => this.onload?.());
+        }
+      },
+    );
+    const vm = await open();
+    const wrapper = mount(
+      {
+        setup() {
+          return () => {
+            const common = {
+              modRoot: 'M:/mod',
+              sessionId: 's1',
+              draftRevision: vm.draftRevision.value,
+              dirty: vm.draftDirty.value,
+              canSave: vm.canSaveSpec.value,
+              saving: vm.draftSaving.value,
+              externalUpdateNotice: vm.externalUpdateNotice.value,
+              onDraftChanged: (draft: RowData) => vm.updateEditorDraft(kind, draft),
+            };
+            return kind === 'ship'
+              ? h(ShipEditor, { ...common, hullId: 'XY', ship: vm.shipEditorData.value!.ship, spriteData: vm.shipSpriteForEditor.value })
+              : h(WeaponEditor, {
+                  ...common,
+                  weaponId: 'XY',
+                  weapon: vm.weaponForEditor.value,
+                  spriteData: vm.weaponEditorData.value!.weaponSpriteData,
+                  projectileOptions: [],
+                });
+          };
+        },
+      },
+      { global: { stubs: editorUiStubs }, attachTo: document.body },
+    );
+    try {
+      const pathInput = wrapper.findAll('input').find((input) => (input.element as HTMLInputElement).value === 'old.png');
+      expect(pathInput).toBeDefined();
+      await pathInput!.setValue('new.png');
+      await flushPromises();
+      expect(sources).toContain('new.png');
+      sources.length = 0;
+      invalidateDetail();
+      await flushPromises();
+      expect(sources.filter(Boolean)).toEqual(['new.png']);
+      expect(wrapper.find('canvas.editor-canvas').exists()).toBe(true);
+      if (kind === 'ship') {
+        const sync = wrapper.findAll('button').find((button) => button.text() === '更新贴图宽高');
+        expect(sync).toBeDefined();
+        await sync!.trigger('click');
+        await flushPromises();
+        expect(vm.draftValue.value).toMatchObject({ spriteName: 'new.png', width: 64, height: 32 });
+      }
+    } finally {
+      wrapper.unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('ignores detail and image completions after disposal', async () => {
+    const vm = await open();
+    let releaseImage!: (value: unknown) => void;
+    let releaseDetail!: (value: unknown) => void;
+    mocks.queryDraftEditorImages.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseImage = resolve;
+        }),
+    );
+    vm.updateEditorDraft(kind, spec('new.png'));
+    await flushPromises();
+    mocks.queryEditorEntityBundle.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseDetail = resolve;
+        }),
+    );
+    invalidateDetail();
+    await flushPromises();
+    vm.disposeEditorWindow();
+    const before = vm.editorData.value;
+    releaseImage(images('new.png'));
+    releaseDetail(bundle('old.png'));
+    await flushPromises();
+    expect(vm.editorData.value).toBe(before);
+    expect(mocks.feedback.error).not.toHaveBeenCalled();
   });
 });

@@ -20,6 +20,7 @@ const SESSION_ID = 'sess-1';
 
 function buildManifest(overrides: Partial<ProjectManifest> = {}): ProjectManifest {
   return {
+    baseVersions: [],
     sessionId: SESSION_ID,
     modRoot: MOD_ROOT,
     starsectorRoot: null,
@@ -49,6 +50,9 @@ function buildManifest(overrides: Partial<ProjectManifest> = {}): ProjectManifes
 function writeResult(overrides: Partial<WriteResult> = {}): WriteResult {
   const invalidation: ProjectInvalidation = { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false };
   return {
+    baseVersions: [],
+    commitId: 1,
+    history: { revision: 1, undoStack: [], redoStack: [] },
     changes: [
       {
         path: `${MOD_ROOT}\\ships.csv`,
@@ -121,6 +125,7 @@ describe('table-save orchestrator', () => {
       [{ rowKey: 'ships:r1', action: 'upsert', row: { id: 'npc1', hullName: 'B' } }],
       [],
       { preserveOriginalJson: false, confirmedSources: [] },
+      [],
     );
     expect(completeSavedWrite).toHaveBeenCalledWith(
       {
@@ -147,10 +152,18 @@ describe('table-save orchestrator', () => {
     const target = captureActiveTableSaveTarget(project.getManifest(MOD_ROOT));
 
     expect(await saveCapturedTableChanges(target, [])).toBe('saved');
-    expect(writeCsvPatch).toHaveBeenCalledWith('sess-1', MOD_ROOT, 'ships', [{ rowKey: 'ships:r1', action: 'delete', row: {} }], [], {
-      preserveOriginalJson: false,
-      confirmedSources: [],
-    });
+    expect(writeCsvPatch).toHaveBeenCalledWith(
+      'sess-1',
+      MOD_ROOT,
+      'ships',
+      [{ rowKey: 'ships:r1', action: 'delete', row: {} }],
+      [],
+      {
+        preserveOriginalJson: false,
+        confirmedSources: [],
+      },
+      [],
+    );
   });
 
   it('is a noop when the session changed since capture', async () => {
@@ -215,7 +228,17 @@ describe('table-save orchestrator', () => {
     writeCsvPatch.mockImplementationOnce(() => new Promise<WriteResult>((resolve) => (resolveWrite = resolve)));
     const pending = saveCapturedTableChanges(captureActiveTableSaveTarget(project.getManifest(MOD_ROOT)), []);
     tables.deleteSelected();
-    resolveWrite(writeResult({ keyMap: [{ previousKey: created.rowKey, nextKey: 'ships:row:2' }] }));
+    resolveWrite(
+      writeResult({
+        keyMap: [
+          {
+            rowIndex: 0,
+            previousKey: created.rowKey,
+            nextKey: 'ships:row:2',
+          },
+        ],
+      }),
+    );
     await pending;
     expect(state.dirty.ships['ships:row:2']).toEqual({ action: 'delete' });
     expect(useTablesEditHistoryStore().canUndoCsvEdit(MOD_ROOT, 'ships')).toBe(true);
@@ -234,5 +257,40 @@ describe('table-save orchestrator', () => {
     await saveCapturedTableChanges(captureActiveTableSaveTarget(project.getManifest(MOD_ROOT)), []);
     expect(state.dirty.ships['ships:r1']).toBeDefined();
     expect(useTablesEditHistoryStore().canUndoCsvEdit(MOD_ROOT, 'ships')).toBe(true);
+  });
+
+  it('rebases a deletion undone during saving into an insert at the original position', async () => {
+    const project = useProjectStore();
+    project.manifests.set(MOD_ROOT, buildManifest());
+    const state = hydrateActiveTable();
+    state.tables.ships = [
+      { _rowKey: 'ships:r1', _sourceRowIndex: 0, id: 'first' },
+      { _rowKey: 'ships:r2', _sourceRowIndex: 1, id: 'second' },
+    ];
+    state.originalTables.ships = state.tables.ships.map((row) => ({ ...row }));
+    const tables = useTablesStore();
+    tables.selectRowByKey('ships:r1');
+    tables.deleteSelected();
+    let release!: (result: WriteResult) => void;
+    writeCsvPatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const saving = saveCapturedTableChanges(captureActiveTableSaveTarget(project.getManifest(MOD_ROOT)), []);
+    tables.undoCurrentTableEdit();
+    release(writeResult());
+    await saving;
+    const restoredKey = state.tables.ships[0]!._rowKey as string;
+    expect(restoredKey).toMatch(/^ships:new:/);
+    expect(state.tables.ships[0]?._insertAt).toBe(0);
+    expect(state.dirty.ships[restoredKey]?.action).toBe('upsert');
+    writeCsvPatch.mockResolvedValueOnce(writeResult({ keyMap: [{ previousKey: restoredKey, nextKey: 'ships:row:3', rowIndex: 0 }] }));
+    await saveCapturedTableChanges(captureActiveTableSaveTarget(project.getManifest(MOD_ROOT)), []);
+    expect(writeCsvPatch.mock.calls.at(-1)?.[3]).toEqual([{ rowKey: restoredKey, action: 'upsert', insertAt: 0, row: { id: 'first' } }]);
+    expect(state.tables.ships.map((row) => row?.id)).toEqual(['first', 'second']);
+    expect(state.tables.ships.map((row) => row?._sourceRowIndex)).toEqual([0, 1]);
+    expect(state.dirty.ships).toEqual({});
   });
 });

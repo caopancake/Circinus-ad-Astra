@@ -34,12 +34,15 @@ fn save_text_file_with_lock(
 }
 
 pub fn load_editable_file(mod_root: &str, path: String) -> AppResult<EditableFileData> {
+    let _lease = acquire_root_write_lock(Path::new(mod_root))?;
     let target = Path::new(&path);
     let boundary = FsRootBoundary::new(Path::new(mod_root), "mod root")?;
     let target = boundary.resolve_absolute(target, "file path")?;
+    let base_versions = vec![crate::io::file_version(&target)?];
     read_utf8_no_bom(&target).map(|text| EditableFileData {
         path: target.display().to_string(),
         text,
+        base_versions,
     })
 }
 

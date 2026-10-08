@@ -3,9 +3,10 @@ import {
   queryCsvSourceOptions,
   queryCsvTableWindow,
   queryEntity,
+  queryEntityBaseVersions,
   queryEntityList,
   queryHullReferences,
-  queryWeaponDraftResources,
+  queryEditorDraftResources,
 } from '@/shared/api/query-api';
 import { queryCached } from '@/services/query-cache.service';
 import type {
@@ -51,14 +52,17 @@ export function querySessionEntity(sessionId: ProjectSessionId, kind: EntityKind
   return queryCached(sessionId, 'entity-detail', { kind, id }, () => queryEntity(sessionId, kind, id));
 }
 
+export const querySessionEntityBaseVersions = queryEntityBaseVersions;
+
 export function querySessionEntityList(sessionId: ProjectSessionId, kind: EntityKind): Promise<EntityData[]> {
   return queryCached(sessionId, 'entity-list', { kind }, () => queryEntityList(sessionId, kind));
 }
 
-export function querySessionWeaponDraftResources(
+export function querySessionEditorDraftResources(
   sessionId: ProjectSessionId,
+  kind: import('@/shared/types').EditorSpecKind,
   id: string,
   draft: RowData,
 ): Promise<Record<string, ResourceRef>> {
-  return queryWeaponDraftResources(sessionId, id, draft);
+  return queryEditorDraftResources(sessionId, kind, id, draft);
 }

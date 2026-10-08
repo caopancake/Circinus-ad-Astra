@@ -13,6 +13,9 @@ const MOD_ROOT = 'M:\\test-mod';
 
 function resultWithChanges(count: number): WriteResult {
   return {
+    baseVersions: [],
+    commitId: 1,
+    history: { revision: 1, undoStack: [], redoStack: [] },
     changes: Array.from({ length: count }, (_, index) => ({
       path: `${MOD_ROOT}\\file${index}.csv`,
       kind: 'file' as const,

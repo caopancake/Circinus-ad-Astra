@@ -25,6 +25,7 @@ export interface ConfigEntityFamilyDefinition {
 }
 
 export interface ConfigFamilyFile {
+  baseVersions: import('@/shared/types').FileVersion[];
   data: RowData;
   relPath: string;
 }

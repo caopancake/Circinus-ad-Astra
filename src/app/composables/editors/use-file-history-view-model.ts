@@ -1,9 +1,10 @@
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { replayNextFileRedo, replayNextFileUndo } from '@/orchestrators/file-history-replay.orchestrator';
 import { useFileHistoryStore } from '@/stores/file-history.store';
 import { useProjectStore } from '@/stores/project.store';
 import { useTablesStore } from '@/stores/tables.store';
+import { clearSavedFileHistory, loadFileHistory } from '@/services/file-history.service';
 
 export function useFileHistoryViewModel() {
   const project = useProjectStore();
@@ -12,6 +13,20 @@ export function useFileHistoryViewModel() {
   const feedback = useAppFeedback();
 
   const activeMod = computed(() => project.activeManifest);
+  watch(
+    () => activeMod.value?.sessionId,
+    async () => {
+      const target = activeMod.value;
+      if (!target) return;
+      try {
+        const snapshot = await loadFileHistory(target.sessionId, target.modRoot);
+        if (project.getSessionId(target.modRoot) === target.sessionId) fileHistory.applySnapshot(target.modRoot, snapshot);
+      } catch (error) {
+        feedback.error(error, '读取文件历史失败');
+      }
+    },
+    { immediate: true },
+  );
   const modTitle = computed(() => activeMod.value?.modInfo?.name ?? activeMod.value?.modRoot ?? '未选择 Mod');
   const stacks = computed(() =>
     activeMod.value ? fileHistory.getHistoryStacks(activeMod.value.modRoot) : { undoStack: [], redoStack: [] },
@@ -31,9 +46,14 @@ export function useFileHistoryViewModel() {
       title: '清空文件历史',
       content: '这会清空当前 Mod 的文件级 undo/redo 栈，不会修改任何磁盘文件。确认清空？',
       actionText: '清空',
-      onConfirm: () => {
-        fileHistory.clearForMod(modData.modRoot);
-        feedback.success('文件历史已清空');
+      onConfirm: async () => {
+        try {
+          const snapshot = await clearSavedFileHistory(modData.sessionId, modData.modRoot);
+          if (project.getSessionId(modData.modRoot) === modData.sessionId) fileHistory.applySnapshot(modData.modRoot, snapshot);
+          feedback.success('文件历史已清空');
+        } catch (error) {
+          feedback.error(error, '清空文件历史失败');
+        }
       },
     });
   }

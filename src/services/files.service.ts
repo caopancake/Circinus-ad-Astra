@@ -7,8 +7,14 @@ export function loadEditableFileData(sessionId: string | null, modRoot: string, 
   return filesApi.loadEditableFile(sessionId, modRoot, path);
 }
 
-export function writeEditableFileText(sessionId: string | null, modRoot: string, path: string, text: string): Promise<WriteResult> {
-  return writeTextFile(sessionId, modRoot, path, text);
+export function writeEditableFileText(
+  sessionId: string | null,
+  modRoot: string,
+  path: string,
+  text: string,
+  baseVersions: import('@/shared/types').FileVersion[],
+): Promise<WriteResult> {
+  return writeTextFile(sessionId, modRoot, path, text, baseVersions);
 }
 
 export function transcodeFileToUtf8(sessionId: string | null, modRoot: string, path: string, encoding: string): Promise<WriteResult> {

@@ -8,6 +8,7 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose};
 use std::{
+    cell::RefCell,
     collections::BTreeMap,
     fs,
     path::Path,
@@ -19,19 +20,27 @@ static ROOT_WRITE_COORDINATORS: LazyLock<Mutex<BTreeMap<String, Weak<RootWriteCo
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
 struct RootWriteCoordinator {
-    writing: Mutex<bool>,
+    tickets: Mutex<(u64, u64)>,
     released: Condvar,
 }
 
-pub struct RootWriteLock {
+thread_local! {
+    static ACTIVE_WRITES: RefCell<BTreeMap<String, Weak<RootWriteLease>>> = const { RefCell::new(BTreeMap::new()) };
+}
+
+struct RootWriteLease {
     coordinator: Arc<RootWriteCoordinator>,
 }
 
-impl Drop for RootWriteLock {
+pub struct RootWriteLock {
+    _lease: Arc<RootWriteLease>,
+}
+
+impl Drop for RootWriteLease {
     fn drop(&mut self) {
-        if let Ok(mut writing) = self.coordinator.writing.lock() {
-            *writing = false;
-            self.coordinator.released.notify_one();
+        if let Ok(mut tickets) = self.coordinator.tickets.lock() {
+            tickets.1 += 1;
+            self.coordinator.released.notify_all();
         }
     }
 }
@@ -43,6 +52,12 @@ pub fn acquire_root_write_lock(root: &Path) -> AppResult<RootWriteLock> {
         .to_string();
     #[cfg(windows)]
     let canonical_root = canonical_root.to_lowercase();
+    // Nested synchronous services share the transaction's lease.
+    if let Some(lease) =
+        ACTIVE_WRITES.with(|active| active.borrow().get(&canonical_root).and_then(Weak::upgrade))
+    {
+        return Ok(RootWriteLock { _lease: lease });
+    }
     let coordinator = {
         let mut coordinators = ROOT_WRITE_COORDINATORS.lock().map_err(|_| {
             AppError::message("write.lock_poisoned", "write coordinator lock poisoned")
@@ -52,25 +67,32 @@ pub fn acquire_root_write_lock(root: &Path) -> AppResult<RootWriteLock> {
             coordinator
         } else {
             let coordinator = Arc::new(RootWriteCoordinator {
-                writing: Mutex::new(false),
+                tickets: Mutex::new((0, 0)),
                 released: Condvar::new(),
             });
-            coordinators.insert(canonical_root, Arc::downgrade(&coordinator));
+            coordinators.insert(canonical_root.clone(), Arc::downgrade(&coordinator));
             coordinator
         }
     };
-    let mut writing = coordinator
-        .writing
+    let mut tickets = coordinator
+        .tickets
         .lock()
         .map_err(|_| AppError::message("write.lock_poisoned", "write coordinator lock poisoned"))?;
-    while *writing {
-        writing = coordinator.released.wait(writing).map_err(|_| {
+    let ticket = tickets.0;
+    tickets.0 += 1;
+    while tickets.1 != ticket {
+        tickets = coordinator.released.wait(tickets).map_err(|_| {
             AppError::message("write.lock_poisoned", "write coordinator lock poisoned")
         })?;
     }
-    *writing = true;
-    drop(writing);
-    Ok(RootWriteLock { coordinator })
+    drop(tickets);
+    let lease = Arc::new(RootWriteLease { coordinator });
+    ACTIVE_WRITES.with(|active| {
+        let mut active = active.borrow_mut();
+        active.retain(|_, lease| lease.strong_count() > 0);
+        active.insert(canonical_root, Arc::downgrade(&lease));
+    });
+    Ok(RootWriteLock { _lease: lease })
 }
 
 pub struct FileChangeSetBuilder {
@@ -489,6 +511,37 @@ mod tests {
     use super::*;
     use crate::testutil::temp_dir;
     use std::{fs, sync::mpsc, thread, time::Duration};
+
+    #[test]
+    fn root_queue_is_fifo_and_reentrant() {
+        let root = temp_dir("fifo_root_queue");
+        let held = acquire_root_write_lock(&root).unwrap();
+        let nested = acquire_root_write_lock(&root).unwrap();
+        let (sent, received) = mpsc::channel();
+        let mut workers = Vec::new();
+        for index in 1..=2 {
+            let worker_root = root.clone();
+            let sent = sent.clone();
+            workers.push(thread::spawn(move || {
+                let _lease = acquire_root_write_lock(&worker_root).unwrap();
+                sent.send(index).unwrap();
+            }));
+            let start = std::time::Instant::now();
+            while held._lease.coordinator.tickets.lock().unwrap().0 < index + 1 {
+                assert!(start.elapsed() < Duration::from_secs(3));
+                thread::yield_now();
+            }
+        }
+        drop(nested);
+        assert!(received.recv_timeout(Duration::from_millis(30)).is_err());
+        drop(held);
+        assert_eq!(received.recv_timeout(Duration::from_secs(3)).unwrap(), 1);
+        assert_eq!(received.recv_timeout(Duration::from_secs(3)).unwrap(), 2);
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn root_write_lock_serializes_same_canonical_root() {

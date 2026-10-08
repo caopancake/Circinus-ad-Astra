@@ -51,6 +51,9 @@ describe('window-save orchestrator', () => {
       id: 'npc_dave',
       spec: {},
       writeResult: {
+        baseVersions: [],
+        commitId: 1,
+        history: { revision: 1, undoStack: [], redoStack: [] },
         changes: [{ path: 'x', kind: 'csv', beforeBase64: null, afterBase64: null, beforeText: '', afterText: '' }],
         invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
         keyMap: [],
@@ -76,6 +79,9 @@ describe('window-save orchestrator', () => {
       id: '',
       spec: {},
       writeResult: {
+        baseVersions: [],
+        commitId: 1,
+        history: { revision: 1, undoStack: [], redoStack: [] },
         changes: [],
         invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
         keyMap: [],
@@ -96,6 +102,9 @@ describe('window-save orchestrator', () => {
       modRoot: 'M:\\mod',
       path: 'x.txt',
       writeResult: {
+        baseVersions: [],
+        commitId: 1,
+        history: { revision: 1, undoStack: [], redoStack: [] },
         changes: [],
         invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
         keyMap: [],

@@ -1,4 +1,3 @@
-use super::ensure_write_scope;
 use crate::{
     errors::AppError,
     models::command_payloads::{
@@ -52,23 +51,24 @@ pub fn load_imported_editor_spec_file(
 
 #[tauri::command(async)]
 pub fn save_editor_spec(payload: SaveEditorSpecPayload) -> Result<WriteResult, AppError> {
-    ensure_write_scope(&payload)?;
-    services::editor_config::save_editor_spec_with_json_options(
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    let result = services::editor_config::save_editor_spec_with_json_options(
         &payload.mod_root,
         payload.kind,
         &payload.id,
         payload.data,
         payload.json_write,
         payload.ordered_json.as_deref(),
-    )
+    )?;
+    transaction.commit(result, "保存编辑器规格")
 }
 
 #[tauri::command(async)]
 pub fn save_indexed_config_entity(
     payload: IndexedConfigEntityPayload,
 ) -> Result<WriteResult<Value>, AppError> {
-    ensure_write_scope(&payload)?;
-    services::editor_config::save_indexed_config_with_json(
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    let result = services::editor_config::save_indexed_config_with_json(
         &payload.mod_root,
         payload.kind,
         payload.previous_id.as_deref(),
@@ -80,39 +80,42 @@ pub fn save_indexed_config_entity(
             json_write: payload.json_write,
             ordered_json: payload.ordered_json.as_deref(),
         },
-    )
+    )?;
+    transaction.commit(result, "保存配置实体")
 }
 
 #[tauri::command(async)]
 pub fn create_indexed_config_entity(
     payload: IndexedConfigEntityPayload,
 ) -> Result<WriteResult<Value>, AppError> {
-    ensure_write_scope(&payload)?;
-    services::editor_config::create_indexed_config_entity(
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    let result = services::editor_config::create_indexed_config_entity(
         &payload.mod_root,
         payload.kind,
         &payload.next_id,
         payload.index_row,
         payload.entity_data,
-    )
+    )?;
+    transaction.commit(result, "创建配置实体")
 }
 
 #[tauri::command(async)]
 pub fn delete_indexed_config_entity(
     payload: DeleteIndexedConfigEntityPayload,
 ) -> Result<WriteResult<Value>, AppError> {
-    ensure_write_scope(&payload)?;
-    services::editor_config::delete_indexed_config_entity(
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    let result = services::editor_config::delete_indexed_config_entity(
         &payload.mod_root,
         payload.kind,
         &payload.id,
         payload.delete_target,
-    )
+    )?;
+    transaction.commit(result, "删除配置实体")
 }
 
 #[tauri::command(async)]
 pub fn save_variant_entity(payload: VariantEntityPayload) -> Result<WriteResult<Value>, AppError> {
-    ensure_write_scope(&payload)?;
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
     let target_exists = spec_save_context(
         &payload.session_id,
         EntityKind::Variant,
@@ -120,7 +123,7 @@ pub fn save_variant_entity(payload: VariantEntityPayload) -> Result<WriteResult<
         &payload.next_id,
         payload.rel_path.as_deref(),
     )?;
-    services::editor_config::save_spec_entity_with_json_options(
+    let result = services::editor_config::save_spec_entity_with_json_options(
         &payload.mod_root,
         EntityKind::Variant,
         payload.previous_id.as_deref(),
@@ -132,32 +135,34 @@ pub fn save_variant_entity(payload: VariantEntityPayload) -> Result<WriteResult<
             json_write: payload.json_write,
             ordered_json: payload.ordered_json.as_deref(),
         },
-    )
+    )?;
+    transaction.commit(result, "保存装配")
 }
 
 #[tauri::command(async)]
 pub fn create_variant_entity(
     payload: VariantEntityPayload,
 ) -> Result<WriteResult<Value>, AppError> {
-    ensure_write_scope(&payload)?;
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
     let target_exists = services::project::query_entity(
         &payload.session_id,
         EntityKind::Variant,
         &payload.next_id,
     )?
     .is_some();
-    services::editor_config::create_spec_entity(
+    let result = services::editor_config::create_spec_entity(
         &payload.mod_root,
         EntityKind::Variant,
         &payload.next_id,
         payload.data,
         target_exists,
-    )
+    )?;
+    transaction.commit(result, "创建装配")
 }
 
 #[tauri::command(async)]
 pub fn delete_variant_entity(payload: DeleteVariantEntityPayload) -> Result<WriteResult, AppError> {
-    ensure_write_scope(&payload)?;
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
     spec_save_context(
         &payload.session_id,
         EntityKind::Variant,
@@ -165,17 +170,18 @@ pub fn delete_variant_entity(payload: DeleteVariantEntityPayload) -> Result<Writ
         &payload.entity_id,
         Some(&payload.rel_path),
     )?;
-    services::editor_config::delete_spec_entity(
+    let result = services::editor_config::delete_spec_entity(
         &payload.mod_root,
         EntityKind::Variant,
         &payload.entity_id,
         &payload.rel_path,
-    )
+    )?;
+    transaction.commit(result, "删除装配")
 }
 
 #[tauri::command(async)]
 pub fn save_skin_entity(payload: SkinEntityPayload) -> Result<WriteResult<Value>, AppError> {
-    ensure_write_scope(&payload)?;
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
     let target_exists = spec_save_context(
         &payload.session_id,
         EntityKind::Skin,
@@ -183,7 +189,7 @@ pub fn save_skin_entity(payload: SkinEntityPayload) -> Result<WriteResult<Value>
         &payload.next_id,
         payload.rel_path.as_deref(),
     )?;
-    services::editor_config::save_spec_entity_with_json_options(
+    let result = services::editor_config::save_spec_entity_with_json_options(
         &payload.mod_root,
         EntityKind::Skin,
         payload.previous_id.as_deref(),
@@ -195,27 +201,29 @@ pub fn save_skin_entity(payload: SkinEntityPayload) -> Result<WriteResult<Value>
             json_write: payload.json_write,
             ordered_json: payload.ordered_json.as_deref(),
         },
-    )
+    )?;
+    transaction.commit(result, "保存皮肤")
 }
 
 #[tauri::command(async)]
 pub fn create_skin_entity(payload: SkinEntityPayload) -> Result<WriteResult<Value>, AppError> {
-    ensure_write_scope(&payload)?;
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
     let target_exists =
         services::project::query_entity(&payload.session_id, EntityKind::Skin, &payload.next_id)?
             .is_some();
-    services::editor_config::create_spec_entity(
+    let result = services::editor_config::create_spec_entity(
         &payload.mod_root,
         EntityKind::Skin,
         &payload.next_id,
         payload.data,
         target_exists,
-    )
+    )?;
+    transaction.commit(result, "创建皮肤")
 }
 
 #[tauri::command(async)]
 pub fn delete_skin_entity(payload: DeleteSkinEntityPayload) -> Result<WriteResult, AppError> {
-    ensure_write_scope(&payload)?;
+    let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
     spec_save_context(
         &payload.session_id,
         EntityKind::Skin,
@@ -223,12 +231,13 @@ pub fn delete_skin_entity(payload: DeleteSkinEntityPayload) -> Result<WriteResul
         &payload.entity_id,
         Some(&payload.rel_path),
     )?;
-    services::editor_config::delete_spec_entity(
+    let result = services::editor_config::delete_spec_entity(
         &payload.mod_root,
         EntityKind::Skin,
         &payload.entity_id,
         &payload.rel_path,
-    )
+    )?;
+    transaction.commit(result, "删除皮肤")
 }
 
 #[cfg(test)]

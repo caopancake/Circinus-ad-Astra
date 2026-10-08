@@ -66,6 +66,7 @@ function emptyTableRecord<T>(createValue: () => T): Record<TableKey, T> {
 
 function createModTableState(): ModTableState {
   return {
+    baseVersions: emptyTableRecord(() => []),
     tables: emptyTablesRecord(),
     originalTables: emptyTablesRecord(),
     headers: emptyHeadersRecord(),

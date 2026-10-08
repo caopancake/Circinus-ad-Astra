@@ -5,6 +5,11 @@ export type GlobalStubs = Record<string, Component>;
 /// Minimal Naive UI stand-ins for component tests: elements keep the same
 /// update:* events so specs can drive them through native inputs.
 export const nInput = {
+  methods: {
+    focus(this: { $el: HTMLElement }) {
+      this.$el.focus();
+    },
+  },
   props: ['value', 'type', 'placeholder', 'disabled', 'size', 'status', 'autosize'],
   emits: ['update:value', 'change', 'blur'],
   template: `<textarea

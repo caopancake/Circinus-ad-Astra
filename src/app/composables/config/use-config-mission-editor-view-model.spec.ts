@@ -46,6 +46,7 @@ interface Harness {
 
 function editorDataFixture(missionId: string): ConfigMissionEditorData {
   return {
+    baseVersions: [],
     descriptor: { title: missionId },
     list: { mission: missionId, title: missionId },
     text: `text of ${missionId}`,
@@ -65,7 +66,7 @@ function mountEditor() {
   } as never);
   const queryMissionEditorData = vi.fn(async (_sessionId: string, id: string) => editorDataFixture(id));
   const saveMission = vi.fn(async (_sessionId: string, _modRoot: string, _previousId: string, local: RowData) => {
-    return String((local.list as RowData)?.mission ?? 'm1');
+    return { id: String((local.list as RowData)?.mission ?? 'm1'), baseVersions: [] };
   });
   const onSaved = vi.fn();
   let vm!: ReturnType<typeof useConfigMissionEditorViewModel>;
@@ -132,7 +133,7 @@ describe('useConfigMissionEditorViewModel', () => {
       text: { content: 'body' },
     } as never;
     await vm.save();
-    expect(saveMission).toHaveBeenCalledWith('sess-1', 'M:/mod', 'm1', expect.anything(), expect.anything());
+    expect(saveMission).toHaveBeenCalledWith('sess-1', 'M:/mod', 'm1', expect.anything(), expect.anything(), []);
     expect(onSaved).toHaveBeenCalledWith('m9');
     expect(vm.loadedMissionId.value).toBe('m9');
     expect(mocks.feedback.error).not.toHaveBeenCalled();

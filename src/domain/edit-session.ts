@@ -23,7 +23,7 @@ export interface EditSessionValue<T> {
   readonly hasPendingExternal: boolean;
   loadBaseline(value: T): void;
   setDraft(value: T): void;
-  applyExternal(value: T): void;
+  applyExternal(value: T, preserveDraft?: boolean): void;
   loadPendingExternal(): void;
   commitSaved(value?: T): void;
   commitSavedBaseline(value: T): void;
@@ -73,9 +73,9 @@ export function createEditSessionValue<T>(initialValue: T, options: EditSessionV
     setDraft(value) {
       state.draft = clone(value);
     },
-    applyExternal(value) {
+    applyExternal(value, preserveDraft = false) {
       const next = clone(value);
-      if (!equals(state.baseline, state.draft)) {
+      if (preserveDraft || !equals(state.baseline, state.draft)) {
         state.pendingExternal = next;
         return;
       }

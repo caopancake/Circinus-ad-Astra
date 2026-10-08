@@ -14,6 +14,7 @@ const allowedServiceEdges = new Set([
   'app_log -> system_open',
   'app_settings -> app_paths',
   'app_settings -> workspace_persistence',
+  'app_settings -> file_history',
   'directory_opening -> app_log',
   'directory_opening -> app_paths',
   'directory_opening -> project',
@@ -21,6 +22,10 @@ const allowedServiceEdges = new Set([
   'file_editor -> file_changes',
   'mod_creation -> directory_opening',
   'workspace_persistence -> app_paths',
+  'write_transactions -> app_settings',
+  'write_transactions -> file_changes',
+  'write_transactions -> file_history',
+  'write_transactions -> project',
 ]);
 
 export const rustServiceEdgeBoundaryRule = {

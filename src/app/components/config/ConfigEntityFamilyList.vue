@@ -164,21 +164,6 @@ function confirmDelete(file: ConfigFamilyFile) {
 }
 
 watch(
-  sortedFiles,
-  (items) => {
-    if (items.length === 0) {
-      emit('select', null);
-      return;
-    }
-    const first = items[0];
-    if (first && !items.some((file) => fileId(file) === props.selectedId)) {
-      emit('select', fileId(first));
-    }
-  },
-  { immediate: true },
-);
-
-watch(
   () => props.files,
   (items) => void recordListFirstFrame(props.listLoadStartedAt, items.length),
 );

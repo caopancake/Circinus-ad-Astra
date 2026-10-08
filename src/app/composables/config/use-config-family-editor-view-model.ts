@@ -1,3 +1,4 @@
+import type { ConfigEditTarget } from '@/shared/types';
 import { computed, watch, type Ref } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useConfigEditorDraftSession } from '@/app/composables/config/use-config-editor-draft-session';
@@ -19,43 +20,56 @@ export function useConfigFamilyEditorViewModel(params: {
   files: Ref<ConfigFamilyFile[]>;
 }) {
   const feedback = useAppFeedback();
+  function editTarget(id: string): ConfigEditTarget {
+    return {
+      sessionId: params.sessionId.value!,
+      modRoot: params.modRoot.value!,
+      kind: family.id,
+      id,
+      relPath: params.files.value.find((file) => familyFileId(family, file) === id)?.relPath ?? null,
+    };
+  }
+
   const family = params.family;
 
   const selectedFile = computed(() => params.files.value.find((file) => familyFileId(family, file) === params.selectedId.value) ?? null);
 
-  const draftSession = useConfigEditorDraftSession<RowData, string, ConfigFamilyFile | null, ConfigFamilyFile>({
+  const draftSession = useConfigEditorDraftSession<RowData, ConfigEditTarget, ConfigFamilyFile | null, ConfigFamilyFile>({
     emptyValue: {},
     modRoot: params.modRoot,
-    load: (id) => {
+    load: (target) => {
+      const id = target.id;
       const file = params.files.value.find((candidate) => familyFileId(family, candidate) === id) ?? null;
-      return { meta: file, value: file ? file.data : {} };
+      return { meta: file, value: file ? file.data : {}, baseVersions: file?.baseVersions ?? [] };
     },
-    save: async (_id, data) => {
-      const current = selectedFile.value;
-      const saveModRoot = params.modRoot.value;
-      const saveSessionId = params.sessionId.value;
+    save: async (target, data, baseVersions) => {
+      const current = params.files.value.find((file) => file.relPath === target.relPath) ?? null;
+      const saveModRoot = target.modRoot;
+      const saveSessionId = target.sessionId;
       if (!current || !saveModRoot || !saveSessionId) return;
-      const saved = await params.saveFile(saveSessionId, saveModRoot, current, data);
+      const saved = await params.saveFile(saveSessionId, saveModRoot, { ...current, baseVersions }, data);
       if (params.modRoot.value !== saveModRoot || params.sessionId.value !== saveSessionId || !saved) return;
-      return { meta: saved, value: saved.data };
+      return { meta: saved, value: saved.data, baseVersions: saved.baseVersions };
     },
-    targetKey: (id) => id,
+    targetKey: (target) => JSON.stringify(target),
+    savedTarget: (target, snapshot) =>
+      snapshot.meta ? { ...target, id: familyFileId(family, snapshot.meta), relPath: snapshot.meta.relPath } : target,
   });
 
   watch(
-    () => [params.selectedId.value, params.dataRevision.value] as const,
+    () => [params.selectedId.value, params.dataRevision.value, params.sessionId.value, params.modRoot.value] as const,
     ([selectedId]) => {
       const file = selectedFile.value;
       const data = file ? file.data : {};
-      if (draftSession.currentTargetKey.value !== selectedId) void loadFamilyEditorData(selectedId);
-      else draftSession.applyExternalForTarget(selectedId, data);
+      if (!draftSession.isTargetCurrent(editTarget(selectedId))) void loadFamilyEditorData(selectedId);
+      else draftSession.applyExternalForTarget(editTarget(selectedId), data, file?.baseVersions);
     },
     { immediate: true },
   );
 
   async function loadFamilyEditorData(selectedId: string) {
     try {
-      await draftSession.loadTarget(selectedId);
+      await draftSession.loadTarget(editTarget(selectedId));
     } catch (error) {
       feedback.error(error, `加载${family.displayName}失败`);
     }

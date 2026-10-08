@@ -21,7 +21,7 @@
 
 - query 严禁写盘；write 严禁重开整个项目；两者只经 `sessionId + modRoot` 身份约束协作。
 - session 注册表锁只保护 `sessionId -> Arc<Mutex<ProjectSession>>` 的插入、移除与查找；每个 session 各自持有一把状态锁。
-- 锁序固定为注册表锁、session 锁、core/sprite/持久化缓存锁，严禁反向。
+- 写入锁序必须为根目录事务租约、session 状态、core/sprite/持久化缓存；注册表锁只允许用于短暂句柄访问。
 - session 关闭只从注册表移除条目；已取得 handle 的在途操作自然完成，关闭后新操作按未知 session 拒绝。
 - 前端 project store 只保存活动 session 与 manifest，严禁读盘、扫描或按完整快照替代 query。
 - 写后失效必须先资源后查询，并按结构化 invalidation 精确处理，严禁扩大到全量刷新。
@@ -61,6 +61,10 @@
 4. 前端按生命周期清理用例移除对应缓存与状态。
 
 ## 规范
+
+- 异步刷新提交必须验证捕获 session 和 pending 生命周期；已关闭 session 的响应严禁覆盖新会话 manifest。
+
+- 编辑 query 必须随数据返回 baseVersions；派生信息刷新必须保留 CSV 行身份，内容刷新必须按实际写盘方向处理。
 
 - 所有 Mod 缓存与索引必须按 session 隔离，严禁跨 session 复用。
 - ID 归属的实体视图、表计数与失效快照只枚举非注释且实体 ID 非空的行；缺 ID 行仍属于表格、草稿与保存链路。

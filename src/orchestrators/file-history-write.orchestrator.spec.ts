@@ -16,6 +16,15 @@ import { useProjectStore } from '@/stores/project.store';
 
 function writeResultFixture(changeCount = 1): WriteResult {
   return {
+    baseVersions: [],
+    commitId: 1,
+    history: {
+      revision: 1,
+      undoStack: [
+        { id: 1, timestamp: 1, label: 'save XY', paths: Array.from({ length: changeCount }, (_, index) => `data/hulls/file${index}.ship`) },
+      ],
+      redoStack: [],
+    },
     changes: Array.from({ length: changeCount }, (_, index) => changeRecord(`data/hulls/file${index}.ship`)),
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
     keyMap: [],
@@ -41,6 +50,7 @@ function changeRecord(path: string) {
 function projectWithSession(modRoot: string, sessionId: string) {
   const project = useProjectStore();
   project.registerProjectManifest({
+    baseVersions: [],
     sessionId,
     modRoot,
     starsectorRoot: null,
@@ -68,7 +78,7 @@ describe('completeSavedWrite', () => {
     await completeSavedWrite({ label: 'save XY', modRoot: 'C:/mods/alpha', result, sessionId: 's1' }, project);
     const stacks = fileHistory.getHistoryStacks('C:/mods/alpha');
     expect(stacks.undoStack).toHaveLength(1);
-    expect(stacks.undoStack[0]).toMatchObject({ label: 'save XY', changes: result.changes });
+    expect(stacks.undoStack).toEqual(result.history.undoStack);
     expect(mocks.refreshProjectSessionAfterWrite).toHaveBeenCalledWith('C:/mods/alpha', result, 's1');
   });
 

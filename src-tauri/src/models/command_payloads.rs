@@ -1,4 +1,5 @@
 use crate::models::{
+    SessionModScope,
     app_log::AppLogEntry,
     app_settings::AppSettings,
     project::{CsvFactionFilter, CsvTableKey, EntityKind, ProjectSessionId, ResourceRef},
@@ -15,6 +16,7 @@ use serde_json::{Map, Value};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveCsvPatchPayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub table: CsvTableKey,
@@ -114,7 +116,8 @@ pub struct QueryEntityListPayload {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct WeaponDraftResourcesPayload {
+pub struct EditorDraftResourcesPayload {
+    pub kind: EditorSpecKind,
     pub session_id: ProjectSessionId,
     pub id: String,
     pub draft: Value,
@@ -164,6 +167,7 @@ pub struct ResolveModRelativePathPayload {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IndexedConfigEntityPayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub kind: IndexedConfigKind,
@@ -182,6 +186,7 @@ pub struct IndexedConfigEntityPayload {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteIndexedConfigEntityPayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub kind: IndexedConfigKind,
@@ -192,6 +197,7 @@ pub struct DeleteIndexedConfigEntityPayload {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigFileEntityPayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     #[serde(deserialize_with = "required_nullable")]
@@ -212,6 +218,7 @@ pub type SkinEntityPayload = ConfigFileEntityPayload;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteVariantEntityPayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub entity_id: String,
@@ -221,6 +228,7 @@ pub struct DeleteVariantEntityPayload {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteSkinEntityPayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub entity_id: String,
@@ -231,11 +239,6 @@ pub struct DeleteSkinEntityPayload {
 /// validated together so a command can never pair one session with another
 /// mod's root. `session_id` is `None` for recovery-mode payloads that
 /// legitimately operate without a session.
-pub trait SessionModScope {
-    fn session_id(&self) -> Option<&ProjectSessionId>;
-    fn mod_root(&self) -> &str;
-}
-
 macro_rules! impl_session_mod_scope_required {
     ($($ty:ty),* $(,)?) => {$(
         impl SessionModScope for $ty {
@@ -285,6 +288,7 @@ impl_session_mod_scope_optional!(
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveTextFilePayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     #[serde(deserialize_with = "required_nullable")]
     pub session_id: Option<ProjectSessionId>,
     pub mod_root: String,
@@ -295,6 +299,7 @@ pub struct SaveTextFilePayload {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscodeFilePayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     #[serde(deserialize_with = "required_nullable")]
     pub session_id: Option<ProjectSessionId>,
     pub mod_root: String,
@@ -321,6 +326,7 @@ pub struct LoadImportedEditorSpecPayload {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveModFilesPayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub files: Vec<AssociatedFileChange>,
@@ -329,6 +335,7 @@ pub struct SaveModFilesPayload {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveModInfoPayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub data: Value,
@@ -341,6 +348,7 @@ pub struct SaveModInfoPayload {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveEditorSpecPayload {
+    pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub kind: EditorSpecKind,
@@ -358,7 +366,15 @@ pub struct ApplyFileChangeSetPayload {
     pub session_id: ProjectSessionId,
     pub mod_root: String,
     pub direction: FileChangeReplayDirection,
-    pub changes: Vec<FileChangeRecord>,
+    pub entry_id: u64,
+    pub revision: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileHistoryPayload {
+    pub session_id: ProjectSessionId,
+    pub mod_root: String,
 }
 
 #[cfg(test)]
@@ -369,6 +385,7 @@ mod tests {
     #[test]
     fn indexed_config_entity_payload_uses_entity_data_wire_field() {
         let payload: IndexedConfigEntityPayload = serde_json::from_value(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "modRoot": "D:/mods/demo",
             "kind": "faction",
@@ -435,6 +452,7 @@ mod tests {
     #[test]
     fn csv_table_window_payload_requires_explicit_nullable_filters() {
         let result = serde_json::from_value::<CsvTableWindowPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "table": "ships",
             "start": 0,
@@ -448,6 +466,7 @@ mod tests {
     #[test]
     fn csv_table_window_payload_uses_explicit_faction_filter() {
         let payload = serde_json::from_value::<CsvTableWindowPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "table": "ships",
             "start": 0,
@@ -468,6 +487,7 @@ mod tests {
     #[test]
     fn csv_source_options_payload_requires_session_and_source() {
         let payload = serde_json::from_value::<CsvSourceOptionsPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "source": "csv:ships.id"
         }))
@@ -486,6 +506,7 @@ mod tests {
     #[test]
     fn hull_references_payload_uses_reference_ids() {
         let payload = serde_json::from_value::<HullReferencesPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "referenceIds": ["ship_or_skin"]
         }))
@@ -497,6 +518,7 @@ mod tests {
     #[test]
     fn indexed_config_entity_payload_requires_explicit_delete_flag() {
         let result = serde_json::from_value::<IndexedConfigEntityPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "modRoot": "D:/mods/demo",
             "kind": "faction",
@@ -512,6 +534,7 @@ mod tests {
     #[test]
     fn config_file_entity_payload_requires_explicit_nullable_previous_id() {
         let result = serde_json::from_value::<ConfigFileEntityPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "modRoot": "D:/mods/demo",
             "nextId": "demo",
@@ -524,12 +547,12 @@ mod tests {
     #[test]
     fn config_file_entity_payload_requires_explicit_nullable_rel_path() {
         let result = serde_json::from_value::<ConfigFileEntityPayload>(json!({
-            "sessionId":"session-1", "modRoot":"D:/mods/demo", "previousId":null,
+            "baseVersions": [], "sessionId":"session-1", "modRoot":"D:/mods/demo", "previousId":null,
             "nextId":"demo", "data":{"id":"demo"}
         }));
         assert!(result.is_err());
         let payload = serde_json::from_value::<ConfigFileEntityPayload>(json!({
-            "sessionId":"session-1", "modRoot":"D:/mods/demo", "previousId":null,
+            "baseVersions": [], "sessionId":"session-1", "modRoot":"D:/mods/demo", "previousId":null,
             "nextId":"demo", "relPath":null, "data":{"id":"demo"}
         }))
         .unwrap();
@@ -539,6 +562,7 @@ mod tests {
     #[test]
     fn delete_indexed_config_entity_payload_requires_explicit_delete_flag() {
         let result = serde_json::from_value::<DeleteIndexedConfigEntityPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "modRoot": "D:/mods/demo",
             "kind": "faction",
@@ -561,6 +585,7 @@ mod tests {
     #[test]
     fn save_text_file_payload_requires_mod_root() {
         let result = serde_json::from_value::<SaveTextFilePayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "path": "D:/mods/demo/mod_info.json",
             "text": "{}"
@@ -583,6 +608,7 @@ mod tests {
     #[test]
     fn save_text_file_payload_accepts_explicit_null_session_id() {
         let payload = serde_json::from_value::<SaveTextFilePayload>(json!({
+            "baseVersions": [],
             "sessionId": null,
             "modRoot": "D:/mods/demo",
             "path": "D:/mods/demo/mod_info.json",
@@ -596,6 +622,7 @@ mod tests {
     #[test]
     fn load_editable_file_payload_requires_mod_root() {
         let result = serde_json::from_value::<LoadEditableFilePayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "path": "D:/mods/demo/mod_info.json"
         }));
@@ -616,6 +643,7 @@ mod tests {
     #[test]
     fn load_editable_file_payload_accepts_explicit_null_session_id() {
         let payload = serde_json::from_value::<LoadEditableFilePayload>(json!({
+            "baseVersions": [],
             "sessionId": null,
             "modRoot": "D:/mods/demo",
             "path": "D:/mods/demo/mod_info.json"
@@ -637,6 +665,7 @@ mod tests {
     #[test]
     fn apply_file_change_set_payload_requires_mod_root() {
         let result = serde_json::from_value::<ApplyFileChangeSetPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "direction": "undo",
             "changes": []
@@ -659,6 +688,7 @@ mod tests {
     #[test]
     fn save_csv_patch_payload_requires_explicit_associated_specs() {
         let result = serde_json::from_value::<SaveCsvPatchPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "modRoot": "C:/mods/test",
             "table": "ships",
@@ -671,6 +701,7 @@ mod tests {
     #[test]
     fn save_csv_patch_payload_requires_mod_root() {
         let result = serde_json::from_value::<SaveCsvPatchPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "table": "ships",
             "patches": [],
@@ -683,6 +714,7 @@ mod tests {
     #[test]
     fn save_csv_patch_payload_requires_explicit_patch_row() {
         let result = serde_json::from_value::<SaveCsvPatchPayload>(json!({
+            "baseVersions": [],
             "sessionId": "session-1",
             "modRoot": "C:/mods/test",
             "table": "ships",

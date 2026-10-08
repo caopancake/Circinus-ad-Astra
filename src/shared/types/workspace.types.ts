@@ -26,6 +26,7 @@ export interface ModOpeningFailure {
 
 /** Per-Mod table state — fully isolated from other Mods */
 export interface ModTableState {
+  baseVersions: Record<TableKey, import('@/shared/types/write.types').FileVersion[]>;
   tables: Record<TableKey, CsvTableRows>;
   originalTables: Record<TableKey, CsvTableRows>;
   headers: Record<TableKey, string[]>;

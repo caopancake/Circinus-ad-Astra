@@ -3,9 +3,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::path::Path;
 
+pub trait SessionModScope {
+    fn session_id(&self) -> Option<&crate::models::ProjectSessionId>;
+    fn mod_root(&self) -> &str;
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CsvRowPatch {
+    #[serde(default)]
+    pub insert_at: Option<usize>,
     pub row_key: String,
     pub action: CsvRowPatchAction,
     pub row: Map<String, Value>,
@@ -23,6 +30,7 @@ pub enum CsvRowPatchAction {
 pub struct CsvRowKeyMapping {
     pub previous_key: String,
     pub next_key: String,
+    pub row_index: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -75,6 +83,31 @@ pub enum AssociatedSpecChangeAction {
 pub struct EditableFileData {
     pub path: String,
     pub text: String,
+    pub base_versions: Vec<FileVersion>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FileVersion {
+    pub path: String,
+    pub fingerprint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileHistorySummary {
+    pub id: u64,
+    pub label: String,
+    pub timestamp: i64,
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileHistorySnapshot {
+    pub revision: u64,
+    pub undo_stack: Vec<FileHistorySummary>,
+    pub redo_stack: Vec<FileHistorySummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,7 +159,7 @@ pub enum IndexedConfigKind {
     Mission,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct FileSnapshot {
     pub rel_path: String,
@@ -143,6 +176,9 @@ pub struct WriteResult<T = ()> {
     pub invalidation: ProjectInvalidation,
     pub key_map: Vec<CsvRowKeyMapping>,
     pub refreshed_entity: Option<T>,
+    pub commit_id: u64,
+    pub base_versions: Vec<FileVersion>,
+    pub history: FileHistorySnapshot,
 }
 
 /// Refreshed-entity payload of the indexed config chains (faction, mission):
@@ -173,6 +209,9 @@ impl<T> WriteResult<T> {
             invalidation,
             key_map,
             refreshed_entity,
+            commit_id: 0,
+            base_versions: Vec::new(),
+            history: FileHistorySnapshot::default(),
         }
     }
 
@@ -262,7 +301,15 @@ mod tests {
         keys.sort_unstable();
         assert_eq!(
             keys,
-            ["changes", "invalidation", "keyMap", "refreshedEntity"]
+            [
+                "baseVersions",
+                "changes",
+                "commitId",
+                "history",
+                "invalidation",
+                "keyMap",
+                "refreshedEntity"
+            ]
         );
         assert!(serialized.get("invalidation").is_some());
         assert_eq!(result.invalidation.paths, [] as [&str; 0]);

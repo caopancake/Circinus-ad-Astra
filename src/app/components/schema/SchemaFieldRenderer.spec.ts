@@ -5,6 +5,9 @@ import type { FieldSchema } from '@/domain/schema/schema.types';
 import { initializeSettingsStore } from '@/stores/settings.store';
 import SchemaFieldRenderer from './SchemaFieldRenderer.vue';
 import { editorUiStubs } from '@/test/ui-stubs';
+import { nSelect } from '@/test/ui-stubs';
+import { h, nextTick, ref } from 'vue';
+import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
 
 const mocks = vi.hoisted(() => ({
   queryCoreFields: vi.fn(async () => ({})),
@@ -66,6 +69,59 @@ describe('SchemaFieldRenderer smart mode', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     initializeSettingsStore({ ...SETTINGS });
+  });
+
+  it('preserves object-array input nodes and focus across cloned drafts', async () => {
+    wrapper = mount(
+      {
+        setup() {
+          const draft = useEditTargetDraftSession({
+            emptyValue: [{ name: 'A' }, { name: 'B' }],
+            load: () => ({ value: [] as { name: string }[] }),
+            targetKey: (id: string) => id,
+          });
+          return () =>
+            h(SchemaFieldRenderer, {
+              field: fieldFixture('array-of-object', { nested: [{ key: 'name', type: 'string', label: 'Name' }] }),
+              value: draft.draftValue.value,
+              onUpdate: (value) => {
+                draft.draftValue.value = value as { name: string }[];
+              },
+            });
+        },
+      },
+      { global: { stubs: editorUiStubs }, attachTo: document.body },
+    );
+    const first = wrapper.get('input');
+    first.element.focus();
+    await first.setValue('AX');
+    expect(wrapper.get('input').element).toBe(first.element);
+    expect(document.activeElement).toBe(first.element);
+    expect(wrapper.findAll('.array-item')).toHaveLength(2);
+  });
+
+  it('keeps key-value expansion attached to the surviving row', async () => {
+    const values = ref({ A: 'a', B: 'b', C: 'c' });
+    wrapper = mount(
+      {
+        setup: () => () =>
+          h(SchemaFieldRenderer, {
+            field: fieldFixture('key-value'),
+            value: values.value,
+            onUpdate: (value) => {
+              values.value = value as typeof values.value;
+            },
+          }),
+      },
+      { global: { stubs: editorUiStubs } },
+    );
+    wrapper.findAllComponents(nSelect)[1]!.vm.$emit('update:show', true);
+    await nextTick();
+    await wrapper.findAll('.kv-row')[0]!.get('button').trigger('click');
+    const selects = wrapper.findAllComponents(nSelect);
+    expect(selects.map((select) => select.props('value'))).toEqual(['B', 'C']);
+    expect(selects[0]!.props('show')).toBe(true);
+    expect(selects[1]!.props('show')).toBeUndefined();
   });
 
   it('renders strings as a single-line input and emits text', async () => {

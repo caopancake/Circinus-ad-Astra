@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, storeToRefs } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { queryCoreFields, queryCoreGraphics } from '@/services/assets.service';
 import { useSettingsStore } from '@/stores/settings.store';
@@ -141,11 +141,12 @@ export const useCoreAssetsStore = defineStore('core-assets', () => {
 
 export function useCoreSchema() {
   const store = useCoreAssetsStore();
+  const state = storeToRefs(store);
   return {
-    coreFields: store.coreFields,
-    loaded: store.coreFieldsLoaded,
-    loading: store.coreFieldsLoading,
-    starsectorRoot: store.starsectorRoot,
+    coreFields: state.coreFields,
+    loaded: state.coreFieldsLoaded,
+    loading: state.coreFieldsLoading,
+    starsectorRoot: state.starsectorRoot,
     getMergedSchema: store.getMergedSchema,
     loadCoreFields: () => store.loadFieldsFor(store.starsectorRoot),
   };
@@ -153,10 +154,11 @@ export function useCoreSchema() {
 
 export function useCoreGraphics() {
   const store = useCoreAssetsStore();
+  const state = storeToRefs(store);
   return {
-    graphicsPaths: store.graphicsPaths,
-    loaded: store.graphicsLoaded,
-    starsectorRoot: store.starsectorRoot,
+    graphicsPaths: state.graphicsPaths,
+    loaded: state.graphicsLoaded,
+    starsectorRoot: state.starsectorRoot,
     loadGraphics: () => store.loadGraphicsFor(store.starsectorRoot),
   };
 }

@@ -1,15 +1,17 @@
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { UnlistenFn } from '@/windows/tauri.events';
 import {
   queryEditorEntityBundle,
   loadImportedSpecFile,
   refreshBundleProjectiles,
   refreshBundleResources,
+  queryDraftEditorImages,
   type EditorEntityBundle,
 } from '@/services/editor.service';
 import type { EditorSpecKind, EditorWindowKind, EntityKind, RowData } from '@/shared/types';
 import { deepClone } from '@/shared/lib/starsector';
 import { formatError } from '@/shared/lib/errors';
+import { normalizeFsPath } from '@/shared/lib/paths';
 import { emitEditorSpecSaved, listenEditorPreviewDraftUpdated, listenEditorSpecSaved } from '@/orchestrators/editor-window.orchestrator';
 import { applyProjectSessionCacheInvalid, listenProjectSessionInvalidated } from '@/orchestrators/project-session-refresh.orchestrator';
 import { saveEditorSpecByKind } from '@/services/editor.service';
@@ -19,6 +21,7 @@ import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/servi
 import { defaultEditorSpec, editorMissingTargetText } from '@/domain/editors/editor-definitions';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
+import { WEAPON_SPRITE_FIELDS } from '@/domain/editors/lib/weapon-sprite-fields';
 import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
 import { pickEditorSpecFile } from '@/shared/runtime/dialog.runtime';
 import { closeCurrentWindow } from '@/windows/current.window';
@@ -52,14 +55,15 @@ export function useEditorWindowViewModel(params: {
       const data = await queryEditorEntityBundle(target.sessionId, target.kind, target.id, previewDraftSnapshot ?? undefined);
       return {
         meta: data,
+        baseVersions: data.baseVersions,
         value: isEditableWindowKind(target.kind) ? primarySpecForBundle(data, target.kind, target.id) : {},
       };
     },
-    save: async (target, draft) => {
+    save: async (target, draft, baseVersions) => {
       if (!isEditableWindowKind(target.kind)) return;
       const kind = target.kind as EditorSpecKind;
       const result = await runConfirmedJsonWrite(feedback, (options) =>
-        saveEditorSpecByKind(target.sessionId, target.modRoot, kind, target.id, draft, options),
+        saveEditorSpecByKind(target.sessionId, target.modRoot, kind, target.id, draft, options, baseVersions),
       );
       if (!result) return;
       await emitEditorSpecSaved({
@@ -70,7 +74,7 @@ export function useEditorWindowViewModel(params: {
         spec: deepClone(draft),
         writeResult: result,
       });
-      return { value: draft };
+      return { value: draft, baseVersions: result.baseVersions };
     },
     targetKey: editorWindowTargetKey,
   });
@@ -83,6 +87,44 @@ export function useEditorWindowViewModel(params: {
   let stopResourceInvalidation: (() => void) | null = null;
   let editorDataRequestId = 0;
   let derivedDataRequestId = 0;
+  let imageRequestId = 0;
+  let disposed = false;
+  const resourceRevision = ref(0);
+
+  const draftImageKey = computed(() =>
+    JSON.stringify(
+      (params.kind === 'ship' ? ['spriteName'] : WEAPON_SPRITE_FIELDS).map((field) => draftSession.draftValue.value[field] ?? null),
+    ),
+  );
+  watch([draftImageKey, resourceRevision], refreshDraftResources);
+
+  async function refreshDraftResources() {
+    const key = draftImageKey.value;
+    const target = editorWindowTarget();
+    if (disposed || !target || !editorData.value || (params.kind !== 'ship' && params.kind !== 'weapon')) return;
+    const requestId = ++imageRequestId;
+    const revision = resourceRevision.value;
+    const draft = deepClone(draftSession.draftValue.value);
+    editorData.value = clearBundleImages(editorData.value);
+    try {
+      const images = await queryDraftEditorImages(target.sessionId, params.kind, target.id, draft);
+      if (
+        disposed ||
+        requestId !== imageRequestId ||
+        revision !== resourceRevision.value ||
+        key !== draftImageKey.value ||
+        !sameEditorWindowTarget(target, editorWindowTarget())
+      )
+        return;
+      if (editorData.value?.kind === 'ship')
+        editorData.value = { ...editorData.value, resourceRefs: images.resourceRefs, shipSpriteData: images.shipSpriteData };
+      if (editorData.value?.kind === 'weapon')
+        editorData.value = { ...editorData.value, resourceRefs: images.resourceRefs, weaponSpriteData: images.weaponSpriteData };
+    } catch (error) {
+      if (!disposed && requestId === imageRequestId && revision === resourceRevision.value && key === draftImageKey.value)
+        feedback.error(error, '读取草稿贴图失败');
+    }
+  }
 
   const shipEditorData = computed(() => (editorData.value?.kind === 'ship' ? editorData.value : null));
   const weaponEditorData = computed(() => (editorData.value?.kind === 'weapon' ? editorData.value : null));
@@ -115,6 +157,7 @@ export function useEditorWindowViewModel(params: {
   async function queryEditorData(options: { promptForMissing: boolean; showLoading: boolean }) {
     const requestId = ++editorDataRequestId;
     derivedDataRequestId++;
+    imageRequestId++;
     const target = editorWindowTarget();
     if (!target) {
       errorText.value = '缺少 Mod 路径或目标 id。';
@@ -133,13 +176,13 @@ export function useEditorWindowViewModel(params: {
               meta: await queryEditorEntityBundle(target.sessionId, params.kind, target.id, previewDraftSnapshot ?? undefined),
               value: {},
             };
-      if (requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
+      if (disposed || requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
       if (!snapshot?.meta) return;
       const data = snapshot.meta;
       applyLoadedEditorData(data);
       if (data.isNew && params.kind !== 'weapon-preview' && options.promptForMissing) {
         const choice = await handleMissingSpec(params.kind, target);
-        if (requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
+        if (disposed || requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
         if (choice.action === 'cancel') {
           void closeCurrentWindow();
           return;
@@ -147,7 +190,7 @@ export function useEditorWindowViewModel(params: {
         if (choice.action === 'import') applyImportedSpec(params.kind, target.id, choice.data);
       }
     } catch (error) {
-      if (requestId !== editorDataRequestId) return;
+      if (disposed || requestId !== editorDataRequestId) return;
       errorText.value = formatError(error);
     } finally {
       if (requestId === editorDataRequestId) loading.value = false;
@@ -184,12 +227,13 @@ export function useEditorWindowViewModel(params: {
     const spec = deepClone(data);
     draftSession.setDraft(spec);
     editorData.value = applySavedSpecToBundle(editorData.value, kind as EditorSpecKind, id, spec);
+    resourceRevision.value++;
   }
 
   async function saveEditorData(kind: EditorSpecKind, data?: RowData): Promise<void> {
     const target = editorWindowTarget();
     if (!target || draftSession.saving.value) return;
-    if (data) draftSession.setDraft(data);
+    if (data) updateEditorDraft(kind, data);
     try {
       const saved = await draftSession.saveDraft();
       if (saved) {
@@ -215,6 +259,7 @@ export function useEditorWindowViewModel(params: {
     draftSession.loadPendingExternal();
     const spec = deepClone(draftSession.draftValue.value);
     editorData.value = applySavedSpecToBundle(editorData.value, params.kind, target.id, spec);
+    resourceRevision.value++;
   }
 
   async function initializeEditorWindow() {
@@ -227,6 +272,10 @@ export function useEditorWindowViewModel(params: {
   }
 
   function disposeEditorWindow() {
+    disposed = true;
+    imageRequestId++;
+    editorDataRequestId++;
+    derivedDataRequestId++;
     unlistenPreviewDraftUpdated?.();
     unlistenPreviewDraftUpdated = null;
     unlistenEditorSpecSaved?.();
@@ -258,9 +307,12 @@ export function useEditorWindowViewModel(params: {
     const target = editorWindowTarget();
     if (!target || event.sessionId !== target.sessionId || event.modRoot !== target.modRoot || !editorData.value) return;
     if (!shouldApplySavedSpec(editorData.value, target, event)) return;
-    if (params.kind === 'weapon-preview' && previewDraftSnapshot && event.kind === 'weapon') return;
+    if (params.kind === 'weapon-preview' && event.kind === 'weapon') {
+      if (!previewDraftSnapshot) void queryEditorData({ promptForMissing: false, showLoading: false });
+      return;
+    }
     if (isPrimaryEditableKind(params.kind, event.kind) && event.id === target.id) {
-      receiveExternalPrimarySpec(event.kind, event.id, event.spec);
+      receiveExternalPrimarySpec(event.kind, event.id, event.spec, event.writeResult.baseVersions);
       return;
     }
     applySavedSpec(event.kind, event.id, event.spec);
@@ -299,6 +351,16 @@ export function useEditorWindowViewModel(params: {
   function handleResourceCacheInvalidated(event: ResourceCacheInvalidationEvent) {
     const target = editorWindowTarget();
     if (!target || event.sessionId !== target.sessionId) return;
+    if (params.kind === 'ship' || params.kind === 'weapon') {
+      const paths = (params.kind === 'ship' ? ['spriteName'] : WEAPON_SPRITE_FIELDS)
+        .map((field) => draftSession.draftValue.value[field])
+        .filter((path): path is string => typeof path === 'string')
+        .map(normalizeFsPath);
+      const resources = event.invalidation?.resources ?? event.resources;
+      if (event.scope === 'session' || resources.some((resource) => paths.includes(normalizeFsPath(resource.relPath))))
+        resourceRevision.value++;
+      return;
+    }
     if (!editorResourceInvalidated(event, editorData.value)) return;
     void refreshEditorDerivedData({
       projectileOptions: false,
@@ -316,10 +378,16 @@ export function useEditorWindowViewModel(params: {
       const projectileRefreshed =
         options.projectileSpecs || options.projectileOptions ? await refreshBundleProjectiles(target.sessionId, bundle, options) : bundle;
       const refreshed = options.resources ? await refreshBundleResources(target.sessionId, projectileRefreshed) : projectileRefreshed;
-      if (requestId !== derivedDataRequestId || editorData.value !== bundle || !sameEditorWindowTarget(target, editorWindowTarget()))
+      if (
+        disposed ||
+        requestId !== derivedDataRequestId ||
+        editorData.value !== bundle ||
+        !sameEditorWindowTarget(target, editorWindowTarget())
+      )
         return;
       editorData.value = refreshed;
     } catch (error) {
+      if (disposed || requestId !== derivedDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
       feedback.error(error, '刷新编辑器派生数据失败');
     }
   }
@@ -361,7 +429,8 @@ export function useEditorWindowViewModel(params: {
       draftSession.clearTarget();
       return;
     }
-    editorData.value = applySavedSpecToBundle(data, params.kind, target.id, draftSession.draftValue.value);
+    editorData.value = clearBundleImages(applySavedSpecToBundle(data, params.kind, target.id, draftSession.draftValue.value));
+    resourceRevision.value++;
   }
 
   function commitSavedSpecToBundle(kind: EditorSpecKind, id: string, data: RowData): void {
@@ -375,20 +444,29 @@ export function useEditorWindowViewModel(params: {
     commitSavedSpecToBundle(kind, id, draftSession.draftValue.value);
   }
 
-  function receiveExternalPrimarySpec(kind: EditorSpecKind, id: string, data: RowData): void {
+  function receiveExternalPrimarySpec(
+    kind: EditorSpecKind,
+    id: string,
+    data: RowData,
+    versions: import('@/shared/types').FileVersion[],
+  ): void {
     if (!editorData.value) return;
     const spec = deepClone(data);
     if (stableDeepEqual(draftSession.draftValue.value, spec)) {
       const target = editorWindowTarget();
-      if (target) draftSession.loadBaseForTarget(target, spec);
+      if (target) draftSession.loadBaseForTarget(target, spec, versions);
       commitSavedSpecToBundle(kind, id, spec);
+      resourceRevision.value++;
       return;
     }
     const target = editorWindowTarget();
     if (!target) return;
     const wasDirty = draftSession.dirty.value;
-    draftSession.applyExternalForTarget(target, spec);
-    if (!wasDirty) editorData.value = applySavedSpecToBundle(editorData.value, kind, id, spec);
+    draftSession.applyExternalForTarget(target, spec, versions);
+    if (!wasDirty) {
+      editorData.value = applySavedSpecToBundle(editorData.value, kind, id, spec);
+      resourceRevision.value++;
+    }
   }
 }
 
@@ -412,8 +490,16 @@ function shouldApplySavedSpec(bundle: EditorEntityBundle, target: EditorWindowTa
 }
 
 function applySavedSpecToBundle(bundle: EditorEntityBundle, kind: EditorSpecKind, id: string, spec: RowData): EditorEntityBundle {
-  if (kind === 'ship' && bundle.kind === 'ship') return { ...bundle, ship: spec };
-  if (kind === 'weapon' && (bundle.kind === 'weapon' || bundle.kind === 'weapon-preview')) return { ...bundle, weapon: spec };
+  if (kind === 'ship' && bundle.kind === 'ship') {
+    const images = bundle.ship.spriteName === spec.spriteName ? {} : { resourceRefs: [], shipSpriteData: '' };
+    return { ...bundle, ...images, ship: spec };
+  }
+  if (kind === 'weapon' && (bundle.kind === 'weapon' || bundle.kind === 'weapon-preview')) {
+    const images = WEAPON_SPRITE_FIELDS.every((field) => bundle.weapon[field] === spec[field])
+      ? {}
+      : { resourceRefs: [], weaponSpriteData: {} };
+    return { ...bundle, ...images, weapon: spec };
+  }
   if (kind === 'projectile' && bundle.kind === 'projectile') {
     return { ...bundle, projectile: spec, projectileSpecs: { ...bundle.projectileSpecs, [id]: spec } };
   }
@@ -421,6 +507,12 @@ function applySavedSpecToBundle(bundle: EditorEntityBundle, kind: EditorSpecKind
     return { ...bundle, projectileSpecs: { ...bundle.projectileSpecs, [id]: spec } };
   }
   if (kind === 'system' && bundle.kind === 'system') return { ...bundle, system: spec };
+  return bundle;
+}
+
+function clearBundleImages(bundle: EditorEntityBundle): EditorEntityBundle {
+  if (bundle.kind === 'ship') return { ...bundle, resourceRefs: [], shipSpriteData: '' };
+  if (bundle.kind === 'weapon') return { ...bundle, resourceRefs: [], weaponSpriteData: {} };
   return bundle;
 }
 

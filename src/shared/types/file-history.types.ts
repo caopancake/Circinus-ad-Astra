@@ -1,11 +1,14 @@
-import type { FileChangeRecord } from '@/shared/types/history.types';
-
 export interface FileSaveHistoryEntry {
-  id: string;
+  id: number;
   timestamp: number;
-  kind: 'file-save';
-  changes: FileChangeRecord[];
+  paths: string[];
   label: string;
 }
 
 export type FileHistoryItem = FileSaveHistoryEntry;
+
+export interface FileHistorySnapshot {
+  revision: number;
+  undoStack: FileSaveHistoryEntry[];
+  redoStack: FileSaveHistoryEntry[];
+}

@@ -4,6 +4,7 @@ import { familyFileCompanion, familyFileId, familyFileTitle, skinFamily, variant
 
 function variantFixture(overrides: Partial<VariantFile> = {}): VariantFile {
   return {
+    baseVersions: [],
     variantId: 'v1',
     hullId: 'h1',
     path: '',
@@ -19,6 +20,7 @@ function variantFixture(overrides: Partial<VariantFile> = {}): VariantFile {
 
 function skinFixture(overrides: Partial<SkinFile> = {}): SkinFile {
   return {
+    baseVersions: [],
     skinHullId: 'sk1',
     baseHullId: 'h1',
     path: '',
@@ -35,16 +37,40 @@ function skinFixture(overrides: Partial<SkinFile> = {}): SkinFile {
 
 describe('familyFileId', () => {
   it('reads the family id field from the file data', () => {
-    expect(familyFileId(variantFamily, { data: { variantId: 'v1' }, relPath: '' })).toBe('v1');
-    expect(familyFileId(skinFamily, { data: { skinHullId: 'sk1' }, relPath: '' })).toBe('sk1');
+    expect(
+      familyFileId(variantFamily, {
+        baseVersions: [],
+        data: { variantId: 'v1' },
+        relPath: '',
+      }),
+    ).toBe('v1');
+    expect(
+      familyFileId(skinFamily, {
+        baseVersions: [],
+        data: { skinHullId: 'sk1' },
+        relPath: '',
+      }),
+    ).toBe('sk1');
   });
 
   it('falls back to an empty string for missing id fields', () => {
-    expect(familyFileId(variantFamily, { data: {}, relPath: '' })).toBe('');
+    expect(
+      familyFileId(variantFamily, {
+        baseVersions: [],
+        data: {},
+        relPath: '',
+      }),
+    ).toBe('');
   });
 
   it('stringifies non-string id values', () => {
-    expect(familyFileId(variantFamily, { data: { variantId: 42 }, relPath: '' })).toBe('42');
+    expect(
+      familyFileId(variantFamily, {
+        baseVersions: [],
+        data: { variantId: 42 },
+        relPath: '',
+      }),
+    ).toBe('42');
   });
 });
 

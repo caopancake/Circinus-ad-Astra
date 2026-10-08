@@ -32,6 +32,7 @@ export type CsvDirtyRow = { action: 'upsert'; cells: Record<string, string> } | 
 export type CsvTableRows = Array<RowData | null>;
 
 export interface CsvTableWindow {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   table: TableKey;
   header: string[];
   totalRows: number;

@@ -50,8 +50,10 @@ export function parseSchemaPlainBoolean(raw: string): boolean | string {
 export function parseSchemaPlainNumber(raw: string, integer: boolean): number | string {
   const trimmed = raw.trim();
   if (trimmed === '') return '';
-  const parsed = integer ? parseInt(trimmed, 10) : Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : raw;
+  if (integer && !/^[+-]?\d+$/.test(trimmed)) return raw;
+  if (!integer && !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) return raw;
+  const parsed = Number(trimmed);
+  return (integer ? Number.isSafeInteger(parsed) : Number.isFinite(parsed)) ? parsed : raw;
 }
 
 export function schemaNumberControlValue(value: unknown): number | null {

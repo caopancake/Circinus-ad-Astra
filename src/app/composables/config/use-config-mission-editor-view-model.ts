@@ -1,3 +1,4 @@
+import type { ConfigEditTarget } from '@/shared/types';
 import { computed, ref, watch, type Ref } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useConfigEditorDraftSession } from '@/app/composables/config/use-config-editor-draft-session';
@@ -18,41 +19,48 @@ export function useConfigMissionEditorViewModel(params: {
     previousId: string,
     localMission: RowData,
     schema: FileSchema,
-  ) => Promise<string | null>;
+    baseVersions: import('@/shared/types').FileVersion[],
+  ) => Promise<import('@/shared/types').ConfigSaveIdentity | null>;
   schema: Ref<FileSchema | null>;
   sessionId: Ref<string | null>;
 }) {
   const feedback = useAppFeedback();
+  function editTarget(id: string): ConfigEditTarget {
+    return { sessionId: params.sessionId.value!, modRoot: params.modRoot.value!, kind: 'mission', id, relPath: null };
+  }
+
   const loadedMissionId = ref<string | null>(null);
   const iconSrc = ref('');
   let editorRequestId = 0;
   let iconRequestId = 0;
-  const draftSession = useConfigEditorDraftSession<RowData, string, ConfigMissionEditorData | null, string>({
+  const draftSession = useConfigEditorDraftSession<RowData, ConfigEditTarget, ConfigMissionEditorData | null, string>({
     emptyValue: {},
     modRoot: params.modRoot,
-    load: async (missionId) => {
-      const targetSessionId = params.sessionId.value;
-      if (!params.modRoot.value || !targetSessionId || !missionId) return { meta: null, value: {} };
+    load: async (target) => {
+      const missionId = target.id;
+      const targetSessionId = target.sessionId;
+      if (!target.modRoot || !targetSessionId || !missionId) return { meta: null, value: {} };
       const data = await params.queryMissionEditorData(targetSessionId, missionId);
       const model = data ? configMissionEditorModel(data) : null;
-      return { meta: data, value: model ? model.localMission : {} };
+      return { meta: data, value: model ? model.localMission : {}, baseVersions: data?.baseVersions ?? [] };
     },
-    save: async (missionId, data) => {
+    save: async (target, data, baseVersions) => {
       const currentSchema = params.schema.value;
       if (!params.modRoot.value || !currentSchema) return;
-      const saveModRoot = params.modRoot.value;
-      const saveSessionId = params.sessionId.value;
+      const saveModRoot = target.modRoot;
+      const saveSessionId = target.sessionId;
       if (!saveSessionId) return;
       const draft = configMissionSaveDraft(data, currentSchema);
       if (!draft.nextId) {
         feedback.warning('mission 不能为空');
         return;
       }
-      const savedId = await params.saveMission(saveSessionId, saveModRoot, missionId, data, currentSchema);
+      const savedId = await params.saveMission(saveSessionId, saveModRoot, target.id, data, currentSchema, baseVersions);
       if (!savedId) return;
       if (params.modRoot.value !== saveModRoot || params.sessionId.value !== saveSessionId) return;
       return {
-        meta: savedId,
+        meta: savedId.id,
+        baseVersions: savedId.baseVersions,
         value: configMissionEditorModel({
           descriptor: draft.descriptor,
           iconSrc: iconSrc.value,
@@ -61,14 +69,19 @@ export function useConfigMissionEditorViewModel(params: {
         }).localMission,
       };
     },
-    targetKey: (missionId) => missionId,
+    targetKey: (target) => JSON.stringify(target),
+    savedTarget: (target, snapshot) => ({ ...target, id: snapshot.meta ?? target.id }),
   });
   const draftData = draftSession.draftValue;
   const editingMissionId = computed(() => configMissionEditingId(draftData.value));
 
-  watch(() => [params.missionId.value, params.modRoot.value, params.editorReloadToken.value] as const, loadConfigMissionEditor, {
-    immediate: true,
-  });
+  watch(
+    () => [params.missionId.value, params.modRoot.value, params.sessionId.value, params.editorReloadToken.value] as const,
+    loadConfigMissionEditor,
+    {
+      immediate: true,
+    },
+  );
   watch(() => params.iconRefreshToken.value, refreshMissionIcon);
 
   async function loadConfigMissionEditor() {
@@ -81,14 +94,16 @@ export function useConfigMissionEditorViewModel(params: {
       iconSrc.value = '';
       return;
     }
-    const targetChanged = draftSession.currentTargetKey.value !== missionId;
+    const targetChanged = !draftSession.isTargetCurrent(editTarget(missionId));
     if (targetChanged) {
       loadedMissionId.value = null;
       iconSrc.value = '';
     }
     if (!params.modRoot.value || !targetSessionId || !missionId) return;
     try {
-      const snapshot = targetChanged ? await draftSession.loadTarget(missionId) : await draftSession.refreshTarget(missionId);
+      const snapshot = targetChanged
+        ? await draftSession.loadTarget(editTarget(missionId))
+        : await draftSession.refreshTarget(editTarget(missionId));
       if (requestId !== editorRequestId || targetSessionId !== params.sessionId.value || missionId !== params.missionId.value) return;
       const data = snapshot?.meta ?? null;
       if (!data) return;

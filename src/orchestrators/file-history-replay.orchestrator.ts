@@ -13,6 +13,7 @@ import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
 import { joinRootRelativePath, normalizeFsPath } from '@/shared/lib/paths';
 import { useWriteSyncStore } from '@/stores/write-sync.store';
+import { loadFileHistory } from '@/services/file-history.service';
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
 type TablesStore = ReturnType<typeof useTablesStore>;
@@ -24,11 +25,11 @@ export interface FileHistoryReplayPlan {
   entry: FileSaveHistoryEntry;
   modRoot: string;
   sessionId: string;
+  revision: number;
 }
 
 interface FileHistoryReplayBehavior {
   actionText: string;
-  commitEntry: (modRoot: string, entryId: string) => boolean;
   peekEntry: (modRoot: string) => FileSaveHistoryEntry | null;
   textForChange: (change: FileChangeRecord) => string | null;
   hasBinaryContent: (change: FileChangeRecord) => boolean;
@@ -50,16 +51,24 @@ export function createFileReplayPlan(project: ProjectStore, direction: FileHisto
   const behavior = replayBehavior(direction);
   const entry = behavior.peekEntry(modRoot);
   if (!entry) return null;
-  return { actionText: behavior.actionText, direction, entry, modRoot, sessionId };
+  return {
+    actionText: behavior.actionText,
+    direction,
+    entry,
+    modRoot,
+    sessionId,
+    revision: useFileHistoryStore().getHistoryStacks(modRoot).revision,
+  };
 }
 
 export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project: ProjectStore, tables: TablesStore): Promise<void> {
   assertReplayPlanStillCurrent(plan, project);
-  const result = await replayFileChangeSet(plan.sessionId, plan.modRoot, plan.direction, plan.entry.changes);
-  commitReplayPlan(plan);
+  const result = await replayFileChangeSet(plan.sessionId, plan.modRoot, plan.direction, plan.entry.id, plan.revision);
+  if (project.getSessionId(plan.modRoot) !== plan.sessionId) return;
+  useFileHistoryStore().applySnapshot(plan.modRoot, result.history);
   const invalidatedSessions = await refreshLoadedSessionsAfterWrite(result, plan.modRoot);
-  const sync = useWriteSyncStore().enqueue(plan.modRoot, plan.sessionId, plan.entry.changes);
-  await notifyOpenFileEditors(plan.sessionId, plan.modRoot, plan.entry.changes, plan.direction);
+  const sync = useWriteSyncStore().enqueue(plan.modRoot, plan.sessionId, result.changes);
+  await notifyOpenFileEditors(plan.sessionId, plan.modRoot, result.changes, 'redo', result.baseVersions);
   refreshActiveTableIfAffected(project, tables, plan.modRoot, invalidatedSessions);
   syncStoreComplete(sync.id);
   recordLogBestEffort({
@@ -74,7 +83,7 @@ export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project
       direction: plan.direction,
       entryId: plan.entry.id,
       label: plan.entry.label,
-      files: plan.entry.changes.length,
+      files: result.changes.length,
     }),
   });
 }
@@ -83,12 +92,24 @@ function syncStoreComplete(id: number): void {
   useWriteSyncStore().complete(id);
 }
 
-function replayNextFileHistoryEntry(
+async function replayNextFileHistoryEntry(
   direction: FileHistoryReplayDirection,
   project: ProjectStore,
   tables: TablesStore,
   feedback: AppFeedback,
 ) {
+  const root = project.activeModRoot;
+  const session = root ? project.getSessionId(root) : null;
+  if (root && session) {
+    try {
+      const snapshot = await loadFileHistory(session, root);
+      if (project.getSessionId(root) !== session) return false;
+      useFileHistoryStore().applySnapshot(root, snapshot);
+    } catch (error) {
+      feedback.error(error, '读取文件历史失败');
+      return false;
+    }
+  }
   const plan = createFileReplayPlan(project, direction);
   if (!plan) return false;
   confirmFileHistoryReplay(feedback, plan, async () => {
@@ -126,7 +147,7 @@ function renderConfirmContent(entry: FileSaveHistoryEntry, action: string) {
 }
 
 function historyEntryPaths(entry: FileSaveHistoryEntry): string[] {
-  return entry.changes.map((change) => change.path);
+  return entry.paths;
 }
 
 function assertReplayPlanStillCurrent(plan: FileHistoryReplayPlan, project: ProjectStore): void {
@@ -141,20 +162,12 @@ function assertReplayPlanStillCurrent(plan: FileHistoryReplayPlan, project: Proj
   }
 }
 
-function commitReplayPlan(plan: FileHistoryReplayPlan): void {
-  const committed = replayBehavior(plan.direction).commitEntry(plan.modRoot, plan.entry.id);
-  if (!committed) {
-    throw new AppError(`${plan.actionText}文件历史失败：历史栈状态已变化`, { action: 'commit-file-history-replay' });
-  }
-}
-
 function replayBehavior(direction: FileHistoryReplayDirection): FileHistoryReplayBehavior {
   const fileHistory = useFileHistoryStore();
   if (direction === 'undo') {
     return {
       actionText: '撤销',
       peekEntry: (modRoot) => fileHistory.peekSavedWriteUndo(modRoot),
-      commitEntry: (modRoot, entryId) => fileHistory.commitReplayUndo(modRoot, entryId),
       textForChange: (change) => change.beforeText ?? null,
       hasBinaryContent: (change) => Boolean(change.beforeDataBase64),
     };
@@ -162,7 +175,6 @@ function replayBehavior(direction: FileHistoryReplayDirection): FileHistoryRepla
   return {
     actionText: '重做',
     peekEntry: (modRoot) => fileHistory.peekSavedWriteRedo(modRoot),
-    commitEntry: (modRoot, entryId) => fileHistory.commitReplayRedo(modRoot, entryId),
     textForChange: (change) => change.afterText ?? null,
     hasBinaryContent: (change) => Boolean(change.afterDataBase64),
   };
@@ -173,6 +185,7 @@ async function notifyOpenFileEditors(
   modRoot: string,
   changes: FileChangeRecord[],
   direction: FileHistoryReplayDirection,
+  baseVersions: import('@/shared/types').FileVersion[],
 ): Promise<void> {
   const behavior = replayBehavior(direction);
   await Promise.all(
@@ -186,6 +199,7 @@ async function notifyOpenFileEditors(
             const snapshot = snapshots.get(normalizeFsPath(relPath));
             if (snapshot?.dataBase64) return;
             await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, {
+              baseVersions,
               modRoot,
               path: joinRootRelativePath(change.path, relPath),
               sessionId,
@@ -197,7 +211,7 @@ async function notifyOpenFileEditors(
       }
       const text = behavior.textForChange(change);
       if (text === null && behavior.hasBinaryContent(change)) return;
-      await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, { modRoot, path: change.path, sessionId, text: text ?? '' });
+      await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, { modRoot, path: change.path, sessionId, text: text ?? '', baseVersions });
     }),
   );
 }

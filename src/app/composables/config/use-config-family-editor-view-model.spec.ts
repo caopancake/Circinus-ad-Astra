@@ -42,7 +42,11 @@ const SETTINGS = {
 } as const;
 
 function fileFixture(variantId: string): ConfigFamilyFile {
-  return { data: { variantId, hullId: 'h1' }, relPath: `data/variants/${variantId}.variant` };
+  return {
+    baseVersions: [],
+    data: { variantId, hullId: 'h1' },
+    relPath: `data/variants/${variantId}.variant`,
+  };
 }
 
 interface EditorParams {
@@ -55,12 +59,19 @@ interface EditorParams {
 function mountEditor(family = variantFamily) {
   const files = ref<ConfigFamilyFile[]>(
     family.id === 'skin'
-      ? [{ data: { skinHullId: 'v1', baseHullId: 'h1' }, relPath: 'data/hulls/skins/v1.skin' }]
+      ? [
+          {
+            baseVersions: [],
+            data: { skinHullId: 'v1', baseHullId: 'h1' },
+            relPath: 'data/hulls/skins/v1.skin',
+          },
+        ]
       : [fileFixture('v1'), fileFixture('v2')],
   );
   const selectedId = ref('v1');
   const saveFile = vi.fn(
     async (_sessionId: string, _modRoot: string, current: ConfigFamilyFile, data: RowData): Promise<ConfigFamilyFile | null> => ({
+      baseVersions: [],
       data,
       relPath: current.relPath,
     }),

@@ -1,7 +1,7 @@
 use super::super::{
     cache::{lock_session, session_handle},
     definitions::entity_definitions::entity_definition,
-    definitions::entity_resources::weapon_resource_refs,
+    definitions::entity_resources::{ship_resource_refs, weapon_resource_refs},
 };
 use crate::{
     errors::AppResult,
@@ -19,6 +19,7 @@ pub fn query_entity(session_id: &str, kind: EntityKind, id: &str) -> AppResult<O
     };
     let resource_refs = (definition.resources)(&session, id, &data);
     Ok(Some(EntityData {
+        base_versions: super::super::versions::target_versions(&session, kind, id, &data),
         resource_refs,
         kind: definition.kind,
         id: id.to_string(),
@@ -31,17 +32,42 @@ pub fn query_entity_list(session_id: &str, kind: EntityKind) -> AppResult<Vec<En
     let mut session = lock_session(&handle)?;
     let definition = entity_definition(kind)?;
     (definition.prepare)(&mut session)?;
-    (definition.list)(&mut session)
+    let mut entities = (definition.list)(&mut session)?;
+    for entity in &mut entities {
+        entity.base_versions =
+            super::super::versions::target_versions(&session, kind, &entity.id, &entity.data);
+    }
+    Ok(entities)
 }
 
-pub fn query_weapon_draft_resources(
+pub fn query_entity_base_versions(
     session_id: &str,
+    kind: EntityKind,
+    id: &str,
+) -> AppResult<Vec<crate::models::FileVersion>> {
+    let handle = session_handle(session_id)?;
+    let session = lock_session(&handle)?;
+    Ok(super::super::versions::target_versions(
+        &session,
+        kind,
+        id,
+        &serde_json::Value::Null,
+    ))
+}
+
+pub fn query_editor_draft_resources(
+    session_id: &str,
+    kind: crate::models::EditorSpecKind,
     id: &str,
     draft: &serde_json::Value,
 ) -> AppResult<std::collections::BTreeMap<String, crate::models::ResourceRef>> {
     let handle = session_handle(session_id)?;
     let _session = lock_session(&handle)?;
-    Ok(weapon_resource_refs(id, draft))
+    Ok(match kind {
+        crate::models::EditorSpecKind::Ship => ship_resource_refs(id, draft),
+        crate::models::EditorSpecKind::Weapon => weapon_resource_refs(id, draft),
+        _ => std::collections::BTreeMap::new(),
+    })
 }
 
 #[cfg(test)]
@@ -106,13 +132,26 @@ mod tests {
         let mut trace = crate::services::project::PerformanceTrace::new("project.openSession");
         let manifest = open_project_session_traced(&root, None, &mut trace).unwrap();
         let draft = serde_json::json!({"id":"weapon", "turretSprite":"graphics/draft.png"});
-        let resources =
-            query_weapon_draft_resources(&manifest.session_id, "weapon", &draft).unwrap();
+        let resources = query_editor_draft_resources(
+            &manifest.session_id,
+            crate::models::EditorSpecKind::Weapon,
+            "weapon",
+            &draft,
+        )
+        .unwrap();
         assert_eq!(resources["turretSprite"].rel_path, "graphics/draft.png");
         assert_eq!(resources["turretSprite"].owner_id, "weapon");
         assert_eq!(resources["turretSprite"].key, "turretSprite");
         close_project_session(manifest.session_id).unwrap();
-        assert!(query_weapon_draft_resources("closed", "weapon", &draft).is_err());
+        assert!(
+            query_editor_draft_resources(
+                "closed",
+                crate::models::EditorSpecKind::Weapon,
+                "weapon",
+                &draft
+            )
+            .is_err()
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -173,7 +212,10 @@ mod tests {
             },
         );
         let session = super::super::super::model::ProjectSession {
+            source_entities: BTreeMap::new(),
+            source_versions: BTreeMap::new(),
             manifest: crate::models::ProjectManifest {
+                base_versions: Vec::new(),
                 session_id: "test".to_string(),
                 mod_root: "mod".to_string(),
                 starsector_root: None,

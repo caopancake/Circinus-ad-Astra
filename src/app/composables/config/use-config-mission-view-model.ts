@@ -23,6 +23,7 @@ export function useConfigMissionViewModel() {
   const missionEditorReloadToken = ref(0);
   const missionIconRefreshToken = ref(0);
   const missionRows = ref<RowData[]>([]);
+  const missionVersions = ref<Record<string, import('@/shared/types').FileVersion[]>>({});
   const missionIconRefs = ref<Record<string, ResourceRef | null>>({});
   const missionIconResourceRefs = ref<ResourceRef[]>([]);
   const listLoadStartedAt = ref(0);
@@ -33,35 +34,49 @@ export function useConfigMissionViewModel() {
   const sessionId = computed(() => project.activeManifest?.sessionId ?? null);
   const missionItems = computed(() => missionItemsFromRows(missionRows.value));
   let missionsRequestId = 0;
+  const savingSessions = new Set<string>();
+  let listSessionKey: string | null = null;
+  let disposed = false;
+
+  function sessionKey() {
+    return JSON.stringify([sessionId.value, modRoot.value]);
+  }
 
   function handleSaved(missionId: string | null) {
     selectedMission.value = missionId;
     refreshToken.value += 1;
     missionEditorReloadToken.value += 1;
     missionIconRefreshToken.value += 1;
+    void queryMissions();
   }
 
   async function queryMissions() {
     const requestId = ++missionsRequestId;
     const activeSessionId = sessionId.value;
-    if (!activeSessionId) {
+    const key = sessionKey();
+    if (key !== listSessionKey) {
+      listSessionKey = key;
       missionRows.value = [];
+      missionVersions.value = {};
       missionIconRefs.value = {};
       missionIconResourceRefs.value = [];
       selectedMission.value = null;
-      return;
     }
+    if (!activeSessionId || disposed) return false;
     listLoadStartedAt.value = performance.now();
     try {
       const records = await listConfigMissionRecords(activeSessionId);
-      if (requestId !== missionsRequestId || activeSessionId !== sessionId.value) return;
+      if (disposed || requestId !== missionsRequestId || key !== sessionKey()) return false;
       missionRows.value = records.map((record) => record.list);
+      missionVersions.value = Object.fromEntries(records.map((record) => [record.id, record.baseVersions]));
       missionIconRefs.value = Object.fromEntries(records.map((record) => [record.id, record.iconRef]));
       missionIconResourceRefs.value = records.flatMap((record) => (record.iconRef ? [record.iconRef] : []));
       normalizeSelectedMission();
+      return true;
     } catch (error) {
-      if (requestId !== missionsRequestId || activeSessionId !== sessionId.value) return;
+      if (disposed || requestId !== missionsRequestId || key !== sessionKey()) return false;
       feedback.error(error, '加载战役失败');
+      return false;
     }
   }
 
@@ -83,6 +98,7 @@ export function useConfigMissionViewModel() {
     }
     try {
       await createIndexedEntityAction({
+        baseVersions: [],
         sessionId: createSessionId,
         modRoot: createModRoot,
         kind: 'mission',
@@ -94,8 +110,9 @@ export function useConfigMissionViewModel() {
       });
       feedback.success(`战役 "${id}" 已创建`);
       if (modRoot.value !== createModRoot || sessionId.value !== createSessionId) return true;
-      selectedMission.value = id;
       await queryMissions();
+      if (disposed || modRoot.value !== createModRoot || sessionId.value !== createSessionId) return true;
+      selectedMission.value = id;
       return true;
     } catch (error) {
       feedback.error(error, '创建战役失败');
@@ -109,7 +126,8 @@ export function useConfigMissionViewModel() {
     previousId: string,
     localMission: RowData,
     schema: FileSchema,
-  ): Promise<string | null> {
+    baseVersions: import('@/shared/types').FileVersion[],
+  ): Promise<import('@/shared/types').ConfigSaveIdentity | null> {
     const activeModRoot = modRoot.value;
     if (!activeModRoot || activeModRoot !== saveModRoot || sessionId.value !== saveSessionId) return null;
     const draft = configMissionSaveDraft(localMission, schema);
@@ -121,39 +139,55 @@ export function useConfigMissionViewModel() {
       feedback.warning(configEntityIdInvalidMessage('战役 ID', draft.nextId), 'config.id_invalid');
       return null;
     }
-    if (!(await saveMissionDraft(saveSessionId, saveModRoot, previousId, draft))) return null;
-    return draft.nextId;
+    const saved = await saveMissionDraft(saveSessionId, saveModRoot, previousId, draft, baseVersions);
+    return saved ? { id: draft.nextId, baseVersions: saved.baseVersions } : null;
   }
 
-  async function saveMissionDraft(activeSessionId: string, activeModRoot: string, previousId: string, draft: ConfigMissionSaveDraft) {
+  async function saveMissionDraft(
+    activeSessionId: string,
+    activeModRoot: string,
+    previousId: string,
+    draft: ConfigMissionSaveDraft,
+    baseVersions: import('@/shared/types').FileVersion[],
+  ) {
     const idChanged = draft.nextId !== previousId;
-    const saved = await saveIndexedEntityAction(
-      {
-        sessionId: activeSessionId,
-        modRoot: activeModRoot,
-        kind: 'mission',
-        previousId,
-        nextId: draft.nextId,
-        indexRow: buildMissionIndexRow([draft.list], Object.keys(draft.list).length ? Object.keys(draft.list) : ['mission'], draft.nextId),
-        entityData: { descriptor: deepClone(draft.descriptor), text: draft.text },
-        deletePreviousTarget: idChanged,
-      },
-      feedback,
-    );
-    if (!saved) return false;
+    savingSessions.add(activeSessionId);
+    missionsRequestId++;
+    let saved;
+    try {
+      saved = await saveIndexedEntityAction(
+        {
+          sessionId: activeSessionId,
+          baseVersions,
+          modRoot: activeModRoot,
+          kind: 'mission',
+          previousId,
+          nextId: draft.nextId,
+          indexRow: buildMissionIndexRow(
+            [draft.list],
+            Object.keys(draft.list).length ? Object.keys(draft.list) : ['mission'],
+            draft.nextId,
+          ),
+          entityData: { descriptor: deepClone(draft.descriptor), text: draft.text },
+          deletePreviousTarget: idChanged,
+        },
+        feedback,
+      );
+    } finally {
+      savingSessions.delete(activeSessionId);
+    }
+    if (!saved) return null;
     feedback.success(`战役 "${draft.nextId}" 已保存`);
-    if (modRoot.value !== activeModRoot || sessionId.value !== activeSessionId) return true;
-    selectedMission.value = draft.nextId;
-    await queryMissions();
-    return true;
+    return saved;
   }
 
   async function deleteMission(deleteSessionId: string, deleteModRoot: string, id: string, deleteDirectory: boolean): Promise<boolean> {
-    await deleteIndexedEntityAction(deleteSessionId, deleteModRoot, 'mission', id, deleteDirectory);
+    if (disposed || sessionId.value !== deleteSessionId || modRoot.value !== deleteModRoot) return false;
+    await deleteIndexedEntityAction(deleteSessionId, deleteModRoot, 'mission', id, deleteDirectory, missionVersions.value[id] ?? []);
     feedback.success(`战役 "${id}" 已删除`);
     if (modRoot.value !== deleteModRoot || sessionId.value !== deleteSessionId) return true;
-    await queryMissions();
-    if (selectedMission.value === id) {
+    const loaded = await queryMissions();
+    if (loaded && modRoot.value === deleteModRoot && sessionId.value === deleteSessionId && selectedMission.value === id) {
       selectedMission.value = missionItems.value[0]?.id ?? null;
     }
     return true;
@@ -161,7 +195,6 @@ export function useConfigMissionViewModel() {
 
   async function refreshMissionList() {
     await queryMissions();
-    normalizeSelectedMission();
   }
 
   function missionExists(id: string): boolean {
@@ -172,11 +205,11 @@ export function useConfigMissionViewModel() {
     return isConfigEntityId(id);
   }
 
-  watch(() => project.activeSessionId, queryMissions, { immediate: true });
+  watch([sessionId, modRoot], queryMissions, { immediate: true, flush: 'sync' });
   const stopQueryInvalidation = subscribeQueryInvalidations((event) => {
     if (event.sessionId !== sessionId.value) return;
     const missionsChanged = hasEntityInvalidation(event, 'entity-list', 'mission');
-    if (missionsChanged) void refreshMissionData();
+    if (missionsChanged && !savingSessions.has(event.sessionId)) void refreshMissionData();
   });
   const stopResourceInvalidation = subscribeResourceInvalidations((event) => {
     if (event.sessionId !== sessionId.value) return;
@@ -184,12 +217,14 @@ export function useConfigMissionViewModel() {
     void refreshMissionResources();
   });
   onUnmounted(() => {
+    disposed = true;
+    missionsRequestId++;
     stopQueryInvalidation();
     stopResourceInvalidation();
   });
 
   async function refreshMissionData() {
-    await queryMissions();
+    if (!(await queryMissions())) return;
     refreshToken.value += 1;
     missionEditorReloadToken.value += 1;
     missionIconRefreshToken.value += 1;

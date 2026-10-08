@@ -1,147 +1,35 @@
 # Todo
 
-## Phase 1: 架构收敛——正确性与权威统一
+## Phase 1: 架构收敛
 
-> 目标：消灭正确性实伤与无 owner 旁路，让声明的分层矩阵、wire 协议、错误语义、文档与配置和真实实现完全一致。每个子阶段完成后必须按事后要求同步受影响的 overview、guideline、module map 或模块契约。
+### Phase 1.1: 配置实体族类型契约收束
 
-### Phase 1.1: CSV row_key 正确性修复
+- [ ] `ConfigFamilyFile`、`VariantFile` 与 `SkinFile` 必须使用明确的正式记录形状，实体字段、文件元数据和列表投影必须具有明确的 ownership。
+- [ ] Variant 与 Skin 的 ID、标题、companion 和排序必须经显式 family 访问器消费；`config-entity-families.ts` 严禁使用 `as unknown as` 绕过记录类型契约。
+- [ ] Variant 与 Skin 的字段、目录、Hull 名称 hydration 和统计差异必须由 family 定义承载；共同的列表、选择、draft、保存、删除、重命名和刷新流程必须复用正式 owner。
+- [ ] Variant 与 Skin 的标题、companion、排序和输入契约必须具有对应行为测试。
+- [ ] 本子阶段必须运行前端全套检查。
 
-- [x] `src-tauri/src/services/project/write/csv_patch.rs` 新增行键分配改为与既有键和删除历史无关的单调递增分配器，消灭"先删后增时 `rows.len()` 生成重复 row_key"缺陷；`key_map` 的 previous→next 映射保持唯一。
-- [x] 补测试：删后增、删后改、乱序 patch 序列、整表删除后重建；`parsers/alex_csv.rs` 补 parse→render→parse 往返恒等属性测试。
-- [x] 跑 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`。
+### Phase 1.2: 审计基线与 Todo 事实收束
 
-### Phase 1.2: Rust 分层规则修复与违规边归位
+- [ ] 源码文件数、行数、最大文件和测试数量必须使用统一统计口径，并附精确数值、单位与对应证据。
+- [ ] Todo 的阶段数字和完成描述必须符合当前实现；待办条目只允许描述当前待执行工作。
+- [ ] 受影响模块文档、overview、guideline 和 module map 的路径、ownership、调用链必须与当前实现一致。
+- [ ] 本子阶段必须运行 `format:check`、`encoding:check`、`node scripts/check-architecture.mjs` 与 `git diff --check`。
 
-Owner 原则：声明的依赖矩阵必须对真实代码生效；每条跨层边要么结构归位、要么显式授权，禁止改矩阵迁就现状。
+### Phase 1.3: 复杂度热点职责收束
 
-- [x] `scripts/architecture/shared/rust-crate-paths.mjs` 支持 `super::`/`self::` 相对导入到 crate 绝对路径的确定性静态解析，`rust-project-layer-boundary` 矩阵对 project 内部相对导入真实生效。
-- [x] 规则修复后暴露的违规边逐边按真实 owner 归位：root↔cache 双向、session→resources、cache→root 的 factions/table_definitions 依赖，优先结构重排或公共下沉；确属长期授权的边写入矩阵与对应模块文档。
-- [x] 后端 service 横向依赖建立显式授权表（对齐前端 `allowedServiceEdges` 模式）并入静态规则；`editor_config→file_changes`、`mod_creation→directory_opening`、`directory_opening→app_log/app_paths/project` 等实存边逐一立约或消灭。
-- [x] `app_log`↔`app_settings` 解环：日志目录校验所需能力收口单一 owner，settings 校验不再读取 workspace 持久化内容。
-- [x] 跑 `node scripts/check-architecture.mjs`、`cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test`。
+- [ ] `ShipEditor.vue`、`source_options.rs`、`invalidation.rs` 和 `csv_patch.rs` 必须具有 ownership、调用扇出、状态写入点和保存终点的完整证据。
+- [ ] 拆分只允许依据稳定职责边界执行，wire 与 changeset 契约必须具有对应行为验证。
+- [ ] 编辑器、source options、失效推导和 CSV patch 的行为、错误语义、session 身份和 refresh 顺序必须符合正式模块契约。
+- [ ] 每个拆分批次必须运行对应前端或 Rust 全套检查，并完成窗口、资源、表格和保存链路验收。
 
-### Phase 1.3: wire 协议与错误通道收敛
+## Phase 2: 沉浸式编辑器
 
-- [x] `AppError` 增加稳定语义码与结构化参数：Rust 侧不再承载用户可见文案，错误消息全部改为稳定码 + 上下文参数；前端建立唯一的码→中文文案映射层（落点按 shared/domain 职责定形），wire 契约变化前后端同步。
-- [x] `detect_directory`/`scan_game_overview` 并入统一错误通道：探测结果显式建模为类型化 outcome（区分"未识别"与"探测出错"），不再折进 warnings 字段；`OpenDirectoryResult` 契约同步。
-- [x] 删除无生产者的 `WriteResult.warnings` wire 字段（含 `csv_patch.rs` 恒真 `debug_assert` 与对应 wire 形状测试）。
-- [x] `read_mod_info` 缺文件不再伪造默认对象：显式建模"无 mod_info"状态并贯穿 manifest 与界面呈现，与游戏概览扫描"缺少 mod_info.json，已跳过"的语义一致。
-- [x] 跑前端全套检查与 cargo 全套。
-
-### Phase 1.4: 静默失败与诊断收敛
-
-- [x] 三处持久化静默吞错接 `app_log`：`session.rs` 项目索引落盘、`cache/core.rs` 核心缓存落盘、`session_opening.rs` 缓存目录 configure；`resources/refs.rs` 四处 `eprintln!` poison 诊断收敛到统一设施。
-- [x] 注册表锁获取封装统一（poison→错误映射不再逐处复制）；`session.rs` 关闭与驱逐两处相反的锁获取顺序统一或补锁序注释。
-- [x] session 归属校验统一下沉：全部携带 `sessionId + modRoot` 的命令强制经单一校验入口（`SessionModScope` trait 全覆盖或 service 层统一守卫），删除 `tables.rs`、`file_changes.rs`、`assets.rs`、`file_editor.rs` 的手调散布。
-- [x] `io/file_changes.rs` 文本快照仅对 UTF-8 语义错误降级二进制路径，权限/IO 错误显式报错。
-- [x] 跑 cargo 全套。
-
-### Phase 1.5: 前端错误反馈补全与链路宣称对齐
-
-- [x] `use-csv-table-view-model.ts` 表格窗口加载、reload、来源选项加载补 catch + feedback，对齐 Config 系列错误反馈模式；全前端异步链路复核无裸 rejection（无全局兜底是既定事实）。
-- [x] recovery 文件编辑器写为显式特例：`file-editor` 模块文档立约"无 session 保存不入文件历史、不触发 session refresh"的边界与适用场景，代码侧显式表达；不实现新链路。
-- [x] `.zcode/overview.md` 链路描述与现实对齐：实体读取不返回 manifest（manifest 归目录打开链路）；撤销重做补强制确认框与多会话刷新；资源链路改为现实（无上传入口，文件选择限于 Mod 内；前端 query/resource/media 三级缓存 + 后端 media cache）；窗口同步补全局广播 + 消费端过滤模型、窗口身份拼装与 draftSnapshot/URL 两条降级路径；删除"上传进入二进制 changeset 与缓存失效"宣称。
-- [x] 跑前端全套检查、`node scripts/check-architecture.mjs`、`format:check`、`encoding:check`。
-
-### Phase 1.6: 文档失实修正与验证口径统一
-
-- [x] 修正模块文档失实：`main-history-command.md` 删除已不存在的 `save-command-registry.ts` 引用与迁移措辞；`ship-editor.md` 修正 `normalize.ts` 幽灵路径与视觉绘制职责矛盾；`about-page.md` 修正入口组件（TitleBar）与 CHANGELOG 内联载体（AboutPage `?raw`）；`terminology.md` 预览倍速改为 0.5–5.0 步进 0.1 滑杆现实。
-- [x] `backend-guidelines.md` 与 `overview.md` 的 services 枚举补齐 `mod_creation`、`schema`、`system_open`、`app_paths`，两份措辞统一为一份清单。
-- [x] `README.md` 与 `CONTRIBUTING.md` 验证清单与 `workflow.md` 对齐：补 `npm.cmd run test`，完整集合口径全仓唯一。
-- [x] `README.md` 构建节点明 `beforeBuildCommand` 与 `npm run build` 的链路关系。
-- [x] 跑 `format:check`、`encoding:check`、`node scripts/check-architecture.mjs`、`git diff --check`。
-
-### Phase 1.7: 工程配置矛盾收敛
-
-- [x] `src-tauri/gen/schemas` 四个生成物退出 git 跟踪并入 `.gitignore`（eslint/prettier/encoding/architecture 四方均已按生成物对待）；`.gitignore` 补 `release/`。
-- [x] `tauri.conf.json` bundle 段与"只发布单文件 exe"策略收敛（`active: false` 或等价表达），README 发布说明同步。
-- [x] 新增 `rust-toolchain.toml` 钉当前 stable 工具链、新增 `.nvmrc` 钉 Node 24；`@types/node` 对齐 Node 24 版本线。
-- [x] build.bat 与 build.ps1 维持各自完整实现。
-- [x] 本地跑与 CI 等价的全套检查。
-
-## Phase 2: 架构收敛——写法统一、残留清理与性能
-
-> 目标：消灭迁移残留与同域多套写法，巨型文件按既有先例拆解归位，缓存与热路径收敛。每类问题取最干净形态，不保留兼容壳；每个子阶段完成后必须按事后要求同步受影响契约文档。
-
-### Phase 2.1: 前端迁移残留清理
-
-- [x] 窗口宿主四件套目录迁移经架构检查裁定为不迁移：宿主组件深度消费 app 组合层（composables/editors/stores），`windows/` 层规则正确禁止该方向依赖——`windows/` 只承载窗口机制，宿主留在 `app/` 是正确的层次归属。
-- [x] `use-history.ts` 双栈删除，画布历史经新增适配器 `use-canvas-history.ts`（draft-session-boundary 白名单已收录）迁移 `domain/edit-session.ts` 撤销原语，limit 250/清理语义与原实现一致。
-- [x] 默认 spec 模板归位 domain：`defaultShip`/`defaultWeapon` 迁出 `shared/lib/starsector.ts`，`editor-definitions.ts` 成为四类编辑器默认数据的唯一来源。
-- [x] 三个编辑器内联 JSON textarea（ShipEditor builtInWeapons、ProjectileEditor genericJson、SystemEditor droneBehavior）迁移 `ObjectEditor` 组件化路径（`parse` prop 保留 Projectile 的 normalize 语义；模型放宽为任意 JSON 值）；无效 JSON 反馈统一为 warning + 保留输入的提交边界单一模式。
-- [x] JsonValue→string 三实现收敛 `cell()` 唯一（`configStringValue`、`stringValue` 私有副本删除）。
-- [x] 跑前端全套检查。
-
-### Phase 2.2: shared/lib/starsector.ts 按职责拆分
-
-- [x] 拆分落点为 `shared/lib/starsector/` 子目录（`tables.ts` 表列资产与列解析、`colors.ts` 视觉常量、`value.ts` 值取用与格式化原语、`rows.ts` 行身份规则、`index.ts` barrel——默认模板已随 2.1 归位 domain，不在本拆分内），消费方经 barrel 导入零改动；`str`/`num`/`arr` 复核结论：保留原名（与 `cell()` 同族的单元格取值原语，非占位缩写）。
-- [x] `WEAPON_COLORS` 颜色字面量统一为 `rgb()` 现代语法（LAUNCH_BAY/DECORATIVE/SYSTEM 三个 hex 完成 hex→rgb 换算）。
-- [x] 跑前端全套检查。
-
-### Phase 2.3: 巨型组件拆解
-
-- [x] `ShipEditor.vue`（1431→1348 行）：几何函数（roundDegree/normalizeDegree/clampArc/angleDelta/distance/pointAngle/pointArc/distanceToSegment）下沉 `domain/editors/lib/geometry.ts`；三对预览态/落盘态默认对象合并为 `ship-slots.ts` 单一工厂（weaponSlotWithDefaults/launchBayWithDefaults/engineWithDefaults）；ID 格式与扫描规则下沉（formatWeaponSlotId/formatLaunchBayId/nextFormattedId），组件内 next* 改为读槽位集合的薄壳；WeaponEditor 重复 `pointAngle` 删除，改用 domain `pointAngleScreen`。
-- [x] `SchemaFieldRenderer.vue`（821→798 行）：9 处装饰性分隔注释删除；模板中复述 `v-else-if` 条件的类型标签注释删除；`.n-base-selection` 私有类名 closest 判定改为 `composedPath` 元素类名单判定（仍依赖 Naive UI 公开类名，行为语义不变：tag 关闭钮/清除钮点击不关闭下拉）。plain/rich 双模板树经通读裁定保留：两分支的控件类型与事件形状逐类型不同（plain 全文本输入 + 字符串化 emitter，rich 类型化控件），强行映射合并不等价、可读性反降。
-- [x] `SystemEditor.vue`（497→411 行）：`SYSTEM_STRUCTURED_FIELD_KEYS`/`TYPE_EXCLUSIVE_FIELDS` 收敛 `domain/editors/lib/system-fields.ts` 常量模块。
-- [x] 跑前端全套检查；手工验收舰船/武器画布、弹体与战术系统表单回归。
-
-### Phase 2.4: 状态 owner 与查询收敛
-
-- [x] "当前 Mod 身份"收敛：workspace 为唯一事实源；project/tables 的 activeModRoot 改为从 workspace 派生（computed），file-history 的 activeRoot 删除（栈按需创建）；`syncActiveModRuntime`/`hydrateOpenedModRuntime` 双写收敛为只传 manifest；`isActiveTableTarget` 减为 workspace+tables 两源；连带删除零引用的 `shared/lib/store-utils.ts`（getNextActiveKeyAfterRemoval 随投影化失去全部调用方）。
-- [x] 未保存查询统一走 `draft-sessions` 注册表：`LoadedModsPanel.vue` 弃 `tables.hasModDirtyChanges` 直查。
-- [x] 删除死状态与死导出：`project.store` 的 `loading`/`setLoading`/`isOpen`、`workspace.store` 的 `gameWorkspace`、`RuntimeCache.touch`（测试改走 get 语义）、`use-config-mission-editor-view-model` 的 `indexHeader`、`WeaponEditor.vue` 的 `projectiles` prop 及父级传参。
-- [x] `use-core-schema`/`use-core-graphics` 合并为 `use-core-assets.ts` Pinia store（单 watcher + 参数化 load/reset/log），`useCoreSchema`/`useCoreGraphics` 兼容门面保持原签名，4 个消费文件零改动。
-- [x] `TableWorkspace` 六事件过路 emit 收敛（组件直用 `useWorkspaceShellActions`，AppContent 减为无参挂载）；`ModTabsBar`/`LoadedModsPanel`/`GameOverviewPanel` 的页面级 emit 链保留（装配层职责，非过路）。
-- [x] 跑前端全套检查。
-
-### Phase 2.5: 前端写法统一
-
-- [x] Mod 状态文案单一实现并 domain 化：新增 `domain/workspace/mod-status.ts` 的 `modStatusLabel`，三份本地 statusLabel 删除，页签栏文案对齐"加载中/已加载/读取失败"；保存处理器注册统一为 onMounted/watch + onUnmounted 单模式（AppContent watchEffect 动态注册改写）；naive-ui 接线边界写入 frontend-guidelines。
-- [x] service 层 `.then()` 链统一 async/await（config-entity.service 6 处）；`JSON.stringify` watch 源与缓存键改 `stableStringify`；`WeaponEditor`/`WeaponFirePreview` 的冗余 `deep: true` spriteData watch 删除；事件闭包内 `ref`（faction/mission 删除确认）改普通变量；无谓 `async`（refreshMissionResources）与死防御（use-settings-view-model）清理。query-cache/resource-cache 两处 `.then().finally()` 为 promise 自引用清理模式，裁定保留。
-- [x] `file-history.store` 双重校验删除（orchestrator 为唯一防线，caller 契约注释化）；mission 选中归一化提取 `normalizeSelectedMission()` 两处共用；确认弹窗 + checkbox 裁定保留三处各自渲染（两处单选已去 ref 化，关联 spec 弹窗为多选列表结构不同）；竞态守卫 requestId 递增模式保留原样（15 处守卫 identity 参数各异，抽原语收益不足，裁定不抽）。
-- [x] `app/composables/` 41 文件按域细分为 5 个子目录：`config/`（9 个配置实体 VM 与 draft session）、`editors/`（7 个编辑器窗口/文件/资源）、`canvas/`（4 个画布）、`tables/`（3 个 CSV 表格）、`settings/`（3 个设置面）；14 个跨域 composable 留根（app-feedback/shortcut/draft-session 等）。消费方 import 经脚本全量改写（26 条子目录路径），`classify.mjs` 的 composable 域名改取路径末段文件名（分组目录不影响 draft-session-boundary 适配器匹配），`naming-boundary` 的 composable 后缀检查改为含子目录匹配；16 份模块文档的参考路径同步。
-- [x] domain 预期错误迁 `AppError`（config-entities 3 处保存链路校验错误，带 action）；`as unknown as` 类型逃逸消除（familyFileId 复用既有 helper，连带修正 domain 内同型实现）。
-- [x] CSS 间距 token 扩充至 `--space-1..9`（4–36px），5 处 `28px 36px` 改 token，非 4 倍数微调值（7/9/14/18px）保留直写；画布颜色收口 `domain/editors/lib/canvas-palette.ts`（8 处字面量，画布固定深色为既定决策）；URL 草稿快照解析失败补 `console.warn` 诊断。
-- [x] 跑前端全套检查。
-
-### Phase 2.6: Rust 写法统一
-
-- [x] 定义注册表族归拢 `services/project/definitions/` 子目录（`entity_definitions`、`table_definitions`、`entity_resources`、`factions`、`projectiles`，mod 内可见性 `pub(in crate::services::project)`），`rust-project-layer-boundary` 的 root 层路径分类同步。
-- [x] 未使用参数统一 `_` 前缀惯例（`entity_definitions.rs` 函数体丢弃式改写）；`push_unique_all` 双实现上收 models 唯一实现；MISSION_LIST 默认表头函数化；`refresh_variant`/`refresh_skin` 镜像合并（warnings 合并态唯一 owner，variant→skin 顺序为规范序）；符号链接测试助手收敛 `testutil`（`temp_linked_dir`/`temp_linked_file`，7 份→2）；`SessionModScope` 手写 impl 宏化（required/optional 两宏）；changeset 落盘统一单一通道（`file_editor` 改走 `apply_file_change_set`，service 边白名单同步）；`hull_references` 提取 `push_non_empty_group`；`_source` 标记经核实全仓零消费方后整体删除（`CACHE_FORMAT_VERSION` 1→2 丢弃旧快照，合并测试改内容级断言）。
-- [x] 查询结果中的 UI 分组文案迁出 Rust：`HullReferenceGroup` 与 `SourceOptionGroup` 的 `label: String` 改为结构化 `origin`/`kind` 字段（wire 前后端同步），分组展示文案归前端组合（新增 `domain/tables/csv-source-options.ts::sourceGroupLabel`）；蓝图 option 的动态标签/描述（含势力名，属查询内容）保留 Rust，模板迁移并入 2.9。
-- [x] variant/skin 删除载荷字段名统一为单一实体 id 字段（`variant_id`/`skin_hull_id` 合一为 `entity_id`，wire 前后端同步）。
-- [x] 跑 cargo 全套。
-
-### Phase 2.7: 缓存与热路径性能收敛
-
-- [x] `CoreCache` 命中路径 `Arc` 化（资产字段与 `CORE_CACHES` 值均包 `Arc`，命中 = Arc clone 零深拷贝；serde 启用 `rc` 特性）；六个 `load_core_*` 收敛为泛型 `get_or_load_core`（get/store/load 三闭包）薄壳；冷加载只写内存并标 dirty，落盘合并为一次性 `flush_core_cache`（打开成功后与缓存失效前执行），query 路径内零持久化。
-- [x] `csv_patch.rs` 写路径第二轮整表深拷贝消除（`render_csv_text` 改引用传递 `&[&Map]`，csv_patch/indexed_entities/alex_csv 调用方同步；第一轮工作副本为失败隔离所需，保留）；`entity_definitions.rs` 五个 list 函数"先收集克隆再二次遍历"收敛为单遍（含 variant/skin 整 Vec clone 删除）；`io/file_changes.rs::build_current_state` 目录快照单次采集。
-- [x] `sprites.rs` 测试专用旧批量加载器迁入测试模块（`load_ship_sprite_data`/`load_weapon_sprite_data` 转为 tests mod 私有）。
-- [x] 跑 cargo 全套；`performance-baseline` 模块文档同步（core 缓存 flush 语义实际归属 `project-session.md`，已同步其规范段）。
-
-### Phase 2.8: scripts 检查体系收敛
-
-- [x] `normalize`×4 经核实为恒等变换（收集器已归一化 `rel`）直接删除；`rustCommandModule`×4 收敛 `scripts/shared/files.mjs` 路径谓词；`splitTopLevel`×2 取四括号超集版上收 `scripts/shared/rust-source.mjs`（use 树与参数列表行为等价）；`ignoredDirs`/`ignoredPathParts` 收敛为收集器私有常量；`scripts/architecture/shared` 五文件经 git mv 归位 `scripts/shared`。
-- [x] 文件收集器三套实现合一为 `collectRepoPaths(root, include)`（范围差异只以扩展名与包含谓词表达，三入口行为逐项等价），static-checks"共享收集"契约扩展覆盖入口脚本；两条元规则（self-boundary、no-name-existence-checks）经 `rules/index.mjs` 注册表装配（文件留在规则目录之外避免自检命中自身，例外已成文）；规则 surface 判定三形态范式（共享分类器路径角色 / 归一化路径成员判定 / singleFileByRel 单文件锚定）成文 static-checks.md。
-- [x] `scripts/*.mjs` 经 tsconfig.node.json `checkJs` 纳入 `npm run typecheck`（选 checkJs 而非迁 .ts：零重命名且不破坏 Node 22.13 引擎下限），39 个 .mjs 全量 JSDoc 注解，strict 零错误。
-- [x] 跑 `lint` 全套（eslint + check-architecture + check-identifier-length）、typecheck、format:check、encoding:check 全绿。
-
-### Phase 2.9: schema 资产与静态数据整理
-
-- [x] 14 份 CSV 列 schema 补齐版本头：裸数组改为 `{ $schema: csv-columns/v1, table, columns }` 对象，与 spec 资产 `field-schema/v1` 统一为一套版本契约，`parseCsvColumnSchemas` 在唯一加载入口校验版本头与 `table` 一致；`FieldSchema` 可选属性删除冗余 `| null`。faction(660 行)/mod-info(95 行) null 冗余键清空为精简形态，与 HEAD 剥离 null 后逐字节语义等价。命名裁决：schema 文件命名依据 = 表注册表 key（14 份已逐一相等），游戏原文件名映射唯一归后端 `CsvTableSpec.rel_path`，成文 schema.md。
-- [x] `source_options.rs` 2029→1172 行：`WELL_KNOWN_TAG_LABELS`(168 条)/`WELL_KNOWN_HINT_LABELS`(48 条) 外置 `schemas/well-known-labels.json`，经新增 `domain/well_known_labels.rs` 唯一加载入口 `include_str!` 编译期内嵌 + `LazyLock` 解析（校验版本头）；JSON 与 Rust 原数据逐条语义对账 0 mismatch；`GENERATED_TAG_PATTERNS`(15 条) 为生成逻辑留 Rust；`parser-boundary` 角色分类器为内嵌资产补 `tool-json` 角色（app_settings/workspace_persistence 同语义）。
-- [x] 跑 cargo 全套（fmt/clippy/test 270 = 基线 268 + 新增 2）、前端全套（format/encoding/lint 三件套/typecheck/test 103/build）全绿。
-
-### Phase 2.10: noUncheckedIndexedAccess 消化启用
-
-- [x] `tsconfig.json` 启用 `noUncheckedIndexedAccess`，实测 105 处错误（20 文件）全部消化：ShipEditor 28（坐标转换族改元组返回、bounds 索引 `?? 0`、新建槽位对象捕获复用、可选槽位守卫）、theme.ts 16（中性色查表改字面量键联合 Record）、mirror.ts 9（rowPoint 改 `[number, number]` 元组 + 循环元素守卫）、colors.ts 查表常量改 `satisfies` + canvas-visuals `keyof` 收窄、resource-cache 8（批量查询键值对数组消并行索引）、schema-values 7（`setNestedValue` 改 `pop()` 叶子惯用法）、spec 文件按既有 `!` 惯用法收窄；未新增行为语义，`!` 仅用于存在性可由相邻守卫证明的站点。
-- [x] 跑前端全套检查（format/encoding/lint 三件套/typecheck/test 103/build）全绿。
-
-### Phase 2.11: 收尾复核与文档同步
-
-- [x] 契约文档终审：overview、frontend/backend guidelines、module map 与 29 份模块文档的 183 条路径引用逐一存在性核对（仅 draft-session.md 与 table-save-changeset.md 两处 `src/app/table-save.orchestrator.spec.ts` 过期路径已修为 `src/orchestrators/`）；后端 services 枚举与磁盘 13 模块逐一相符；码表、naive-ui 接线、AppError 约定等 1.x–2.x 落点均有文档归属；模块文档无实现过程与临时状态措辞。
-- [x] 跑前后端全套检查全绿（前端：format:check、encoding:check、lint 三件套、typecheck 0 错、test 103、build；Rust：cargo fmt --check、clippy -D warnings、test 270）。手工验收清单见阶段总结：画布（舰船/武器拖拽与镜像预览、弹体窗口）、表格（窗口滚动、单元格编辑、保存、撤销重做）、快捷键（Ctrl+S 全局与输入框内、主窗口历史分派）、窗口（子窗口身份、保存事件回主窗口、设置变更失效）、保存链路（CSV/配置/spec/文件编辑器 changeset 与写后失效）、错误反馈（后端稳定码→中文文案、一次动作一条提示、失败不落历史）。
-- [x] 复查工作树与暂存区：暂存区为空，仅含本轮两份模块文档修复与本条勾选；`git diff --check` 无空白/冲突标记；编码检查覆盖全部文本文件通过；用户的 "phase 2.11" 提交（实为 2.10 修复内容）原样保留。
+- [ ] 基于原版的 UI 界面，产生 舰船/武器 的沉浸式编辑器。
+- [ ] 沉浸式编辑器完全复刻游戏原版的界面，但允许点击进行编辑。
+- [ ] 保存走通用文件保存和文件级 history；undo/redo 后刷新对应文件内容。
+- [ ] 验收新增、编辑、保存、撤销重做和解析错误定位行为。
 
 ## Phase 3: 外置文本 JSON 支持
 

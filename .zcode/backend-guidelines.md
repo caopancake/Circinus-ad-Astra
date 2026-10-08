@@ -27,6 +27,8 @@
 
 ## Rust 约定
 
+- 写入必须由 write_transactions 协调 FIFO 租约、会话、基线版本和 file_history；file_history 只允许持有内存历史并依赖 IO 与模型。
+- command payload 必须只由 command 消费；会话授权接口必须使用 models 中的 SessionModScope。
 - `#[tauri::command]` 只允许出现在 `src-tauri/src/commands/`。
 - command 层只负责参数接收、状态访问、错误转换和调用后端实现；严禁承载解析、扫描或写盘实现。
 - command 错误必须携带可定位上下文（路径、行、位置）与稳定语义，前端负责动作归类与呈现。

@@ -33,7 +33,7 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   function replaceProjectManifest(manifest: ProjectManifest) {
-    if (!manifests.value.has(manifest.modRoot)) return;
+    if (manifests.value.get(manifest.modRoot)?.sessionId !== manifest.sessionId) return;
     manifests.value.set(manifest.modRoot, manifest);
   }
 

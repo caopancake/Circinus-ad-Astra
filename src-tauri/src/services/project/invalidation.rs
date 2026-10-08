@@ -44,11 +44,13 @@ pub(crate) fn invalidate_session_changes(
             invalidated_entities_for_file(&impact.target, &impact.file)?,
         );
     }
-    if affected_kinds.contains(&EntityKind::Faction) {
+    let content_tables = tables.clone();
+    let factions_changed = affected_kinds.contains(&EntityKind::Faction);
+    if factions_changed {
         tables.extend(faction_annotated_tables());
     }
     let mut saved_tables = BTreeMap::new();
-    for table in &tables {
+    for table in &content_tables {
         let state = session
             .csv_tables
             .get_mut(table.as_str())
@@ -68,7 +70,7 @@ pub(crate) fn invalidate_session_changes(
             );
         }
     }
-    for table in &tables {
+    for table in &content_tables {
         if let Some(state) = session.csv_tables.get_mut(table.as_str()) {
             state.rows = None;
         }
@@ -92,6 +94,9 @@ pub(crate) fn invalidate_session_changes(
             .expect("registered CSV table");
         state.rows = Some(rows);
         state.next_row_seq = next_row_seq;
+    }
+    if factions_changed {
+        super::cache::refresh_faction_annotations(session);
     }
     let resources = impacts
         .iter()
@@ -689,13 +694,16 @@ mod tests {
         let _ = fs::remove_dir_all(root);
         assert!(session.tag_map.contains_key("demo_new_bp"));
         assert!(!session.tag_map.contains_key("demo_old_bp"));
-        assert!(
-            session
-                .csv_tables
-                .get(CsvTableKey::Ships.as_str())
-                .and_then(|table| table.rows.as_ref())
-                .is_none()
-        );
+        let rows = session
+            .csv_tables
+            .get(CsvTableKey::Ships.as_str())
+            .unwrap()
+            .rows
+            .as_ref()
+            .unwrap();
+        assert_eq!(rows[0].row_key, "ships:row:0");
+        assert_eq!(rows[0].row["tags"], "demo_old_bp");
+        assert_eq!(rows[0].row[crate::models::CSV_FACTION_FIELD], "other");
         assert!(invalidation.entities.contains(&invalidated_entity(
             EntityKind::Faction,
             Some("demo".to_string())

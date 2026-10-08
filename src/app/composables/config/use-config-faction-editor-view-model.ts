@@ -1,3 +1,4 @@
+import type { ConfigEditTarget } from '@/shared/types';
 import { computed, ref, watch, type Ref } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useConfigEditorDraftSession } from '@/app/composables/config/use-config-editor-draft-session';
@@ -10,34 +11,48 @@ export function useConfigFactionEditorViewModel(params: {
   dataRevision: Ref<number>;
   factionId: Ref<string>;
   factions: Ref<Record<string, RowData>>;
+  factionVersions: Ref<Record<string, import('@/shared/types').FileVersion[]>>;
   modRoot: Ref<string | null>;
   onSaved: (factionId: string | null) => void;
   previewRevision: Ref<number>;
   queryPreviewImages: (sessionId: string, factionId: string) => Promise<{ crestSrc: string; logoSrc: string }>;
-  saveFaction: (sessionId: string, modRoot: string, previousId: string, local: RowData, schema: FileSchema) => Promise<string | null>;
+  saveFaction: (
+    sessionId: string,
+    modRoot: string,
+    previousId: string,
+    local: RowData,
+    schema: FileSchema,
+    baseVersions: import('@/shared/types').FileVersion[],
+  ) => Promise<import('@/shared/types').ConfigSaveIdentity | null>;
   schema: Ref<FileSchema | null>;
   sessionId: Ref<string | null>;
 }) {
   const feedback = useAppFeedback();
-  const draftSession = useConfigEditorDraftSession<RowData, string, void, string>({
+  function editTarget(id: string): ConfigEditTarget {
+    return { sessionId: params.sessionId.value!, modRoot: params.modRoot.value!, kind: 'faction', id, relPath: null };
+  }
+
+  const draftSession = useConfigEditorDraftSession<RowData, ConfigEditTarget, void, string>({
     emptyValue: {},
     modRoot: params.modRoot,
-    load: (factionId) => ({
-      value: params.factions.value[factionId]
-        ? configFactionEditorModel(deepClone(params.factions.value[factionId]))
-        : configFactionEditorModel({ id: factionId }),
+    load: (target) => ({
+      baseVersions: params.factionVersions.value[target.id] ?? [],
+      value: params.factions.value[target.id]
+        ? configFactionEditorModel(deepClone(params.factions.value[target.id]!))
+        : configFactionEditorModel({ id: target.id }),
     }),
-    save: async (factionId, data) => {
+    save: async (target, data, baseVersions) => {
       const currentSchema = params.schema.value;
-      const saveModRoot = params.modRoot.value;
-      const saveSessionId = params.sessionId.value;
+      const saveModRoot = target.modRoot;
+      const saveSessionId = target.sessionId;
       if (!currentSchema || !saveModRoot || !saveSessionId) return;
-      const savedId = await params.saveFaction(saveSessionId, saveModRoot, factionId, data, currentSchema);
+      const savedId = await params.saveFaction(saveSessionId, saveModRoot, target.id, data, currentSchema, baseVersions);
       if (!savedId) return;
       if (params.modRoot.value !== saveModRoot || params.sessionId.value !== saveSessionId) return;
-      return { meta: savedId, value: data };
+      return { meta: savedId.id, value: data, baseVersions: savedId.baseVersions };
     },
-    targetKey: (factionId) => factionId,
+    targetKey: (target) => JSON.stringify(target),
+    savedTarget: (target, snapshot) => ({ ...target, id: snapshot.meta ?? target.id }),
   });
   const draftData = draftSession.draftValue;
   const factionFile = computed<RowData>(() => {
@@ -49,13 +64,13 @@ export function useConfigFactionEditorViewModel(params: {
   let previewRequestId = 0;
 
   watch(
-    () => [params.factionId.value, params.dataRevision.value] as const,
+    () => [params.factionId.value, params.dataRevision.value, params.sessionId.value, params.modRoot.value] as const,
     ([id]) => {
       const data = params.factions.value[id]
         ? configFactionEditorModel(deepClone(params.factions.value[id]))
         : configFactionEditorModel({ id });
-      if (draftSession.currentTargetKey.value !== id) void loadFactionEditorData(id);
-      else draftSession.applyExternalForTarget(id, data);
+      if (!draftSession.isTargetCurrent(editTarget(id))) void loadFactionEditorData(id);
+      else draftSession.applyExternalForTarget(editTarget(id), data, params.factionVersions.value[id]);
     },
     { immediate: true },
   );
@@ -68,7 +83,7 @@ export function useConfigFactionEditorViewModel(params: {
 
   async function loadFactionEditorData(id: string) {
     try {
-      await draftSession.loadTarget(id);
+      await draftSession.loadTarget(editTarget(id));
     } catch (error) {
       feedback.error(error, '加载势力失败');
     }

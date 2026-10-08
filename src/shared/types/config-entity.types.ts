@@ -1,6 +1,20 @@
 import type { RowData } from '@/shared/types/json.types';
 
+export interface ConfigSaveIdentity {
+  id: string;
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
+}
+
+export interface ConfigEditTarget {
+  sessionId: string;
+  modRoot: string;
+  kind: 'variant' | 'skin' | 'faction' | 'mission';
+  id: string;
+  relPath: string | null;
+}
+
 export interface ConfigFileEntityWrite {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   sessionId: string;
   modRoot: string;
   previousId: string | null;
@@ -12,6 +26,7 @@ export interface ConfigFileEntityWrite {
 export type IndexedConfigKind = 'faction' | 'mission';
 
 export interface IndexedConfigEntityWrite {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   sessionId: string;
   modRoot: string;
   kind: IndexedConfigKind;
@@ -23,6 +38,7 @@ export interface IndexedConfigEntityWrite {
 }
 
 export interface DeleteIndexedConfigEntityWrite {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   sessionId: string;
   modRoot: string;
   kind: IndexedConfigKind;
@@ -31,6 +47,7 @@ export interface DeleteIndexedConfigEntityWrite {
 }
 
 export interface IndexedConfigEntityData {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   entityId: string;
   indexPath: string;
   indexHeader: string[];
@@ -41,6 +58,7 @@ export interface IndexedConfigEntityData {
 export type VariantEntityWrite = ConfigFileEntityWrite;
 
 export interface DeleteVariantEntityWrite {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   sessionId: string;
   modRoot: string;
   entityId: string;
@@ -50,6 +68,7 @@ export interface DeleteVariantEntityWrite {
 export type SkinEntityWrite = ConfigFileEntityWrite;
 
 export interface DeleteSkinEntityWrite {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   sessionId: string;
   modRoot: string;
   entityId: string;
@@ -57,6 +76,7 @@ export interface DeleteSkinEntityWrite {
 }
 
 export interface ConfigMissionEditorData {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   list: RowData;
   descriptor: RowData;
   text: string;
@@ -64,6 +84,7 @@ export interface ConfigMissionEditorData {
 }
 
 export interface VariantFile {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   variantId: string;
   hullId: string;
   path: string;
@@ -76,6 +97,7 @@ export interface VariantFile {
 }
 
 export interface SkinFile {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   skinHullId: string;
   baseHullId: string;
   path: string;

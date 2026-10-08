@@ -40,10 +40,9 @@
               </div>
               <em>{{ formatItemKind(item) }}</em>
             </div>
-            <ul v-if="item.kind === 'file-save'" class="file-history-change-list">
-              <li v-for="change in item.changes" :key="fileHistoryChangeKey(item.id, change)">
-                <code>{{ change.path }}</code>
-                <span>{{ formatChange(change) }}</span>
+            <ul class="file-history-change-list">
+              <li v-for="path in item.paths" :key="path">
+                <code>{{ path }}</code>
               </li>
             </ul>
           </article>
@@ -66,10 +65,9 @@
               </div>
               <em>{{ formatItemKind(item) }}</em>
             </div>
-            <ul v-if="item.kind === 'file-save'" class="file-history-change-list">
-              <li v-for="change in item.changes" :key="fileHistoryChangeKey(item.id, change)">
-                <code>{{ change.path }}</code>
-                <span>{{ formatChange(change) }}</span>
+            <ul class="file-history-change-list">
+              <li v-for="path in item.paths" :key="path">
+                <code>{{ path }}</code>
               </li>
             </ul>
           </article>
@@ -81,7 +79,7 @@
 
 <script setup lang="ts">
 import { useFileHistoryViewModel } from '@/app/composables/editors/use-file-history-view-model';
-import type { FileChangeRecord, FileHistoryItem } from '@/shared/types';
+import type { FileHistoryItem } from '@/shared/types';
 
 const {
   modTitle,
@@ -98,28 +96,10 @@ const {
 } = useFileHistoryViewModel();
 
 function formatItemKind(item: FileHistoryItem): string {
-  return `${item.changes.length} 个文件变更`;
+  return `${item.paths.length} 个文件变更`;
 }
 
 function formatTimestamp(timestamp: number): string {
   return new Date(timestamp).toLocaleString();
-}
-
-function formatChange(change: FileChangeRecord): string {
-  const type = change.kind === 'directory' ? '目录' : '文件';
-  const content = change.kind === 'file' && isBinaryChange(change) ? '，二进制' : '';
-  return `${type}${content}：${formatExists(change.beforeExists)} → ${formatExists(change.afterExists)}`;
-}
-
-function formatExists(exists: boolean): string {
-  return exists ? '存在' : '不存在';
-}
-
-function isBinaryChange(change: FileChangeRecord): boolean {
-  return Boolean(change.beforeDataBase64 || change.afterDataBase64);
-}
-
-function fileHistoryChangeKey(itemId: string, change: FileChangeRecord): string {
-  return JSON.stringify([itemId, change.kind, change.path]);
 }
 </script>

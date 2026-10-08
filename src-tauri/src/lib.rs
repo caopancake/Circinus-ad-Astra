@@ -40,6 +40,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::query_file_history,
+            commands::query_entity_base_versions,
+            commands::clear_file_history,
             commands::open_project_session,
             commands::close_project_session,
             commands::query_csv_table_window,
@@ -48,7 +51,7 @@ pub fn run() {
             commands::query_hull_references,
             commands::query_entity,
             commands::query_entity_list,
-            commands::query_weapon_draft_resources,
+            commands::query_editor_draft_resources,
             commands::query_resource_data_urls,
             commands::invalidate_project_session,
             commands::invalidate_core_cache,

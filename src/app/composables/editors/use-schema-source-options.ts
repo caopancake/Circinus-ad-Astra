@@ -4,6 +4,7 @@ import type { SchemaRuntimeContext } from '@/domain/schema/schema-runtime';
 import { mapSourceGroupsToSelectOptions, type SelectOption } from '@/domain/schema/schema-options';
 import { isCsvSource } from '@/domain/tables/csv-source-options';
 import type { ResourceRef } from '@/shared/types';
+import { useAppFeedback } from '@/app/composables/use-app-feedback';
 
 export function useSchemaSourceOptions(args: {
   field: () => FieldSchema;
@@ -11,6 +12,8 @@ export function useSchemaSourceOptions(args: {
   runtimeContext: () => SchemaRuntimeContext | null | undefined;
 }) {
   const loadedOptions = ref<SelectOption[]>([]);
+  const feedback = useAppFeedback();
+  let disposed = false;
   let requestId = 0;
   let stopInvalidation: (() => void) | null = null;
 
@@ -18,6 +21,7 @@ export function useSchemaSourceOptions(args: {
   watch(
     () => [args.runtimeContext()?.sessionId ?? null, args.runtimeContext()?.sourceContextKey ?? null, args.field().source ?? null] as const,
     () => {
+      loadedOptions.value = [];
       void reloadSourceOptions();
     },
     { immediate: true },
@@ -37,7 +41,11 @@ export function useSchemaSourceOptions(args: {
     { immediate: true },
   );
 
-  onUnmounted(() => stopInvalidation?.());
+  onUnmounted(() => {
+    disposed = true;
+    requestId++;
+    stopInvalidation?.();
+  });
 
   async function reloadSourceOptions() {
     const activeRequestId = ++requestId;
@@ -49,9 +57,16 @@ export function useSchemaSourceOptions(args: {
       return;
     }
 
-    const groups = await context?.querySourceOptions?.(source);
-    if (activeRequestId !== requestId || sessionId !== args.runtimeContext()?.sessionId || source !== args.field().source) return;
-    loadedOptions.value = groups ? mapSourceGroupsToSelectOptions(groups) : [];
+    try {
+      const groups = await context?.querySourceOptions?.(source);
+      if (disposed || activeRequestId !== requestId || sessionId !== args.runtimeContext()?.sessionId || source !== args.field().source)
+        return;
+      loadedOptions.value = groups ? mapSourceGroupsToSelectOptions(groups) : [];
+    } catch (error) {
+      if (disposed || activeRequestId !== requestId) return;
+      loadedOptions.value = [];
+      feedback.error(error, '加载字段来源失败');
+    }
   }
 
   function loadedSourceResourceRefs(): ResourceRef[] {

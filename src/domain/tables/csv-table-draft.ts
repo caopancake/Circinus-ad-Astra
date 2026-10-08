@@ -33,11 +33,13 @@ export function applyCsvTableWindowDraft(state: ModTableState, window: CsvTableW
     return { changed: false, externalUpdateMarked: true };
   }
   state.headers[table] = [...window.header];
+  state.baseVersions[table] = window.baseVersions;
   state.totalRows[table] = window.totalRows;
   state.filteredRows[table] = window.filteredRows;
   const rows = window.rows.map((item) => ({
     ...deepClone(item.row),
     [TABLE_ROW_KEY_FIELD]: item.rowKey,
+    _sourceRowIndex: item.rowIndex,
   }));
   state.tables[table] = mergeWindowRows(state.tables[table], rows, window.start, window.filteredRows);
   state.originalTables[table] = mergeWindowRows(state.originalTables[table], deepClone(rows), window.start, window.filteredRows);
@@ -182,6 +184,20 @@ export function markCsvTableSavedDraft(state: ModTableState, tab: TableKey): voi
 }
 
 export function commitCsvTableSaveDraft(state: ModTableState, tab: TableKey, patches: CsvRowPatch[], keyMap: CsvRowKeyMapping[]): void {
+  const removedPositions = patches
+    .filter((patch) => patch.action === 'delete')
+    .flatMap((patch) => {
+      const row = findOriginalRow(state, tab, patch.rowKey);
+      return typeof row?._sourceRowIndex === 'number' ? [row._sourceRowIndex] : [];
+    });
+  const restoredPositions = patches
+    .filter((patch) => patch.action === 'delete')
+    .flatMap((patch) => {
+      const row = findLoadedRow(state, tab, patch.rowKey);
+      return typeof row?._sourceRowIndex === 'number' ? [row._sourceRowIndex] : [];
+    });
+  const insertedKeys = new Set(keyMap.map((mapping) => mapping.nextKey));
+  const insertedPositions = keyMap.map((mapping) => mapping.rowIndex).sort((left, right) => left - right);
   applySavedCsvRowKeyMapDraft(state, tab, keyMap);
   const original = state.originalTables[tab];
   const mapped = new Map(keyMap.map((item) => [item.previousKey, item.nextKey]));
@@ -192,11 +208,38 @@ export function commitCsvTableSaveDraft(state: ModTableState, tab: TableKey, pat
     );
     if (patch.action === 'delete') {
       if (index >= 0) original.splice(index, 1);
+      const restored = findLoadedRow(state, tab, rowKey);
+      if (restored) {
+        const previousKey = rowKey;
+        const nextKey = `${tab}:new:${state.nextRowKey++}`;
+        const sourceIndex = typeof restored._sourceRowIndex === 'number' ? restored._sourceRowIndex : 0;
+        const rowIndex =
+          sourceIndex -
+          removedPositions.filter((position) => position < sourceIndex).length +
+          restoredPositions.filter((position) => position < sourceIndex).length;
+        restored._insertAt = rowIndex;
+        const mapping = { previousKey, nextKey, rowIndex };
+        keyMap.push(mapping);
+        applySavedCsvRowKeyMapDraft(state, tab, [mapping]);
+      }
       continue;
     }
-    const savedRow = { ...deepClone(patch.row), [TABLE_ROW_KEY_FIELD]: rowKey };
+    const sourceIndex =
+      keyMap.find((mapping) => mapping.nextKey === rowKey)?.rowIndex ?? (index >= 0 ? original[index]?._sourceRowIndex : undefined);
+    const savedRow = {
+      ...deepClone(patch.row),
+      [TABLE_ROW_KEY_FIELD]: rowKey,
+      ...(typeof sourceIndex === 'number' ? { _sourceRowIndex: sourceIndex } : {}),
+    };
     if (index >= 0) original[index] = savedRow;
     else original.push(savedRow);
+  }
+  for (const row of [...state.tables[tab], ...state.originalTables[tab]]) {
+    if (!row || typeof row._sourceRowIndex !== 'number' || insertedKeys.has(cell(row[TABLE_ROW_KEY_FIELD]))) continue;
+    row._sourceRowIndex -= removedPositions.filter((position) => position < (row._sourceRowIndex as number)).length;
+    for (const position of insertedPositions) {
+      if (row._sourceRowIndex >= position) row._sourceRowIndex++;
+    }
   }
   rebuildCsvDirty(state, tab);
   state.pendingExternalTableUpdates[tab] = hasCsvTableDraftChanges(state, tab);
@@ -214,6 +257,14 @@ export function applySavedCsvRowKeyMapDraft(state: ModTableState, tab: TableKey,
   const mapped = new Map(keyMap.map((item) => [item.previousKey, item.nextKey]));
   for (const row of state.tables[tab]) applySavedRowKey(row, mapped);
   for (const row of state.originalTables[tab]) applySavedRowKey(row, mapped);
+  for (const row of state.tables[tab]) {
+    if (!row) continue;
+    const mapping = keyMap.find((mapping) => mapping.nextKey === cell(row[TABLE_ROW_KEY_FIELD]));
+    if (mapping && !mapping.nextKey.includes(':new:')) {
+      row._sourceRowIndex = mapping.rowIndex;
+      delete row._insertAt;
+    }
+  }
   if (state.selectedRowKey) {
     state.selectedRowKey = mapped.get(state.selectedRowKey) ?? state.selectedRowKey;
   }

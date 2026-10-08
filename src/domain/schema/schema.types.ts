@@ -32,6 +32,7 @@ export interface FieldSchema {
   warning?: string;
   danger?: string;
   source?: string;
+  pathBase?: 'mod' | 'mission';
   min?: number;
   max?: number;
   step?: number;

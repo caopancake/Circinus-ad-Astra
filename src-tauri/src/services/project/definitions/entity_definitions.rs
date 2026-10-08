@@ -377,6 +377,7 @@ fn variant_entity(
 ) -> AppResult<EntityData> {
     let data = variant_file_data(item)?;
     Ok(EntityData {
+        base_versions: Vec::new(),
         kind: EntityKind::Variant,
         id: item.variant_id.clone(),
         resource_refs: variant_resource_refs(session, origin, &data),
@@ -400,6 +401,7 @@ fn plain_entity(
 ) -> AppResult<EntityData> {
     let definition = entity_definition(kind)?;
     Ok(EntityData {
+        base_versions: Vec::new(),
         kind,
         id: id.to_string(),
         resource_refs: (definition.resources)(session, id, &data),
@@ -480,9 +482,14 @@ fn variant_resources(
 fn skin_resources(
     session: &ProjectSession,
     id: &str,
-    data: &Value,
+    _data: &Value,
 ) -> BTreeMap<String, ResourceRef> {
-    skin_entity_resource_refs(session, id, data)
+    session
+        .skin_files
+        .iter()
+        .find(|skin| skin.skin_hull_id == id)
+        .map(|skin| skin_entity_resource_refs(session, skin))
+        .unwrap_or_default()
 }
 
 fn build_skin_entity(
@@ -492,9 +499,10 @@ fn build_skin_entity(
 ) -> AppResult<EntityData> {
     let data = skin_file_data(item)?;
     Ok(EntityData {
+        base_versions: Vec::new(),
         kind,
         id: item.skin_hull_id.clone(),
-        resource_refs: skin_entity_resource_refs(session, &item.skin_hull_id, &data),
+        resource_refs: skin_entity_resource_refs(session, item),
         data,
     })
 }
@@ -583,6 +591,7 @@ fn build_weapon_list_entity(
     data.insert("spec".to_string(), spec.clone());
     data.insert("csvRow".to_string(), Value::Object(row));
     Ok(EntityData {
+        base_versions: Vec::new(),
         kind,
         id: id.to_string(),
         resource_refs: weapon_resource_refs(id, &spec),
@@ -626,6 +635,7 @@ fn build_skill_list_entity(
     data.insert("csvRow".to_string(), Value::Object(row));
     let data = Value::Object(data);
     Ok(EntityData {
+        base_versions: Vec::new(),
         kind,
         id: id.to_string(),
         resource_refs: skill_resources(session, id, &data),
@@ -665,6 +675,7 @@ fn build_mission_list_entity(
         .map(|resource| BTreeMap::from([("icon".to_string(), resource)]))
         .unwrap_or_default();
     Ok(EntityData {
+        base_versions: Vec::new(),
         kind,
         id: id.to_string(),
         resource_refs,
@@ -770,14 +781,6 @@ fn refresh_faction(session: &mut ProjectSession) -> AppResult<()> {
     let mod_root = Path::new(&session.manifest.mod_root);
     session.faction_files = factions::load_faction_files(mod_root)?;
     session.tag_map = factions::discover_factions(mod_root)?.1;
-    for definition in super::table_definitions::csv_table_definitions()
-        .iter()
-        .filter(|definition| definition.spec.supports_faction_filter)
-    {
-        if let Some(table) = session.csv_tables.get_mut(definition.spec.key.as_str()) {
-            table.rows = None;
-        }
-    }
     session.manifest.entity_summaries.factions = session.faction_files.len();
     Ok(())
 }

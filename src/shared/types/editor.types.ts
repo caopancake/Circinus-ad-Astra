@@ -9,4 +9,5 @@ export type EditorSpecKind = EditorKind;
 export interface EditableFileData {
   path: string;
   text: string;
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
 }

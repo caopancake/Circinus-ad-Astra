@@ -23,6 +23,7 @@ import type { ResourceRef, RowData, SkinFile, VariantFile } from '@/shared/types
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import type { SelectOption } from '@/domain/schema/schema-options';
 import { hasEntityInvalidation, hasQueryInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
+import { stableDeepEqual } from '@/shared/lib/stable-compare';
 
 export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   const selectedId = ref<string | null>(null);
@@ -38,9 +39,16 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   const modRoot = computed(() => project.activeManifest?.modRoot ?? null);
   const sessionId = computed(() => project.activeManifest?.sessionId ?? null);
   let filesRequestId = 0;
+  const savingSessions = new Set<string>();
   let hullNamesRequestId = 0;
   let hullOptionsRequestId = 0;
   const hullOptionsLoaded = ref(false);
+  let listSessionKey: string | null = null;
+  let disposed = false;
+
+  function sessionKey() {
+    return JSON.stringify([sessionId.value, modRoot.value]);
+  }
 
   function idOf(file: VariantFile | SkinFile): string {
     return family.id === 'variant' ? (file as VariantFile).variantId : (file as SkinFile).skinHullId;
@@ -53,20 +61,25 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   async function loadFiles() {
     const requestId = ++filesRequestId;
     const activeSessionId = project.activeSessionId;
-    if (!activeSessionId) {
+    const key = sessionKey();
+    if (key !== listSessionKey) {
+      listSessionKey = key;
       files.value = [];
       spriteRefs.value = {};
-      if (family.usesHullNames) hullNames.value = {};
+      hullNames.value = {};
+      hullOptions.value = [];
+      hullOptionsLoaded.value = false;
+      hullNamesRequestId++;
+      hullOptionsRequestId++;
       selectedId.value = null;
       dataRevision.value += 1;
-      return;
     }
+    if (!activeSessionId || disposed) return;
     listLoadStartedAt.value = performance.now();
-    const selectedIdAtStart = selectedId.value;
-    const previousSelected = selectedIdAtStart ? files.value.find((file) => idOf(file) === selectedIdAtStart) : null;
     try {
       const records = family.id === 'variant' ? await listVariantRecords(activeSessionId) : await listSkinRecords(activeSessionId);
-      if (requestId !== filesRequestId || activeSessionId !== project.activeSessionId) return;
+      if (disposed || requestId !== filesRequestId || key !== sessionKey()) return;
+      const previousSelected = files.value.find((file) => idOf(file) === selectedId.value);
       files.value = records.map((record) =>
         family.id === 'variant' ? (record as { variant: VariantFile }).variant : (record as { skin: SkinFile }).skin,
       );
@@ -76,15 +89,14 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
           record.spriteRef,
         ]),
       );
-      if (family.usesHullNames) {
-        const hullNamesRequestIdAtStart = ++hullNamesRequestId;
-        await loadFamilyHullNames(activeSessionId, hullNamesRequestIdAtStart, files.value);
-      }
-      const nextSelected = selectedIdAtStart ? files.value.find((file) => idOf(file) === selectedIdAtStart) : null;
+      const nextSelected = files.value.find((file) => idOf(file) === selectedId.value);
       if (selectedEntityDataChanged(previousSelected, nextSelected)) dataRevision.value += 1;
       if (selectedId.value && !files.value.some((file) => idOf(file) === selectedId.value)) selectedId.value = null;
+      if (family.usesHullNames) {
+        await loadFamilyHullNames(activeSessionId, ++hullNamesRequestId, files.value);
+      }
     } catch (error) {
-      if (requestId !== filesRequestId || activeSessionId !== project.activeSessionId) return;
+      if (disposed || requestId !== filesRequestId || key !== sessionKey()) return;
       feedback.error(error, `加载${family.displayName}失败`);
     }
   }
@@ -97,10 +109,10 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     try {
       const hullIds = sourceFiles.map((file) => (file as VariantFile).hullId);
       const result = await queryHullPreviewMetadata(activeSessionId, hullIds);
-      if (requestId !== hullNamesRequestId || activeSessionId !== project.activeSessionId) return;
+      if (disposed || requestId !== hullNamesRequestId || activeSessionId !== project.activeSessionId) return;
       hullNames.value = result;
     } catch (error) {
-      if (requestId !== hullNamesRequestId) return;
+      if (disposed || requestId !== hullNamesRequestId || activeSessionId !== project.activeSessionId) return;
       feedback.error(error, `读取${family.displayName}引用失败`);
     }
   }
@@ -115,15 +127,17 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     }
     try {
       const options = await queryHullReferenceOptions(activeSessionId, []);
-      if (requestId !== hullOptionsRequestId || activeSessionId !== project.activeSessionId) return;
+      if (disposed || requestId !== hullOptionsRequestId || activeSessionId !== project.activeSessionId) return;
       hullOptions.value = options;
       hullOptionsLoaded.value = true;
     } catch (error) {
+      if (disposed || requestId !== hullOptionsRequestId || activeSessionId !== project.activeSessionId) return;
       feedback.error(error, '读取舰船引用失败');
     }
   }
 
   async function createFamilyEntity(createSessionId: string, createModRoot: string, companionId: string, id: string): Promise<boolean> {
+    if (disposed || sessionId.value !== createSessionId || modRoot.value !== createModRoot) return false;
     if (!companionId || !id) {
       feedback.warning(`${family.companionLabel} 和 ${family.idField} 不能为空`);
       return false;
@@ -144,6 +158,8 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       }
       if (project.activeManifest?.modRoot !== createModRoot || project.activeManifest.sessionId !== createSessionId) return true;
       await loadFiles();
+      if (disposed || project.activeManifest?.modRoot !== createModRoot || project.activeManifest.sessionId !== createSessionId)
+        return true;
       selectedId.value = id;
       feedback.success(`${family.displayName} "${id}" 已创建`);
       return true;
@@ -154,11 +170,24 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   }
 
   async function deleteFamilyEntity(deleteSessionId: string, deleteModRoot: string, id: string, relPath: string): Promise<boolean> {
+    if (disposed || sessionId.value !== deleteSessionId || modRoot.value !== deleteModRoot) return false;
     try {
       if (family.id === 'variant') {
-        await deleteVariantAction(deleteSessionId, deleteModRoot, relPath, id);
+        await deleteVariantAction(
+          deleteSessionId,
+          deleteModRoot,
+          relPath,
+          id,
+          files.value.find((file) => idOf(file) === id)?.baseVersions ?? [],
+        );
       } else {
-        await deleteSkinAction(deleteSessionId, deleteModRoot, relPath, id);
+        await deleteSkinAction(
+          deleteSessionId,
+          deleteModRoot,
+          relPath,
+          id,
+          files.value.find((file) => idOf(file) === id)?.baseVersions ?? [],
+        );
       }
       if (project.activeManifest?.modRoot !== deleteModRoot || project.activeManifest.sessionId !== deleteSessionId) return true;
       await loadFiles();
@@ -177,7 +206,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     data: RowData,
   ): Promise<ConfigFamilyFile | null> {
     const manifest = project.activeManifest;
-    if (!manifest || manifest.modRoot !== saveModRoot || manifest.sessionId !== saveSessionId) return null;
+    if (disposed || !manifest || manifest.modRoot !== saveModRoot || manifest.sessionId !== saveSessionId) return null;
     const currentId = idOfFamilyFile(current);
     const nextId = trimmedConfigStringField(data, family.idField);
     const nextCompanionId = trimmedConfigStringField(data, family.companionField);
@@ -194,27 +223,53 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       return null;
     }
     const renameContext = configEntityRenameContext(currentId, nextId);
-    const saved =
-      family.id === 'variant'
-        ? await saveVariantAction(saveSessionId, saveModRoot, nextId, data, renameContext.previousId, current.relPath, feedback)
-        : await saveSkinAction(saveSessionId, saveModRoot, nextId, data, renameContext.previousId, current.relPath, feedback);
+    savingSessions.add(saveSessionId);
+    filesRequestId++;
+    let saved: ConfigFamilyFile | null;
+    try {
+      saved =
+        family.id === 'variant'
+          ? await saveVariantAction(
+              saveSessionId,
+              saveModRoot,
+              nextId,
+              data,
+              renameContext.previousId,
+              current.relPath,
+              feedback,
+              current.baseVersions,
+            )
+          : await saveSkinAction(
+              saveSessionId,
+              saveModRoot,
+              nextId,
+              data,
+              renameContext.previousId,
+              current.relPath,
+              feedback,
+              current.baseVersions,
+            );
+    } finally {
+      savingSessions.delete(saveSessionId);
+    }
     if (!saved) return null;
-    if (project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId) return saved;
-    await loadFiles();
-    selectedId.value = nextId;
+    if (disposed || project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId) return saved;
+    files.value = files.value.map((file) => (idOf(file) === currentId ? (saved as VariantFile | SkinFile) : file));
     feedback.success(`${family.displayName} "${nextId}" 已保存`);
     return saved;
   }
 
   function onSaved(id: string | null) {
     selectedId.value = id;
+    void loadFiles();
   }
 
-  watch(() => project.activeSessionId, loadFiles, { immediate: true });
+  watch([sessionId, modRoot], loadFiles, { immediate: true, flush: 'sync' });
   watch(
     () => settings.isPlainEditMode,
     () => {
       if (settings.isPlainEditMode) {
+        hullOptionsRequestId++;
         hullOptions.value = [];
         hullOptionsLoaded.value = false;
       }
@@ -224,7 +279,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     if (event.sessionId !== project.activeSessionId) return;
     const filesChanged = hasEntityInvalidation(event, 'entity-list', family.entityKind);
     const hullReferenceQueryChanged = hasQueryInvalidation(event, 'hull-references');
-    if (filesChanged) void loadFiles();
+    if (filesChanged && !savingSessions.has(event.sessionId)) void loadFiles();
     if (hullReferenceQueryChanged) {
       if (family.usesHullNames) {
         const requestId = ++hullNamesRequestId;
@@ -234,6 +289,10 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     }
   });
   onUnmounted(() => {
+    disposed = true;
+    filesRequestId++;
+    hullNamesRequestId++;
+    hullOptionsRequestId++;
     stopQueryInvalidation();
   });
 
@@ -257,8 +316,9 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   };
 }
 
-function selectedEntityDataChanged(previous: { data: RowData } | null | undefined, next: { data: RowData } | null | undefined): boolean {
-  if (!previous && !next) return false;
-  if (!previous || !next) return true;
-  return JSON.stringify(previous.data) !== JSON.stringify(next.data);
+function selectedEntityDataChanged(previous: ConfigFamilyFile | null | undefined, next: ConfigFamilyFile | null | undefined): boolean {
+  return !stableDeepEqual(
+    previous ? [previous.data, previous.relPath, previous.baseVersions] : null,
+    next ? [next.data, next.relPath, next.baseVersions] : null,
+  );
 }

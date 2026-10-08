@@ -2,7 +2,6 @@ import { watch } from 'vue';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { saveSettings } from '@/services/app-settings.service';
 import { useSettingsStore } from '@/stores/settings.store';
-import { useFileHistoryStore } from '@/stores/file-history.store';
 import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
 import { emitWindowEvent, listenWindowEvent, type UnlistenFn } from '@/windows/tauri.events';
 import { WINDOW_EVENTS, type AppSettingsChangedEvent } from '@/windows/window.events';
@@ -91,7 +90,6 @@ export function startSettingsMirror(): () => void {
 }
 
 function syncHistoryLimit(limit: number): void {
-  useFileHistoryStore().setHistoryLimit(limit);
   useTablesEditHistoryStore().setHistoryLimit(limit);
 }
 

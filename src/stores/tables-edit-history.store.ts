@@ -94,6 +94,10 @@ export const useTablesEditHistoryStore = defineStore('tables-edit-history', () =
     const mapped = new Map(keyMap.map((item) => [item.previousKey, item.nextKey]));
     for (const entry of [...stack.undoStack, ...stack.redoStack]) {
       entry.operation.rowKey = mapped.get(entry.operation.rowKey) ?? entry.operation.rowKey;
+      if (entry.operation.type !== 'cell-value-set') {
+        const mapping = keyMap.find((mapping) => mapping.nextKey === entry.operation.rowKey);
+        if (mapping?.nextKey.includes(':new:')) entry.operation.row._insertAt = mapping.rowIndex;
+      }
     }
   }
 

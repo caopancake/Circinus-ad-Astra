@@ -1,4 +1,5 @@
-import { ref, type Ref } from 'vue';
+import { computed, ref, type Ref } from 'vue';
+import { provideFieldInputs } from '@/shared/runtime/field-inputs';
 import { useDraftSession, type DraftSession, type DraftSessionOptions } from '@/app/composables/use-draft-session';
 import { deepClone } from '@/shared/lib/starsector';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
@@ -6,6 +7,7 @@ import { stableDeepEqual } from '@/shared/lib/stable-compare';
 type MaybePromise<T> = T | Promise<T>;
 
 export interface EditTargetSnapshot<TValue, TMeta = unknown> {
+  baseVersions?: import('@/shared/types').FileVersion[];
   meta?: TMeta;
   value: TValue;
 }
@@ -18,10 +20,15 @@ export interface EditTargetDraftSessionOptions<
 > extends DraftSessionOptions<TValue> {
   emptyValue: TValue;
   load: (target: TTarget) => MaybePromise<EditTargetSnapshot<TValue, TLoadMeta>>;
-  save?: (target: TTarget, draft: TValue) => MaybePromise<EditTargetSnapshot<TValue, TSaveMeta> | void>;
+  save?: (
+    target: TTarget,
+    draft: TValue,
+    baseVersions: import('@/shared/types').FileVersion[],
+  ) => MaybePromise<EditTargetSnapshot<TValue, TSaveMeta> | void>;
   targetKey: (target: TTarget) => string;
   onLoaded?: (target: TTarget, value: TValue, meta: TLoadMeta | undefined) => void;
   onSaved?: (target: TTarget, value: TValue, meta: TSaveMeta | undefined) => void;
+  savedTarget?: (target: TTarget, snapshot: EditTargetSnapshot<TValue, TSaveMeta>) => TTarget;
 }
 
 export interface EditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, TSaveMeta = unknown> {
@@ -35,22 +42,24 @@ export interface EditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, TS
   pendingExternalValue: DraftSession<TValue>['pendingExternalValue'];
   revision: DraftSession<TValue>['revision'];
   saving: Ref<boolean>;
-  applyExternalForTarget: (target: TTarget, value: TValue) => void;
+  applyExternalForTarget: (target: TTarget, value: TValue, versions?: import('@/shared/types').FileVersion[]) => void;
   clearTarget: () => void;
   dispose: () => void;
-  loadBaseForTarget: (target: TTarget, value: TValue) => void;
+  loadBaseForTarget: (target: TTarget, value: TValue, versions?: import('@/shared/types').FileVersion[]) => void;
   loadPendingExternal: () => void;
   loadTarget: (target: TTarget) => Promise<EditTargetSnapshot<TValue, TLoadMeta> | null>;
   refreshTarget: (target: TTarget) => Promise<EditTargetSnapshot<TValue, TLoadMeta> | null>;
   resetDraft: () => void;
   saveDraft: () => Promise<EditTargetSnapshot<TValue, TSaveMeta> | null>;
   setDraft: (value: TValue) => void;
+  isTargetCurrent: (target: TTarget) => boolean;
 }
 
 export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, TSaveMeta = unknown>(
   options: EditTargetDraftSessionOptions<TValue, TTarget, TLoadMeta, TSaveMeta>,
 ): EditTargetDraftSession<TValue, TTarget, TLoadMeta, TSaveMeta> {
   const draftSession = useDraftSession(options.emptyValue, options);
+  const fieldInputs = provideFieldInputs();
   const clone = options.clone ?? deepClone;
   const equals = options.equals ?? stableDeepEqual;
   const currentTarget = ref<TTarget | null>(null) as Ref<TTarget | null>;
@@ -60,6 +69,8 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
   let disposed = false;
   let loadRequestId = 0;
   let saveRequestId = 0;
+  let baseVersions: import('@/shared/types').FileVersion[] = [];
+  let pendingVersions: import('@/shared/types').FileVersion[] | null = null;
 
   async function loadTarget(target: TTarget): Promise<EditTargetSnapshot<TValue, TLoadMeta> | null> {
     return loadTargetSnapshot(target, 'base');
@@ -78,8 +89,16 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
     try {
       const snapshot = await options.load(target);
       if (!isCurrentLoad(requestId, key)) return null;
-      if (mode === 'base') draftSession.loadBase(snapshot.value);
-      else draftSession.applyExternal(snapshot.value);
+      if (mode === 'base') {
+        baseVersions = snapshot.baseVersions ?? [];
+        pendingVersions = null;
+        draftSession.loadBase(snapshot.value);
+        fieldInputs.reset();
+      } else {
+        if (draftSession.dirty.value || fieldInputs.dirty.value) pendingVersions = snapshot.baseVersions ?? [];
+        else baseVersions = snapshot.baseVersions ?? [];
+        draftSession.applyExternal(snapshot.value, fieldInputs.dirty.value);
+      }
       options.onLoaded?.(target, draftSession.draftValue.value, snapshot.meta);
       return snapshot;
     } finally {
@@ -89,30 +108,45 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
 
   async function saveDraft(): Promise<EditTargetSnapshot<TValue, TSaveMeta> | null> {
     if (!options.save || !currentTarget.value || !currentTargetKey.value) return null;
+    if (!sameTarget(currentTarget.value)) return null;
     const requestId = ++saveRequestId;
     const target = currentTarget.value;
     const key = currentTargetKey.value;
-    const submittedDraft = clone(draftSession.draftValue.value);
     saving.value = true;
     try {
-      const result = await options.save(target, submittedDraft);
+      const fieldCommit = fieldInputs.commit();
+      if (fieldCommit) await fieldCommit;
+      if (!isCurrentSave(requestId, key)) return null;
+      const submittedDraft = clone(draftSession.draftValue.value);
+      const result = await options.save(target, submittedDraft, deepClone(baseVersions));
       if (!isCurrentSave(requestId, key)) return null;
       if (!result) return null;
+      if (result.baseVersions) baseVersions = result.baseVersions;
+      pendingVersions = null;
       if (equals(draftSession.draftValue.value, submittedDraft)) draftSession.commitSaved(result.value);
       else draftSession.commitSavedBaseline(result.value);
+      if (options.savedTarget) {
+        currentTarget.value = options.savedTarget(target, result);
+        currentTargetKey.value = options.targetKey(currentTarget.value);
+      }
       options.onSaved?.(target, clone(result.value), result.meta);
       return result;
     } finally {
-      if (isCurrentSave(requestId, key)) saving.value = false;
+      if (!disposed && requestId === saveRequestId) saving.value = false;
     }
   }
 
-  function applyExternalForTarget(target: TTarget, value: TValue): void {
+  function applyExternalForTarget(target: TTarget, value: TValue, versions?: import('@/shared/types').FileVersion[]): void {
     if (!sameTarget(target)) return;
-    draftSession.applyExternal(value);
+    if (versions) {
+      if (draftSession.dirty.value || fieldInputs.dirty.value) pendingVersions = versions;
+      else baseVersions = versions;
+    }
+    draftSession.applyExternal(value, fieldInputs.dirty.value);
   }
 
-  function loadBaseForTarget(target: TTarget, value: TValue): void {
+  function loadBaseForTarget(target: TTarget, value: TValue, versions?: import('@/shared/types').FileVersion[]): void {
+    if (versions) baseVersions = versions;
     if (!sameTarget(target)) {
       currentTarget.value = target;
       currentTargetKey.value = options.targetKey(target);
@@ -121,6 +155,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
   }
 
   function clearTarget(): void {
+    fieldInputs.reset();
     loadRequestId++;
     saveRequestId++;
     currentTarget.value = null;
@@ -151,7 +186,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
   return {
     currentTarget,
     currentTargetKey,
-    dirty: draftSession.dirty,
+    dirty: computed(() => draftSession.dirty.value || fieldInputs.dirty.value),
     draftValue: draftSession.draftValue,
     externalUpdateNotice: draftSession.externalUpdateNotice,
     hasPendingExternalValue: draftSession.hasPendingExternalValue,
@@ -163,11 +198,20 @@ export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, 
     clearTarget,
     dispose,
     loadBaseForTarget,
-    loadPendingExternal: draftSession.loadPendingExternal,
+    loadPendingExternal: () => {
+      draftSession.loadPendingExternal();
+      if (pendingVersions) baseVersions = pendingVersions;
+      pendingVersions = null;
+      fieldInputs.reset();
+    },
     loadTarget,
     refreshTarget,
-    resetDraft: draftSession.resetDraft,
+    resetDraft: () => {
+      draftSession.resetDraft();
+      fieldInputs.reset();
+    },
     saveDraft,
     setDraft: draftSession.setDraft,
+    isTargetCurrent: sameTarget,
   };
 }

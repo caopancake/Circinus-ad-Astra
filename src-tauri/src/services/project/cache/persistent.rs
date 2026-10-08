@@ -236,7 +236,7 @@ fn core_fingerprint(core_dir: &Path) -> AppResult<SourceFingerprint> {
     fingerprint_files(files)
 }
 
-fn session_source_files(root: &Path) -> AppResult<Vec<(String, PathBuf)>> {
+pub(crate) fn session_source_files(root: &Path) -> AppResult<Vec<(String, PathBuf)>> {
     let mut files = Vec::new();
     collect_exact_file(root, "mod_info.json", &mut files);
     collect_exact_file(root, "data/world/factions/factions.csv", &mut files);

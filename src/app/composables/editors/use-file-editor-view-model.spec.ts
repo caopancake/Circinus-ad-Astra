@@ -130,12 +130,20 @@ describe('useFileEditorViewModel editing', () => {
   });
 
   it('saves through the write service and records history only in session mode', async () => {
-    const result = { changes: [], invalidation: {}, keyMap: [], refreshedEntity: null };
+    const result = {
+      baseVersions: [],
+      commitId: 1,
+      history: { revision: 1, undoStack: [], redoStack: [] },
+      changes: [],
+      invalidation: {},
+      keyMap: [],
+      refreshedEntity: null,
+    };
     mocks.writeEditableFileText.mockResolvedValue(result);
     const viewModel = await loadedViewModel();
     viewModel.updateText('saved text');
     await viewModel.saveFile();
-    expect(mocks.writeEditableFileText).toHaveBeenCalledWith('s1', 'C:/mods/alpha', 'data/hulls/test.file', 'saved text');
+    expect(mocks.writeEditableFileText).toHaveBeenCalledWith('s1', 'C:/mods/alpha', 'data/hulls/test.file', 'saved text', []);
     expect(mocks.emitFileEditorSaved).toHaveBeenCalledTimes(1);
     expect(mocks.feedback.success).toHaveBeenCalledWith('文件已保存');
     expect(viewModel.dirty.value).toBe(false);
@@ -145,10 +153,18 @@ describe('useFileEditorViewModel editing', () => {
   it('keeps recovery mode a side-effect-free write without history', async () => {
     mocks.loadEditableFileData.mockResolvedValue({ path: 'x', text: 'base' });
     const viewModel = await initializeViewModel(paramsFixture({ mode: 'recovery', sessionId: null }));
-    mocks.writeEditableFileText.mockResolvedValue({ changes: [], invalidation: {}, keyMap: [], refreshedEntity: null });
+    mocks.writeEditableFileText.mockResolvedValue({
+      baseVersions: [],
+      commitId: 1,
+      history: { revision: 1, undoStack: [], redoStack: [] },
+      changes: [],
+      invalidation: {},
+      keyMap: [],
+      refreshedEntity: null,
+    });
     viewModel.updateText('recovered');
     await viewModel.saveFile();
-    expect(mocks.writeEditableFileText).toHaveBeenCalledWith(null, 'C:/mods/alpha', 'data/hulls/test.file', 'recovered');
+    expect(mocks.writeEditableFileText).toHaveBeenCalledWith(null, 'C:/mods/alpha', 'data/hulls/test.file', 'recovered', []);
     expect(mocks.emitFileEditorSaved).not.toHaveBeenCalled();
     viewModel.dispose();
   });
@@ -165,6 +181,34 @@ describe('useFileEditorViewModel editing', () => {
 });
 
 describe('useFileEditorViewModel external text', () => {
+  it('discards an external read superseded by the local save', async () => {
+    mocks.loadEditableFileData.mockResolvedValueOnce({ path: 'C:/mods/alpha/notes.txt', text: 'base', baseVersions: [] });
+    let invalidated!: (event: ProjectSessionInvalidatedEvent) => Promise<void>;
+    mocks.listenFileEditorProjectInvalidated.mockImplementationOnce(async (handler: unknown) => {
+      invalidated = handler as typeof invalidated;
+      return async () => {};
+    });
+    const vm = await initializeViewModel(paramsFixture({ filePath: 'C:/mods/alpha/notes.txt' }));
+    let release!: (loaded: { text: string; baseVersions: [] }) => void;
+    mocks.loadEditableFileData.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const reading = invalidated({
+      manifest: { sessionId: 's1', modRoot: 'C:/mods/alpha' },
+      invalidation: { paths: ['notes.txt'] },
+    } as ProjectSessionInvalidatedEvent);
+    vm.updateText('saved B');
+    mocks.writeEditableFileText.mockResolvedValueOnce({ changes: [], baseVersions: [] });
+    await vm.saveFile();
+    release({ text: 'older A', baseVersions: [] });
+    await reading;
+    expect(vm.text.value).toBe('saved B');
+    expect(vm.dirty.value).toBe(false);
+    vm.dispose();
+  });
   it.each(['data/hulls/test.file', 'data/hulls', 'C:/mods/alpha/data/hulls/test.file'])(
     'stages a dirty file version from the invalidation path %s',
     async (path) => {

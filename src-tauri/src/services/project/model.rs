@@ -294,6 +294,8 @@ pub(super) struct SessionCsvRow {
 }
 
 pub(super) struct ProjectSession {
+    pub source_entities: BTreeMap<String, String>,
+    pub source_versions: BTreeMap<String, crate::models::FileVersion>,
     pub manifest: ProjectManifest,
     pub faction_files: BTreeMap<String, Value>,
     pub tag_map: HashMap<String, String>,

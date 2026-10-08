@@ -704,7 +704,6 @@ async function pickWeaponSprite(field: WeaponSpriteField) {
   if (!relative) return;
   localWeapon.value[field] = relative;
   commitDraft();
-  setSpriteImage(field, '');
 }
 function save() {
   emit('save-requested');

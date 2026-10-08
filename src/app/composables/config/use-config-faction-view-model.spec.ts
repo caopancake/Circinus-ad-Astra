@@ -83,7 +83,7 @@ describe('useConfigFactionViewModel saveFaction', () => {
     const vm = mountViewModel();
     const local = { file: { id: 'existing', displayName: 'Existing' } };
 
-    await vm.saveFaction('sess-1', 'M:/mod', 'existing', local, schema);
+    await vm.saveFaction('sess-1', 'M:/mod', 'existing', local, schema, []);
 
     expect(mocks.saveIndexedEntityAction).toHaveBeenCalledWith(
       expect.objectContaining({ previousId: 'existing', nextId: 'existing', deletePreviousTarget: false }),
@@ -95,7 +95,7 @@ describe('useConfigFactionViewModel saveFaction', () => {
     const vm = mountViewModel();
     const local = { file: { id: 'renamed', displayName: 'Renamed' } };
 
-    await vm.saveFaction('sess-1', 'M:/mod', 'existing', local, schema);
+    await vm.saveFaction('sess-1', 'M:/mod', 'existing', local, schema, []);
 
     expect(mocks.saveIndexedEntityAction).toHaveBeenCalledWith(
       expect.objectContaining({ previousId: 'existing', nextId: 'renamed', deletePreviousTarget: true }),
@@ -105,7 +105,7 @@ describe('useConfigFactionViewModel saveFaction', () => {
 
   it('returns no saved id after rejecting an invalid faction id', async () => {
     const vm = mountViewModel();
-    expect(await vm.saveFaction('sess-1', 'M:/mod', 'existing', { file: { id: 'bad id' } }, schema)).toBeNull();
+    expect(await vm.saveFaction('sess-1', 'M:/mod', 'existing', { file: { id: 'bad id' } }, schema, [])).toBeNull();
     expect(mocks.saveIndexedEntityAction).not.toHaveBeenCalled();
     expect(feedbackStub.warning).toHaveBeenCalledWith(expect.stringContaining('势力 ID'), 'config.id_invalid');
   });

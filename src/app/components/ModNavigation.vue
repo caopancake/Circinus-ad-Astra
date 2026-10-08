@@ -1,5 +1,6 @@
 <template>
   <aside class="nav-pane">
+    <WriteSyncNotice />
     <template v-if="workspace.isModView && workspace.activeMod">
       <div class="nav-label">Mod 内容</div>
 
@@ -30,6 +31,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import WriteSyncNotice from '@/app/components/WriteSyncNotice.vue';
 import { buildModNavigationSections, isModNavigationItemActive, type ModNavigationItem } from '@/domain/workspace/mod-navigation';
 import { useWorkspaceNavigationActions } from '@/app/composables/use-workspace-navigation-actions';
 import { useProjectStore } from '@/stores/project.store';

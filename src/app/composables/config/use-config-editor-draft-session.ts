@@ -21,5 +21,6 @@ export function useConfigEditorDraftSession<TValue, TTarget, TLoadMeta = unknown
   const draftSession = useEditTargetDraftSession(options);
   const draftSessions = useDraftSessionsStore();
   onScopeDispose(draftSessions.registerDraftSession(options.modRoot, draftSession.dirty));
+  onScopeDispose(draftSession.dispose);
   return draftSession;
 }

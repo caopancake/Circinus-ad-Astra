@@ -10,7 +10,7 @@ mod project;
 mod tables;
 mod workspace_persistence;
 
-use crate::{errors::AppResult, models::command_payloads::SessionModScope, services};
+use crate::{errors::AppResult, models::SessionModScope, services};
 
 pub use app_feedback_log::*;
 pub use app_settings::*;
@@ -32,9 +32,4 @@ pub(crate) fn ensure_session_mod_scope<T: SessionModScope>(payload: &T) -> AppRe
         services::project::ensure_project_session_mod_root(session_id, payload.mod_root())?;
     }
     Ok(())
-}
-
-pub(crate) fn ensure_write_scope<T: SessionModScope>(payload: &T) -> AppResult<()> {
-    ensure_session_mod_scope(payload)?;
-    services::app_settings::ensure_core_editing_allowed(payload.mod_root())
 }

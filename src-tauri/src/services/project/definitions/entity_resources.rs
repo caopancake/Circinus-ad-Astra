@@ -77,23 +77,22 @@ pub(in crate::services::project) fn variant_resource_refs(
 
 pub(in crate::services::project) fn skin_entity_resource_refs(
     session: &ProjectSession,
-    id: &str,
-    data: &Value,
+    skin: &crate::models::SkinFile,
 ) -> BTreeMap<String, ResourceRef> {
     let mut refs = BTreeMap::new();
-    if let Some(sprite) = string_field(data, "spriteName") {
+    if let Some(sprite) = string_field(&skin.data, "spriteName") {
         refs.insert(
             "sprite".to_string(),
             resource_ref(
                 ResourceSource::Mod,
                 &sprite,
                 ResourceOwnerKind::Skin,
-                id,
+                &skin.skin_hull_id,
                 "sprite",
             ),
         );
-    } else if let Some(base_hull_id) = string_field(data, "baseHullId")
-        && let Ok(Some(resource)) = hull_resource_ref(session, ResourceSource::Mod, &base_hull_id)
+    } else if let Ok(Some(resource)) =
+        hull_resource_ref(session, ResourceSource::Mod, &skin.base_hull_id)
     {
         refs.insert("sprite".to_string(), resource);
     }

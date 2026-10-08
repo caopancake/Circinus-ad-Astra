@@ -7,7 +7,7 @@
 ## 参考
 
 `src/orchestrators/table-save.orchestrator.ts`：保存编排 owner，拥有目标捕获、noop 判定、patch 构造与保存后提交。
-`src/services/write.service.ts`：排他写 owner，拥有同目标互斥与 changeset 提交。
+`src/services/write.service.ts`：写入能力包装，提交 patches、版本凭据与关联动作。
 `src/shared/api/write-api.ts`：CSV 保存 wire API。
 `src/domain/tables/associated-spec-candidates.ts`：关联 spec 候选 owner。
 `src/domain/tables/csv-dirty.ts`：dirty 行形状 owner。
@@ -21,7 +21,7 @@
 - 重命名必须经 JSON-like 解析器处理，严禁字符串替换。
 - 无实际 changes 严禁记 history、清草稿或生成空文件；任一失败严禁提交本地保存状态。
 - 捕获目标必须与当前 manifest session 和 tables 状态一致，任一变化即放弃本次保存。
-- 排他写冲突必须以带动作的 AppError 上抛，严禁静默排队或丢弃。
+- 同根跨窗口写入必须由 Rust FIFO 排队；基线冲突必须以带动作的 AppError 上抛并保留草稿。
 - 保存完成登记必须在 dirty 清理之前完成，严禁先清后记。
 
 ## 链路
@@ -52,11 +52,12 @@
 
 ## 规范
 
+- CSV patch 必须携带读取基线，恢复行必须携带 insertAt；正式 rowKey 删除必须命中实际行，未知键必须返回冲突。
 - upsert patch 必须构造提交时的独立行快照，并剥离内部行键字段。
 - 删除 patch 必须携带删除动作标记，严禁以空 upsert 表达删除。
 - 保存请求期间的新编辑必须保留，original 必须以实际提交 patches 更新，dirty 必须按该基线重算。
 - 保存期间的查询与自身失效必须保留前端草稿；写后 refresh 必须保留与已写盘 after 快照相符的后端行身份。
-- 保存状态必须覆盖整个提交窗口，期间重复触发必须被排他写拒绝。
+- 保存状态必须覆盖整个提交窗口，同一编辑器重复触发必须保持当前请求；跨窗口请求必须进入后端队列。
 - 关联 spec 动作必须与 CSV 变更构成同一次原子 changeset，严禁分次写入。
 - 关联 spec 改名必须按本次 `preserveOriginalJson` 设置更新旧文件文本；需要整体重排时必须在 CSV 与 spec changeset 应用前确认。
 - 结构化失效必须由后端从同一 changeset 推导，严禁前端拼装失效路径。

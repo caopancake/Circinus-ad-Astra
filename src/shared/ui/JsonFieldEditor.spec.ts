@@ -29,11 +29,15 @@ describe('JsonFieldEditor', () => {
     expect(editor.emitted('update:modelValue')?.at(-1)).toEqual([{ text: '7', count: 3 }]);
   });
 
-  it('keeps invalid JSON as raw text for object fields', async () => {
+  it('keeps incomplete JSON in the input and commits a completed object', async () => {
     const editor = mountEditor({ knownKeys: [], modelValue: { nested: { a: 1 } } });
     const nestedInput = editor.get('.json-field-row textarea');
     await nestedInput.setValue('{broken');
-    expect(editor.emitted('update:modelValue')?.at(-1)).toEqual([{ nested: '{broken' }]);
+    expect(editor.emitted('update:modelValue')).toBeUndefined();
+    expect((nestedInput.element as HTMLTextAreaElement).value).toBe('{broken');
+    await nestedInput.setValue('{"a":2}');
+    await nestedInput.trigger('change');
+    expect(editor.emitted('update:modelValue')?.at(-1)).toEqual([{ nested: { a: 2 } }]);
   });
 
   it('removes fields and adds new blank ones', async () => {

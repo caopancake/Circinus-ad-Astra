@@ -4,16 +4,17 @@ import type { EntityData, ResourceRef, RowData, WriteResult } from '@/shared/typ
 const mocks = vi.hoisted(() => ({
   querySessionEntity: vi.fn(),
   querySessionEntityList: vi.fn(async () => [] as { id: string }[]),
-  querySessionWeaponDraftResources: vi.fn(async () => ({})),
+  querySessionEditorDraftResources: vi.fn(async () => ({})),
   queryResourceDataUrls: vi.fn(async () => [] as (string | null)[]),
   writeEditorSpec: vi.fn(),
   loadImportedEditorSpecFile: vi.fn(),
 }));
 
 vi.mock('@/services/query.service', () => ({
+  querySessionEntityBaseVersions: vi.fn(async () => []),
   querySessionEntity: mocks.querySessionEntity,
   querySessionEntityList: mocks.querySessionEntityList,
-  querySessionWeaponDraftResources: mocks.querySessionWeaponDraftResources,
+  querySessionEditorDraftResources: mocks.querySessionEditorDraftResources,
 }));
 
 vi.mock('@/services/resource-cache.service', () => ({
@@ -38,11 +39,20 @@ import {
 } from './editor.service';
 
 function entity(data: RowData, refs: Record<string, ResourceRef> = {}): EntityData {
-  return { kind: 'ship', id: String(data.id ?? ''), data, resourceRefs: refs };
+  return {
+    baseVersions: [],
+    kind: 'ship',
+    id: String(data.id ?? ''),
+    data,
+    resourceRefs: refs,
+  };
 }
 
 function writeResultFixture(): WriteResult {
   return {
+    baseVersions: [],
+    commitId: 1,
+    history: { revision: 1, undoStack: [], redoStack: [] },
     changes: [],
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
     keyMap: [],
@@ -107,7 +117,7 @@ describe('queryEditorEntityBundle', () => {
       return null;
     });
     mocks.queryResourceDataUrls.mockResolvedValue(['data:image/png;base64,DRAFT']);
-    mocks.querySessionWeaponDraftResources.mockResolvedValue({
+    mocks.querySessionEditorDraftResources.mockResolvedValue({
       turretSprite: { source: 'mod', relPath: 'graphics/draft.png', ownerKind: 'weapon', ownerId: 'railgun', key: 'turretSprite' },
     });
 
@@ -122,7 +132,7 @@ describe('queryEditorEntityBundle', () => {
     expect(bundle.weapon.projectileSpecId).toBe('proj_b');
     expect(bundle.projectileSpecs).toEqual({ proj_b: { id: 'proj_b', specClass: 'projectile', length: 42 } });
     expect(bundle.weaponSpriteData).toEqual({ turretSprite: 'data:image/png;base64,DRAFT' });
-    expect(mocks.querySessionWeaponDraftResources).toHaveBeenCalledWith('s1', 'railgun', {
+    expect(mocks.querySessionEditorDraftResources).toHaveBeenCalledWith('s1', 'weapon', 'railgun', {
       id: 'railgun',
       projectileSpecId: 'proj_b',
       turretSprite: 'graphics/draft.png',
@@ -206,7 +216,7 @@ describe('saveEditorSpecByKind and import', () => {
   it('wraps write failures with the spec save cause', async () => {
     mocks.writeEditorSpec.mockRejectedValue(new Error('disk on fire'));
     await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', 'ship', 'XY', { hullId: 'XY' })).rejects.toThrow('保存 XY spec 失败');
-    expect(mocks.writeEditorSpec).toHaveBeenCalledWith('s1', 'C:/mods/alpha', 'ship', 'XY', { hullId: 'XY' }, undefined);
+    expect(mocks.writeEditorSpec).toHaveBeenCalledWith('s1', 'C:/mods/alpha', 'ship', 'XY', { hullId: 'XY' }, undefined, []);
   });
 
   it('passes successful writes through unchanged', async () => {

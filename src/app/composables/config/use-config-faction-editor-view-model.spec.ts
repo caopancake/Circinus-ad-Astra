@@ -49,7 +49,7 @@ function mountEditor() {
   const factions = ref<Record<string, RowData>>({
     existing: { id: 'existing', displayName: 'Existing' },
   });
-  const saveFaction = vi.fn(async (_sessionId: string, _modRoot: string, previousId: string) => previousId);
+  const saveFaction = vi.fn(async (_sessionId: string, _modRoot: string, previousId: string) => ({ id: previousId, baseVersions: [] }));
   const queryPreviewImages = vi.fn(async () => ({ logoSrc: 'data:logo', crestSrc: 'data:crest' }));
   const onSaved = vi.fn();
   let vm!: ReturnType<typeof useConfigFactionEditorViewModel>;
@@ -60,6 +60,7 @@ function mountEditor() {
           dataRevision: ref(0),
           factionId,
           factions,
+          factionVersions: ref({}),
           modRoot: ref('M:/mod'),
           onSaved,
           previewRevision: ref(0),
@@ -99,7 +100,7 @@ describe('useConfigFactionEditorViewModel', () => {
     const { vm, saveFaction, onSaved } = mountEditor();
     await vi.waitFor(() => expect(vm.draftData.value).not.toEqual({}));
     await vm.save();
-    expect(saveFaction).toHaveBeenCalledWith('sess-1', 'M:/mod', 'existing', expect.anything(), { sections: [] });
+    expect(saveFaction).toHaveBeenCalledWith('sess-1', 'M:/mod', 'existing', expect.anything(), { sections: [] }, []);
     expect(onSaved).toHaveBeenCalledWith('existing');
     expect(mocks.feedback.error).not.toHaveBeenCalled();
   });

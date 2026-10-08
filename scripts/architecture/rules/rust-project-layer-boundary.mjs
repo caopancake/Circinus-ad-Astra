@@ -2,7 +2,7 @@ import { rustFile } from '../../shared/files.mjs';
 import { cratePaths } from '../../shared/rust-crate-paths.mjs';
 import { productionRustSource } from '../../shared/rust-source.mjs';
 
-/** @typedef {'commands' | 'project-query' | 'project-write' | 'project-resources' | 'project-cache' | 'project-session' | 'project-model' | 'project-root' | 'services' | 'domain' | 'io' | 'parsers' | 'models' | 'other'} RustLayer */
+/** @typedef {'commands' | 'project-query' | 'project-write' | 'project-resources' | 'project-cache' | 'project-session' | 'project-model' | 'project-root' | 'file-history' | 'services' | 'domain' | 'io' | 'parsers' | 'models' | 'other'} RustLayer */
 
 export const rustProjectLayerBoundaryRule = {
   name: 'rust-project-layer-boundary',
@@ -49,6 +49,7 @@ export const rustProjectLayerBoundaryRule = {
 
 /** @param {string} path @returns {RustLayer} */
 function rustLayer(path) {
+  if (/^src-tauri\/src\/services\/file_history(?:\.rs|\/)/.test(path)) return 'file-history';
   if (path.startsWith('src-tauri/src/commands/')) return 'commands';
   if (path.startsWith('src-tauri/src/services/project/query/')) return 'project-query';
   if (path.startsWith('src-tauri/src/services/project/write/')) return 'project-write';
@@ -74,6 +75,7 @@ function testOnlyRustFile(text) {
 
 /** @param {string} path @returns {RustLayer | null} */
 function rustLayerFromCratePath(path) {
+  if (path.startsWith('crate::services::file_history')) return 'file-history';
   if (path.startsWith('crate::commands')) return 'commands';
   if (path.startsWith('crate::services::project::query')) return 'project-query';
   if (path.startsWith('crate::services::project::write')) return 'project-write';
@@ -104,6 +106,7 @@ function stripFacadeReexports(text) {
 function validRustDependency(from, to) {
   if (from === to) return true;
   if (from === 'commands') return to === 'services' || to === 'models';
+  if (from === 'file-history') return ['io', 'models'].includes(to);
   if (from === 'project-query')
     return ['project-model', 'project-cache', 'project-root', 'project-resources', 'domain', 'io', 'parsers', 'models'].includes(to);
   if (from === 'project-write')
@@ -111,11 +114,11 @@ function validRustDependency(from, to) {
   if (from === 'project-resources') return ['project-model', 'project-cache', 'domain', 'io', 'parsers', 'models', 'services'].includes(to);
   if (from === 'project-cache') return ['project-model', 'domain', 'io', 'parsers', 'models'].includes(to);
   if (from === 'project-session')
-    return ['project-model', 'project-cache', 'project-root', 'domain', 'io', 'parsers', 'models'].includes(to);
+    return ['project-model', 'project-cache', 'project-root', 'file-history', 'domain', 'io', 'parsers', 'models'].includes(to);
   if (from === 'project-model') return ['domain', 'models'].includes(to);
   if (from === 'project-root')
     return ['project-cache', 'project-resources', 'project-model', 'domain', 'io', 'parsers', 'models'].includes(to);
-  if (from === 'services') return ['services', 'project-root', 'domain', 'io', 'parsers', 'models'].includes(to);
+  if (from === 'services') return ['services', 'file-history', 'project-root', 'domain', 'io', 'parsers', 'models'].includes(to);
   if (from === 'domain') return to === 'domain' || to === 'models';
   if (from === 'io') return to === 'io' || to === 'parsers' || to === 'models';
   if (from === 'parsers') return to === 'parsers' || to === 'models';

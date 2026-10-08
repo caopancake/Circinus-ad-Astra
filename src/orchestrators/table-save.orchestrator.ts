@@ -5,7 +5,8 @@ import { writeCsvPatch } from '@/services/write.service';
 import { useTablesStore } from '@/stores/tables.store';
 import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
 import { useProjectStore } from '@/stores/project.store';
-import { resolveTableRowKey, TABLE_ROW_KEY_FIELD } from '@/domain/tables/table-row-key';
+import { resolveTableRowKey } from '@/domain/tables/table-row-key';
+import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import { isLoadedCsvTableRow } from '@/domain/tables/csv-table-rows';
 import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
@@ -54,7 +55,7 @@ export async function saveCapturedTableChanges(
     const submittedHistory = csvEditHistory.captureSaveHistory(modRoot, table);
     const patches = buildCurrentTablePatches(state, table);
     const result = await runConfirmedJsonWrite(feedback, (options) =>
-      writeCsvPatch(manifest.sessionId, modRoot, table, patches, associatedSpecs, options),
+      writeCsvPatch(manifest.sessionId, modRoot, table, patches, associatedSpecs, options, state.baseVersions[table]),
     );
     if (!result) return 'cancelled';
     recordLogBestEffort({
@@ -77,6 +78,7 @@ export async function saveCapturedTableChanges(
       await completeSavedWrite({ modRoot, result, label: `保存 ${table} CSV`, sessionId: manifest.sessionId }, useProjectStore());
       if (!isTableSaveTargetCurrent(target)) return 'saved';
       commitCsvTableSaveDraft(state, table, patches, result.keyMap);
+      state.baseVersions[table] = result.baseVersions;
       csvEditHistory.applySavedRowKeyMap(modRoot, table, result.keyMap);
       csvEditHistory.commitSaveHistory(modRoot, table, submittedHistory);
       if (Object.keys(state.dirty[table]).length === 0) csvEditHistory.clearCsvEditHistory(modRoot, table);
@@ -101,8 +103,7 @@ function buildCurrentTablePatches(state: ModTableState, table: TableKey): CsvRow
     const row = state.tables[table].find(
       (candidate, index) => isLoadedCsvTableRow(candidate) && resolveTableRowKey(table, candidate, index) === rowKey,
     );
-    const cleanRow = { ...(row ?? {}) };
-    delete cleanRow[TABLE_ROW_KEY_FIELD];
-    return { rowKey, action: 'upsert', row: cleanRow };
+    const cleanRow = Object.fromEntries(Object.entries(row ?? {}).filter(([key]) => !isInternalJsonFieldKey(key)));
+    return { rowKey, action: 'upsert', row: cleanRow, ...(typeof row?._insertAt === 'number' ? { insertAt: row._insertAt } : {}) };
   });
 }

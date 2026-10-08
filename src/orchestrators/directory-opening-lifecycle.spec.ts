@@ -41,6 +41,7 @@ const modRoot = 'D:/game/mods/demo';
 
 function manifest(sessionId: string): ProjectManifest {
   return {
+    baseVersions: [],
     sessionId,
     modRoot,
     starsectorRoot: null,

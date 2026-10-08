@@ -1,4 +1,9 @@
-import { querySessionEntity, querySessionEntityList, querySessionWeaponDraftResources } from '@/services/query.service';
+import {
+  querySessionEntity,
+  querySessionEntityList,
+  querySessionEditorDraftResources,
+  querySessionEntityBaseVersions,
+} from '@/services/query.service';
 import { AppError, withCause } from '@/shared/lib/errors';
 import { queryResourceDataUrls } from '@/services/resource-cache.service';
 import { writeEditorSpec } from '@/services/write.service';
@@ -14,6 +19,7 @@ export type EditorEntityBundle =
   ShipEditorEntityBundle | WeaponEditorEntityBundle | ProjectileEditorEntityBundle | SystemEditorEntityBundle | WeaponPreviewEntityBundle;
 
 export interface ShipEditorEntityBundle {
+  baseVersions: import('@/shared/types').FileVersion[];
   kind: 'ship';
   ship: RowData;
   resourceRefs: ResourceRef[];
@@ -22,6 +28,7 @@ export interface ShipEditorEntityBundle {
 }
 
 export interface WeaponEditorEntityBundle {
+  baseVersions: import('@/shared/types').FileVersion[];
   kind: 'weapon';
   weapon: RowData;
   weaponCsvRow: RowData;
@@ -33,6 +40,7 @@ export interface WeaponEditorEntityBundle {
 }
 
 export interface WeaponPreviewEntityBundle {
+  baseVersions: import('@/shared/types').FileVersion[];
   kind: 'weapon-preview';
   weapon: RowData;
   weaponCsvRow: RowData;
@@ -43,6 +51,7 @@ export interface WeaponPreviewEntityBundle {
 }
 
 export interface ProjectileEditorEntityBundle {
+  baseVersions: import('@/shared/types').FileVersion[];
   kind: 'projectile';
   projectile: RowData;
   projectileSpecs: Record<string, RowData>;
@@ -50,6 +59,7 @@ export interface ProjectileEditorEntityBundle {
 }
 
 export interface SystemEditorEntityBundle {
+  baseVersions: import('@/shared/types').FileVersion[];
   kind: 'system';
   system: RowData;
   isNew: boolean;
@@ -75,6 +85,15 @@ export async function refreshBundleResources(sessionId: ProjectSessionId, bundle
     return { ...bundle, weaponSpriteData: await queryWeaponSprites(sessionId, resourceRefsByKey(bundle.resourceRefs)) };
   }
   return bundle;
+}
+
+export async function queryDraftEditorImages(sessionId: ProjectSessionId, kind: 'ship' | 'weapon', id: string, draft: RowData) {
+  const refs = await querySessionEditorDraftResources(sessionId, kind, id, draft);
+  return {
+    resourceRefs: Object.values(refs),
+    shipSpriteData: kind === 'ship' ? await querySpriteData(sessionId, refs.sprite ?? null) : '',
+    weaponSpriteData: kind === 'weapon' ? await queryWeaponSprites(sessionId, refs) : {},
+  };
 }
 
 export async function refreshBundleProjectiles(
@@ -114,6 +133,7 @@ async function queryShipEditorBundle(sessionId: ProjectSessionId, id: string): P
   const shipSpec = ship ? requireRowData(ship.data, `舰船 ${id} 数据无效`) : defaultEditorSpec('ship', id);
   return {
     kind: 'ship',
+    baseVersions: ship ? ship.baseVersions : await querySessionEntityBaseVersions(sessionId, 'ship', id),
     ship: shipSpec,
     resourceRefs: ship ? Object.values(ship.resourceRefs) : [],
     shipSpriteData: ship ? await querySpriteData(sessionId, ship.resourceRefs.sprite ?? null) : '',
@@ -160,11 +180,14 @@ async function queryWeaponLikeBundle(
   const weaponSpec = weaponOverride ?? savedWeaponSpec;
   const weaponCsvRow = requireRowData(weaponEntity.csvRow, `武器 ${id} CSV 数据无效`);
   const isNew = Object.keys(weaponSpec).length === 0;
-  const resourceRefs = weaponOverride ? await querySessionWeaponDraftResources(sessionId, id, weaponOverride) : weapon.resourceRefs;
+  const resourceRefs = weaponOverride
+    ? await querySessionEditorDraftResources(sessionId, 'weapon', id, weaponOverride)
+    : weapon.resourceRefs;
   const projectileId = typeof weaponSpec.projectileSpecId === 'string' ? weaponSpec.projectileSpecId : '';
   const weaponProjectile = projectileId ? await querySessionEntity(sessionId, 'projectile', projectileId) : null;
   return {
     weapon: weaponSpec,
+    baseVersions: weapon.baseVersions,
     weaponCsvRow,
     isNew,
     projectileSpecs: weaponProjectile ? { [projectileId]: requireRowData(weaponProjectile.data, `弹体 ${projectileId} 数据无效`) } : {},
@@ -178,6 +201,7 @@ async function queryProjectileEditorBundle(sessionId: ProjectSessionId, id: stri
   const spec = projectile ? requireRowData(projectile.data, `弹体 ${id} 数据无效`) : defaultEditorSpec('projectile', id);
   return {
     kind: 'projectile',
+    baseVersions: projectile ? projectile.baseVersions : await querySessionEntityBaseVersions(sessionId, 'projectile', id),
     projectile: spec,
     projectileSpecs: { [id]: spec },
     isNew: !projectile,
@@ -188,6 +212,7 @@ async function querySystemEditorBundle(sessionId: ProjectSessionId, id: string):
   const system = await querySessionEntity(sessionId, 'system', id);
   return {
     kind: 'system',
+    baseVersions: system ? system.baseVersions : await querySessionEntityBaseVersions(sessionId, 'system', id),
     system: system ? requireRowData(system.data, `战术系统 ${id} 数据无效`) : defaultEditorSpec('system', id),
     isNew: !system,
   };
@@ -200,10 +225,11 @@ export async function saveEditorSpecByKind(
   id: string,
   data: RowData,
   jsonWrite?: import('@/shared/types').JsonWriteOptions,
+  baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
   ensureSpecContext(modRoot, id);
   try {
-    return await writeEditorSpec(sessionId, modRoot, kind, id, data, jsonWrite);
+    return await writeEditorSpec(sessionId, modRoot, kind, id, data, jsonWrite, baseVersions);
   } catch (error) {
     throw withCause(`保存 ${id} spec 失败`, error, `save-${kind}-spec`);
   }

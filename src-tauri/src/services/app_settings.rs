@@ -24,6 +24,7 @@ pub fn load_app_settings(app_handle: tauri::AppHandle) -> AppResult<AppSettings>
     let app_data = app_paths::app_data_dir(app_handle)?;
     let settings = load_settings(&app_data)?;
     ALLOW_CORE_EDITING.store(settings.allow_core_editing, Ordering::Release);
+    super::file_history::set_history_limit(settings.history_limit as usize)?;
     Ok(settings)
 }
 
@@ -44,6 +45,7 @@ pub fn save_app_settings(
     prepare_log_directory(&app_data, &mut settings)?;
     save_settings(&app_data, &settings)?;
     ALLOW_CORE_EDITING.store(settings.allow_core_editing, Ordering::Release);
+    super::file_history::set_history_limit(settings.history_limit as usize)?;
     Ok(settings)
 }
 

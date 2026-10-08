@@ -29,6 +29,7 @@ import { useWorkspaceStore } from '@/stores/workspace.store';
 
 function manifestFixture(modRoot: string): ProjectManifest {
   return {
+    baseVersions: [],
     sessionId: 's1',
     modRoot,
     starsectorRoot: null,

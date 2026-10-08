@@ -2,9 +2,9 @@ use crate::{
     errors::AppError,
     models::command_payloads::{
         CloseProjectSessionPayload, CsvRowPreviewPayload, CsvSourceOptionsPayload,
-        CsvTableWindowPayload, HullReferencesPayload, InvalidateCoreCachePayload,
-        InvalidateProjectSessionPayload, QueryEntityListPayload, QueryEntityPayload,
-        ResourceDataUrlBatchPayload, WeaponDraftResourcesPayload,
+        CsvTableWindowPayload, EditorDraftResourcesPayload, HullReferencesPayload,
+        InvalidateCoreCachePayload, InvalidateProjectSessionPayload, QueryEntityListPayload,
+        QueryEntityPayload, ResourceDataUrlBatchPayload,
     },
     models::{
         CsvRowPreview, CsvTableWindow, EntityData, HullReferencesResult,
@@ -55,16 +55,24 @@ pub fn query_entity(payload: QueryEntityPayload) -> Result<Option<EntityData>, A
 }
 
 #[tauri::command(async)]
+pub fn query_entity_base_versions(
+    payload: QueryEntityPayload,
+) -> Result<Vec<crate::models::FileVersion>, AppError> {
+    services::project::query_entity_base_versions(&payload.session_id, payload.kind, &payload.id)
+}
+
+#[tauri::command(async)]
 pub fn query_entity_list(payload: QueryEntityListPayload) -> Result<Vec<EntityData>, AppError> {
     services::project::query_entity_list(&payload.session_id, payload.kind)
 }
 
 #[tauri::command(async)]
-pub fn query_weapon_draft_resources(
-    payload: WeaponDraftResourcesPayload,
+pub fn query_editor_draft_resources(
+    payload: EditorDraftResourcesPayload,
 ) -> Result<std::collections::BTreeMap<String, crate::models::ResourceRef>, AppError> {
-    services::project::query_weapon_draft_resources(
+    services::project::query_editor_draft_resources(
         &payload.session_id,
+        payload.kind,
         &payload.id,
         &payload.draft,
     )

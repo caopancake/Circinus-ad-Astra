@@ -7,7 +7,7 @@ import { requestProjectSessionRefresh } from '@/services/session.service';
 import { invalidateQueryCacheByProject } from '@/services/query-cache.service';
 import { invalidateResourceCacheByProject } from '@/services/resource-cache.service';
 import { isAbsoluteFsPath, pathBelongsToRoot, pathIsProjectScopedChangedPath } from '@/shared/lib/paths';
-import { AppError } from '@/shared/lib/errors';
+import { AppError, formatError } from '@/shared/lib/errors';
 import type { ProjectManifest, WriteResult } from '@/shared/types';
 
 function emitProjectSessionInvalidated(event: ProjectSessionInvalidatedEvent) {
@@ -64,8 +64,16 @@ async function refreshProjectSessionByChanges(
 ): Promise<ProjectSessionInvalidatedEvent> {
   const sync = useWriteSyncStore();
   const entry = sync.enqueue(manifest.modRoot, manifest.sessionId, changes);
-  const events = await retryPendingProjectSessionWrites(project, manifest.sessionId);
-  return events.find((event) => event.id === entry.id)!.event;
+  let events: PendingWriteEvent[];
+  try {
+    events = await retryPendingProjectSessionWrites(project, manifest.sessionId);
+  } catch (error) {
+    sync.markFailed(entry.id, formatError(error));
+    throw error;
+  }
+  const completed = events.find((event) => event.id === entry.id);
+  if (!completed) throw new AppError('会话已关闭，本次同步已结束', { action: 'refresh-project-session-after-write' });
+  return completed.event;
 }
 
 const syncExecutions = new Map<string, Promise<PendingWriteEvent[]>>();
@@ -93,8 +101,10 @@ async function synchronizePendingWrites(project: ReturnType<typeof useProjectSto
   const sync = useWriteSyncStore();
   const events: PendingWriteEvent[] = [];
   for (const entry of sync.pending.filter((entry) => entry.sessionId === sessionId)) {
+    if (project.getSessionId(entry.modRoot) !== entry.sessionId || !sync.pending.some((pending) => pending.id === entry.id)) continue;
     if (!entry.refreshed) {
       const refreshed = await requestProjectSessionRefresh(entry.sessionId, entry.changes);
+      if (project.getSessionId(entry.modRoot) !== entry.sessionId || !sync.pending.some((pending) => pending.id === entry.id)) continue;
       project.replaceProjectManifest(refreshed.manifest);
       applyProjectSessionCacheInvalid(refreshed);
       sync.markRefreshed(entry.id, refreshed);

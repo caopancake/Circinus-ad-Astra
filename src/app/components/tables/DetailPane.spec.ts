@@ -62,6 +62,7 @@ afterEach(() => {
 
 function manifestFixture(modRoot: string): ProjectManifest {
   return {
+    baseVersions: [],
     sessionId: 'sess-1',
     modRoot,
     starsectorRoot: null,
@@ -110,6 +111,7 @@ describe('DetailPane', () => {
     const manifest = useProjectStore().getManifest('M:/mod')!;
     // Seed one ship row through the table state store.
     const window = {
+      baseVersions: [],
       table: 'ships',
       start: 0,
       header: ['id', 'name'],
@@ -135,6 +137,7 @@ describe('DetailPane', () => {
     activateProject();
     const tables = useTablesStore();
     const window = {
+      baseVersions: [],
       table: 'ships',
       start: 0,
       header: ['id'],
@@ -155,6 +158,7 @@ describe('DetailPane', () => {
     activateProject();
     const tables = useTablesStore();
     const window = {
+      baseVersions: [],
       table: 'ships',
       start: 0,
       header: ['id'],

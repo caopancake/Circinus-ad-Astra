@@ -12,6 +12,7 @@ import type {
 } from '@/shared/types';
 
 export interface ConfigFactionRecord {
+  baseVersions: import('@/shared/types').FileVersion[];
   crestRef: ResourceRef | null;
   id: string;
   data: RowData;
@@ -23,6 +24,7 @@ export interface ConfigFactionPreviewImages {
 }
 
 export interface ConfigMissionRecord {
+  baseVersions: import('@/shared/types').FileVersion[];
   iconRef: ResourceRef | null;
   id: string;
   list: RowData;
@@ -40,6 +42,7 @@ export interface ConfigSkinRecord {
 
 export function toConfigFactionRecord(entity: EntityData): ConfigFactionRecord {
   return {
+    baseVersions: entity.baseVersions,
     crestRef: entity.resourceRefs.crest ?? null,
     id: entity.id,
     data: requireRowData(entity.data, `势力 ${entity.id} 数据无效`),
@@ -49,6 +52,7 @@ export function toConfigFactionRecord(entity: EntityData): ConfigFactionRecord {
 export function toConfigMissionRecord(entity: EntityData): ConfigMissionRecord {
   const data = requireRowData(entity.data, `战役 ${entity.id} 数据无效`);
   return {
+    baseVersions: entity.baseVersions,
     iconRef: entity.resourceRefs.icon ?? null,
     id: entity.id,
     list: { ...requireRowData(data.list, `战役 ${entity.id} 列表数据无效`), id: entity.id },
@@ -57,14 +61,14 @@ export function toConfigMissionRecord(entity: EntityData): ConfigMissionRecord {
 
 export function toConfigVariantRecord(entity: EntityData): ConfigVariantRecord {
   return {
-    variant: variantFileFromEntityData(entity.data),
+    variant: variantFileFromEntityData(entity.data, entity.baseVersions),
     spriteRef: entity.resourceRefs.sprite ?? null,
   };
 }
 
 export function toConfigSkinRecord(entity: EntityData): ConfigSkinRecord {
   return {
-    skin: skinFileFromEntityData(entity.data),
+    skin: skinFileFromEntityData(entity.data, entity.baseVersions),
     spriteRef: entity.resourceRefs.sprite ?? null,
   };
 }
@@ -72,6 +76,7 @@ export function toConfigSkinRecord(entity: EntityData): ConfigSkinRecord {
 export function missionEditorDataFromEntity(entity: EntityData, iconSrc: string): ConfigMissionEditorData {
   const data = requireRowData(entity.data, `战役 ${entity.id} 数据无效`);
   return {
+    baseVersions: entity.baseVersions,
     list: requireRowData(data.list, `战役 ${entity.id} 列表数据无效`),
     descriptor: requireRowData(data.descriptor, `战役 ${entity.id} descriptor 数据无效`),
     text: stringField(data, 'text', `战役 ${entity.id} 文本数据无效`),
@@ -82,6 +87,7 @@ export function missionEditorDataFromEntity(entity: EntityData, iconSrc: string)
 export function indexedConfigEntityData(result: WriteResult): IndexedConfigEntityData {
   const row = requireRowData(result.refreshedEntity, '配置保存返回数据无效');
   return {
+    baseVersions: result.baseVersions,
     entityId: stringField(row, 'entityId', '配置保存返回 entityId 无效'),
     indexPath: stringField(row, 'indexPath', '配置保存返回 indexPath 无效'),
     indexHeader: stringArrayField(row, 'indexHeader', '配置保存返回 indexHeader 无效'),
@@ -91,16 +97,17 @@ export function indexedConfigEntityData(result: WriteResult): IndexedConfigEntit
 }
 
 export function variantEntityData(result: WriteResult): VariantFile {
-  return variantFileFromEntityData(result.refreshedEntity);
+  return variantFileFromEntityData(result.refreshedEntity, result.baseVersions);
 }
 
 export function skinEntityData(result: WriteResult): SkinFile {
-  return skinFileFromEntityData(result.refreshedEntity);
+  return skinFileFromEntityData(result.refreshedEntity, result.baseVersions);
 }
 
-function variantFileFromEntityData(value: unknown): VariantFile {
+function variantFileFromEntityData(value: unknown, baseVersions: import('@/shared/types').FileVersion[]): VariantFile {
   const row = requireRowData(value, '装配数据无效');
   return {
+    baseVersions,
     variantId: stringField(row, 'variantId', '装配 variantId 无效'),
     hullId: stringField(row, 'hullId', '装配 hullId 无效'),
     path: stringField(row, 'path', '装配 path 无效'),
@@ -113,9 +120,10 @@ function variantFileFromEntityData(value: unknown): VariantFile {
   };
 }
 
-function skinFileFromEntityData(value: unknown): SkinFile {
+function skinFileFromEntityData(value: unknown, baseVersions: import('@/shared/types').FileVersion[]): SkinFile {
   const row = requireRowData(value, '舰船皮肤数据无效');
   return {
+    baseVersions,
     skinHullId: stringField(row, 'skinHullId', '舰船皮肤 skinHullId 无效'),
     baseHullId: stringField(row, 'baseHullId', '舰船皮肤 baseHullId 无效'),
     path: stringField(row, 'path', '舰船皮肤 path 无效'),

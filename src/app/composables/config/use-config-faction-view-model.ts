@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import { listConfigFactionRecords, queryFactionPreviewImages } from '@/services/config-entity.service';
 import { createIndexedEntityAction, deleteIndexedEntityAction, saveIndexedEntityAction } from '@/orchestrators/config-save.orchestrator';
 import {
@@ -22,6 +22,7 @@ export function useConfigFactionViewModel() {
   const factionDataRevision = ref(0);
   const factionPreviewRevision = ref(0);
   const factions = ref<Record<string, RowData>>({});
+  const factionVersions = ref<Record<string, import('@/shared/types').FileVersion[]>>({});
   const factionCrestRefs = ref<Record<string, ResourceRef | null>>({});
   const factionCrestResourceRefs = ref<ResourceRef[]>([]);
   const listLoadStartedAt = ref(0);
@@ -31,22 +32,33 @@ export function useConfigFactionViewModel() {
   const modRoot = computed(() => project.activeManifest?.modRoot ?? null);
   const sessionId = computed(() => project.activeManifest?.sessionId ?? null);
   let factionsRequestId = 0;
+  const savingSessions = new Set<string>();
+  let listSessionKey: string | null = null;
+  let disposed = false;
+
+  function sessionKey() {
+    return JSON.stringify([sessionId.value, modRoot.value]);
+  }
 
   async function loadFactions(options: { reloadEditorData: boolean } = { reloadEditorData: true }) {
     const requestId = ++factionsRequestId;
     const sessionId = project.activeSessionId;
-    if (!sessionId) {
+    const key = sessionKey();
+    if (key !== listSessionKey) {
+      listSessionKey = key;
       factions.value = {};
+      factionVersions.value = {};
       factionCrestRefs.value = {};
       factionCrestResourceRefs.value = [];
       selectedFaction.value = null;
-      return;
     }
+    if (!sessionId || disposed) return;
     listLoadStartedAt.value = performance.now();
     try {
       const records = await listConfigFactionRecords(sessionId);
-      if (requestId !== factionsRequestId || sessionId !== project.activeSessionId) return;
+      if (disposed || requestId !== factionsRequestId || key !== sessionKey()) return;
       factions.value = Object.fromEntries(records.map((record) => [record.id, record.data]));
+      factionVersions.value = Object.fromEntries(records.map((record) => [record.id, record.baseVersions]));
       factionCrestRefs.value = Object.fromEntries(records.map((record) => [record.id, record.crestRef]));
       factionCrestResourceRefs.value = records.flatMap((record) => (record.crestRef ? [record.crestRef] : []));
       if (selectedFaction.value && !factions.value[selectedFaction.value]) selectedFaction.value = null;
@@ -54,7 +66,7 @@ export function useConfigFactionViewModel() {
       factionPreviewRevision.value += 1;
       if (options.reloadEditorData) factionDataRevision.value += 1;
     } catch (error) {
-      if (requestId !== factionsRequestId || sessionId !== project.activeSessionId) return;
+      if (disposed || requestId !== factionsRequestId || key !== sessionKey()) return;
       feedback.error(error, '加载势力失败');
     }
   }
@@ -71,6 +83,7 @@ export function useConfigFactionViewModel() {
     }
     try {
       await createIndexedEntityAction({
+        baseVersions: [],
         sessionId: createSessionId,
         modRoot: createModRoot,
         kind: 'faction',
@@ -82,8 +95,10 @@ export function useConfigFactionViewModel() {
       });
       feedback.success(`势力 "${id}" 已创建`);
       if (project.activeManifest?.modRoot !== createModRoot || project.activeManifest.sessionId !== createSessionId) return true;
-      selectedFaction.value = id;
       await loadFactions();
+      if (disposed || project.activeManifest?.modRoot !== createModRoot || project.activeManifest.sessionId !== createSessionId)
+        return true;
+      selectedFaction.value = id;
       return true;
     } catch (error) {
       feedback.error(error, '创建势力失败');
@@ -97,7 +112,8 @@ export function useConfigFactionViewModel() {
     previousId: string,
     local: RowData,
     schema: FileSchema,
-  ): Promise<string | null> {
+    baseVersions: import('@/shared/types').FileVersion[],
+  ): Promise<import('@/shared/types').ConfigSaveIdentity | null> {
     const draft = configFactionSaveDraft(local, schema);
     const nextId = draft.nextId;
     if (!isConfigEntityId(nextId)) {
@@ -105,29 +121,45 @@ export function useConfigFactionViewModel() {
       return null;
     }
     const idChanged = nextId !== previousId;
-    const saved = await saveIndexedEntityAction(
-      {
-        sessionId: saveSessionId,
-        modRoot: saveModRoot,
-        kind: 'faction',
-        previousId,
-        nextId,
-        indexRow: buildFactionIndexRow(nextId),
-        entityData: { file: draft.file },
-        deletePreviousTarget: idChanged,
-      },
-      feedback,
-    );
+    savingSessions.add(saveSessionId);
+    factionsRequestId++;
+    let saved;
+    try {
+      saved = await saveIndexedEntityAction(
+        {
+          sessionId: saveSessionId,
+          baseVersions,
+          modRoot: saveModRoot,
+          kind: 'faction',
+          previousId,
+          nextId,
+          indexRow: buildFactionIndexRow(nextId),
+          entityData: { file: draft.file },
+          deletePreviousTarget: idChanged,
+        },
+        feedback,
+      );
+    } finally {
+      savingSessions.delete(saveSessionId);
+    }
     if (!saved) return null;
     feedback.success(`势力 "${nextId}" 已保存`);
-    if (project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId) return nextId;
-    selectedFaction.value = nextId;
-    await loadFactions();
-    return nextId;
+    if (disposed || project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId)
+      return { id: nextId, baseVersions: saved.baseVersions };
+    const nextFactions = { ...factions.value };
+    delete nextFactions[previousId];
+    nextFactions[nextId] = draft.file;
+    factions.value = nextFactions;
+    const nextVersions = { ...factionVersions.value };
+    delete nextVersions[previousId];
+    nextVersions[nextId] = saved.baseVersions;
+    factionVersions.value = nextVersions;
+    return { id: nextId, baseVersions: saved.baseVersions };
   }
 
   async function deleteFaction(deleteSessionId: string, deleteModRoot: string, id: string, deleteFile: boolean): Promise<boolean> {
-    await deleteIndexedEntityAction(deleteSessionId, deleteModRoot, 'faction', id, deleteFile);
+    if (disposed || sessionId.value !== deleteSessionId || modRoot.value !== deleteModRoot) return false;
+    await deleteIndexedEntityAction(deleteSessionId, deleteModRoot, 'faction', id, deleteFile, factionVersions.value[id] ?? []);
     feedback.success(`势力 "${id}" 已删除`);
     if (project.activeManifest?.modRoot !== deleteModRoot || project.activeManifest.sessionId !== deleteSessionId) return true;
     if (selectedFaction.value === id) selectedFaction.value = null;
@@ -135,15 +167,11 @@ export function useConfigFactionViewModel() {
     return true;
   }
 
-  onMounted(loadFactions);
-  watch(
-    () => project.activeSessionId,
-    () => void loadFactions({ reloadEditorData: true }),
-  );
+  watch([sessionId, modRoot], () => void loadFactions({ reloadEditorData: true }), { immediate: true, flush: 'sync' });
   const stopQueryInvalidation = subscribeQueryInvalidations((event) => {
     if (event.sessionId !== project.activeSessionId) return;
     const factionsChanged = hasEntityInvalidation(event, 'entity-list', 'faction');
-    if (factionsChanged) void loadFactions({ reloadEditorData: true });
+    if (factionsChanged && !savingSessions.has(event.sessionId)) void loadFactions({ reloadEditorData: true });
   });
   const stopResourceInvalidation = subscribeResourceInvalidations((event) => {
     if (event.sessionId !== project.activeSessionId) return;
@@ -151,6 +179,8 @@ export function useConfigFactionViewModel() {
     factionPreviewRevision.value += 1;
   });
   onUnmounted(() => {
+    disposed = true;
+    factionsRequestId++;
     stopQueryInvalidation();
     stopResourceInvalidation();
   });
@@ -165,6 +195,7 @@ export function useConfigFactionViewModel() {
     factionPreviewRevision,
     listLoadStartedAt,
     factions,
+    factionVersions,
     factionCrestRefs,
     modRoot,
     sessionId,

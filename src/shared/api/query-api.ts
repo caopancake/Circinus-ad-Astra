@@ -41,12 +41,25 @@ export function queryEntity(sessionId: ProjectSessionId, kind: EntityKind, id: s
   return invoke('query_entity', { payload: { sessionId, kind, id } });
 }
 
+export function queryEntityBaseVersions(
+  sessionId: ProjectSessionId,
+  kind: EntityKind,
+  id: string,
+): Promise<import('@/shared/types').FileVersion[]> {
+  return invoke('query_entity_base_versions', { payload: { sessionId, kind, id } });
+}
+
 export function queryEntityList(sessionId: ProjectSessionId, kind: EntityKind): Promise<EntityData[]> {
   return invoke('query_entity_list', { payload: { sessionId, kind } });
 }
 
-export function queryWeaponDraftResources(sessionId: ProjectSessionId, id: string, draft: RowData): Promise<Record<string, ResourceRef>> {
-  return invoke('query_weapon_draft_resources', { payload: { sessionId, id, draft } });
+export function queryEditorDraftResources(
+  sessionId: ProjectSessionId,
+  kind: import('@/shared/types').EditorSpecKind,
+  id: string,
+  draft: RowData,
+): Promise<Record<string, ResourceRef>> {
+  return invoke('query_editor_draft_resources', { payload: { sessionId, kind, id, draft } });
 }
 
 export function queryResourceDataUrlBatch(sessionId: ProjectSessionId, resources: ResourceRef[]): Promise<ResourceDataUrlBatchResult> {

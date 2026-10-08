@@ -76,6 +76,7 @@ pub fn save_csv_patch_with_json_options(
         table_data.next_row_seq = next_row_seq;
         table_data.saved_text = Some(csv_text);
     }
+    super::super::cache::refresh_faction_annotations(&mut session);
     let write_result: WriteResult<()> = WriteResult::new(changes, key_map, None);
     debug_assert!(
         write_result
@@ -98,7 +99,18 @@ fn apply_csv_row_patches(
     let mut key_map = Vec::new();
     for patch in patches {
         match patch.action {
-            CsvRowPatchAction::Delete => rows.retain(|row| row.row_key != patch.row_key),
+            CsvRowPatchAction::Delete => {
+                let index = rows
+                    .iter()
+                    .position(|row| row.row_key == patch.row_key)
+                    .ok_or_else(|| {
+                        AppError::message(
+                            "table.row_key_unknown",
+                            format!("CSV delete row key does not exist: {}", patch.row_key),
+                        )
+                    })?;
+                rows.remove(index);
+            }
             CsvRowPatchAction::Upsert => {
                 if let Some(row) = rows.iter_mut().find(|row| row.row_key == patch.row_key) {
                     row.row = patch.row;
@@ -108,11 +120,22 @@ fn apply_csv_row_patches(
                     key_map.push(CsvRowKeyMapping {
                         previous_key: patch.row_key,
                         next_key: next_key.clone(),
+                        row_index: patch.insert_at.unwrap_or(rows.len()),
                     });
-                    rows.push(SessionCsvRow {
-                        row_key: next_key,
-                        row: patch.row,
-                    });
+                    let index = patch.insert_at.unwrap_or(rows.len());
+                    if index > rows.len() {
+                        return Err(AppError::message(
+                            "table.insert_position_invalid",
+                            "CSV insertion position exceeds the current table",
+                        ));
+                    }
+                    rows.insert(
+                        index,
+                        SessionCsvRow {
+                            row_key: next_key,
+                            row: patch.row,
+                        },
+                    );
                 } else {
                     return Err(AppError::message(
                         "table.row_key_unknown",
@@ -121,6 +144,12 @@ fn apply_csv_row_patches(
                 }
             }
         }
+    }
+    for mapping in &mut key_map {
+        mapping.row_index = rows
+            .iter()
+            .position(|row| row.row_key == mapping.next_key)
+            .expect("inserted row survives the submitted patch");
     }
     Ok(key_map)
 }
@@ -147,6 +176,12 @@ fn add_associated_spec_change(
     let rel_path = definition.default_rel_path(&change.id);
     match change.action {
         AssociatedSpecChangeAction::Create => {
+            if builder.root().join(&rel_path).exists() {
+                return Err(AppError::message(
+                    "spec.target_exists",
+                    format!("关联文件已存在: {rel_path}"),
+                ));
+            }
             builder.text_file(
                 rel_path,
                 Some(default_associated_spec_text(
@@ -160,6 +195,12 @@ fn add_associated_spec_change(
             builder.text_file(rel_path, None)?;
         }
         AssociatedSpecChangeAction::Rename => {
+            if builder.root().join(&rel_path).exists() {
+                return Err(AppError::message(
+                    "spec.target_exists",
+                    format!("关联目标已存在: {rel_path}"),
+                ));
+            }
             let previous_id = change.previous_id.as_deref().ok_or_else(|| {
                 AppError::message(
                     "spec.rename_missing_previous_id",
@@ -248,6 +289,7 @@ mod tests {
             &session_id,
             CsvTableKey::Ships,
             vec![CsvRowPatch {
+                insert_at: None,
                 row_key: "ships:new:1".to_string(),
                 action: CsvRowPatchAction::Upsert,
                 row: row.clone(),
@@ -309,11 +351,13 @@ mod tests {
             CsvTableKey::Ships,
             vec![
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: window.rows[0].row_key.clone(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:new:0".to_string(),
                     action: CsvRowPatchAction::Upsert,
                     row: row_with_id("id", "d"),
@@ -346,6 +390,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Ships,
             vec![CsvRowPatch {
+                insert_at: None,
                 row_key: survivor_key,
                 action: CsvRowPatchAction::Upsert,
                 row: row_with_id("id", "b2"),
@@ -407,6 +452,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Delete,
                 row: Map::new(),
@@ -469,6 +515,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,
                 row,
@@ -532,6 +579,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,
                 row,
@@ -585,6 +633,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,
                 row,
@@ -636,6 +685,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,
                 row,
@@ -679,6 +729,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Ships,
             vec![CsvRowPatch {
+                insert_at: None,
                 row_key: "ships:row:missing:new:1".to_string(),
                 action: CsvRowPatchAction::Upsert,
                 row,
@@ -713,11 +764,13 @@ mod tests {
             &mut next_row_seq,
             vec![
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:row:0".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:new:1".to_string(),
                     action: CsvRowPatchAction::Upsert,
                     row: row_with_id("id", "c"),
@@ -753,11 +806,13 @@ mod tests {
             &mut next_row_seq,
             vec![
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:row:0".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:row:1".to_string(),
                     action: CsvRowPatchAction::Upsert,
                     row: row_with_id("id", "b2"),
@@ -792,16 +847,19 @@ mod tests {
             &mut next_row_seq,
             vec![
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:new:1".to_string(),
                     action: CsvRowPatchAction::Upsert,
                     row: row_with_id("id", "c"),
                 },
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:row:1".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:new:2".to_string(),
                     action: CsvRowPatchAction::Upsert,
                     row: row_with_id("id", "d"),
@@ -840,21 +898,25 @@ mod tests {
             &mut next_row_seq,
             vec![
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:row:0".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:row:1".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:new:1".to_string(),
                     action: CsvRowPatchAction::Upsert,
                     row: row_with_id("id", "c"),
                 },
                 CsvRowPatch {
+                    insert_at: None,
                     row_key: "ships:new:2".to_string(),
                     action: CsvRowPatchAction::Upsert,
                     row: row_with_id("id", "d"),

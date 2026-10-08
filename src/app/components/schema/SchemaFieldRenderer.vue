@@ -10,7 +10,7 @@
           :autosize="stringTextareaAutosize"
           size="small"
           :disabled="field.editable === false"
-          @update:value="emitStringOrUiJsonText($event)"
+          @update:value="emit('update', $event)"
         />
         <n-input
           v-else-if="field.type === 'text'"
@@ -48,14 +48,12 @@
           :disabled="field.editable === false"
           @update:value="emit('update', $event)"
         />
-        <n-input
+        <JsonValueInput
           v-else-if="field.type === 'color-rgb' || field.type === 'color-rgba'"
-          :value="uiJsonText"
-          type="textarea"
-          :autosize="{ minRows: 1, maxRows: 4 }"
-          size="small"
-          @update:value="emitSchemaUiJsonText"
-          @change="warnInvalidUiJsonOnCommit($event)"
+          :value="props.value"
+          :label="field.label"
+          shape="array"
+          @update="emit('update', $event)"
         />
         <n-input
           v-else-if="field.type === 'path-image' || field.type === 'path'"
@@ -75,24 +73,14 @@
           size="small"
           @update:value="emitPlainTagSelect"
         />
-        <n-input
+        <JsonValueInput
           v-else-if="field.type === 'key-value' || field.type === 'object' || field.type === 'array' || field.type === 'array-of-object'"
-          :value="uiJsonText"
-          type="textarea"
-          :autosize="{ minRows: 2, maxRows: 10 }"
-          size="small"
-          @update:value="emitSchemaUiJsonText"
-          @change="warnInvalidUiJsonOnCommit($event)"
+          :value="props.value"
+          :label="field.label"
+          :shape="jsonShape"
+          @update="emit('update', $event)"
         />
-        <n-input
-          v-else
-          :value="uiJsonText"
-          type="textarea"
-          :autosize="{ minRows: 1, maxRows: 4 }"
-          size="small"
-          @update:value="emitSchemaUiJsonText"
-          @change="warnInvalidUiJsonOnCommit($event)"
-        />
+        <JsonValueInput v-else :value="props.value" :label="field.label" shape="json" @update="emit('update', $event)" />
       </template>
 
       <template v-else>
@@ -103,7 +91,7 @@
           :autosize="stringInputAutosize"
           size="small"
           :disabled="field.editable === false"
-          @update:value="emitStringOrUiJsonText($event)"
+          @update:value="emit('update', $event)"
         />
 
         <n-input
@@ -287,7 +275,7 @@
         </div>
 
         <div v-else-if="field.type === 'array' && field.item" class="array-of-object">
-          <div v-for="(item, idx) in genericArrayItems" :key="entryKey('array-item', item, idx)" class="array-item">
+          <div v-for="(_, idx) in genericArrayItems" :key="genericRowIds[idx]" class="array-item">
             <div class="array-item-header">
               <span class="array-item-index">#{{ idx + 1 }}</span>
               <n-button class="compact-icon-button" size="tiny" quaternary title="删除" @click="removeGenericArrayItem(idx)">
@@ -308,7 +296,7 @@
         </div>
 
         <div v-else-if="field.type === 'array-of-object' && field.nested" class="array-of-object">
-          <div v-for="(item, idx) in arrayItems" :key="entryKey('array-item', item, idx)" class="array-item">
+          <div v-for="(_, idx) in arrayItems" :key="arrayRowIds[idx]" class="array-item">
             <div class="array-item-header">
               <span class="array-item-index">#{{ idx + 1 }}</span>
               <n-button class="compact-icon-button" size="tiny" quaternary title="删除" @click="removeArrayItem(idx)">
@@ -330,15 +318,7 @@
           <n-button size="tiny" @click="addArrayItem">+ 添加项</n-button>
         </div>
 
-        <n-input
-          v-else
-          :value="uiJsonText"
-          type="textarea"
-          :autosize="{ minRows: 1, maxRows: 4 }"
-          size="small"
-          @update:value="emitSchemaUiJsonText"
-          @change="warnInvalidUiJsonOnCommit($event)"
-        />
+        <JsonValueInput v-else :value="props.value" :label="field.label" shape="json" @update="emit('update', $event)" />
       </template>
 
       <!-- Warning text -->
@@ -360,8 +340,6 @@ import {
   appendSchemaKeyValueEntry,
   formatSchemaCommaList,
   formatSchemaKeyValueText,
-  formatSchemaUiJsonText,
-  parseSchemaUiJsonText,
   parseSchemaControlNumber,
   parseSchemaCommaList,
   parseSchemaKeyValueText,
@@ -386,8 +364,8 @@ import {
   type SelectOption,
 } from '@/domain/schema/schema-options';
 import ColorPicker from '@/shared/ui/ColorPicker.vue';
-import { useAppFeedback } from '@/app/composables/use-app-feedback';
-import { entryKey } from '@/shared/lib/entry-keys';
+import { useEditorRowIdentities } from '@/app/composables/editors/use-editor-row-identities';
+import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
 import { useCoreGraphics } from '@/app/composables/use-core-assets';
 import { useSettingsStore } from '@/stores/settings.store';
 import { isCsvSource } from '@/domain/tables/csv-source-options';
@@ -430,7 +408,9 @@ const boolVal = computed(() => props.value === true);
 
 const arrVal = computed(() => schemaArrayStringValues(props.value));
 
-const uiJsonText = computed(() => formatSchemaUiJsonText(props.value));
+const jsonShape = computed(() =>
+  props.field.type === 'array' || props.field.type === 'array-of-object' || props.field.format === 'array-of-entries' ? 'array' : 'object',
+);
 
 // tag-select: value is { tags: string[] } or string[]
 const tagSelectVal = computed(() => schemaTagValues(props.value));
@@ -465,13 +445,13 @@ const { sourceOptions } = useSchemaSourceOptions({
   runtimeContext: () => props.runtimeContext,
 });
 const { pickPathFile } = useSchemaPathPicker({
+  pathBase: () => props.field.pathBase,
   runtimeContext: () => props.runtimeContext,
   setPath: (path) => emit('update', path),
 });
 const isReferenceKeyValue = computed(() => props.field.type === 'key-value' && isCsvSource(props.field.source));
 const selectOpen = ref(false);
 const suppressNextSelectOpen = ref(false);
-const feedback = useAppFeedback();
 const kvSelectOpen = ref<Record<number, boolean>>({});
 const suppressNextKvSelectOpen = ref<Record<number, boolean>>({});
 
@@ -564,10 +544,11 @@ const tagDisplayOptions = computed(() => includeCurrentSelectOptions(sourceOptio
 
 const graphicsOptions = computed(() => {
   const options: SelectOption[] = [];
+  if (props.field.pathBase === 'mission') return options;
   const seen = new Set<string>();
 
   // Add core graphics paths
-  for (const path of graphicsPaths) {
+  for (const path of graphicsPaths.value) {
     if (!seen.has(path)) {
       seen.add(path);
       options.push({ label: schemaPathDisplayLabel(path), value: path });
@@ -606,6 +587,8 @@ function onSubUpdate(subKey: string, subValue: unknown) {
 }
 
 const arrayItems = computed(() => (Array.isArray(props.value) ? (props.value as Record<string, unknown>[]) : []));
+const arrayIdentity = useEditorRowIdentities(() => arrayItems.value);
+const arrayRowIds = arrayIdentity.identities;
 
 function getArrayItemValue(idx: number, subKey: string): unknown {
   const item = arrayItems.value[idx];
@@ -615,6 +598,7 @@ function getArrayItemValue(idx: number, subKey: string): unknown {
 function onArrayItemUpdate(idx: number, subKey: string, subValue: unknown) {
   const items = [...arrayItems.value];
   items[idx] = { ...items[idx], [subKey]: subValue };
+  arrayIdentity.commit(items);
   emit('update', items);
 }
 
@@ -627,40 +611,28 @@ function addArrayItem() {
     }
   }
   items.push(newItem);
+  arrayIdentity.commit(items, { kind: 'insert', index: items.length - 1 });
   emit('update', items);
 }
 
 function removeArrayItem(idx: number) {
   const items = [...arrayItems.value];
   items.splice(idx, 1);
+  arrayIdentity.commit(items, { kind: 'remove', index: idx });
   emit('update', items);
 }
 
 const kvEntries = computed<SchemaKeyValueEntry[]>(() => schemaKeyValueEntries(props.value, props.field.format));
 
-// Row ids align with entries by position: appended on add, truncated on remove.
-// Ids never shift with indexes, so the dropdown open state follows the row content
-// and removal needs no manual re-indexing.
-const kvRowIds = ref<number[]>([]);
-let nextKvRowId = 1;
-watch(
-  kvEntries,
-  (entries) => {
-    if (kvRowIds.value.length < entries.length) {
-      for (let i = kvRowIds.value.length; i < entries.length; i += 1) {
-        kvRowIds.value.push(nextKvRowId);
-        nextKvRowId += 1;
-      }
-    }
-    if (kvRowIds.value.length > entries.length) kvRowIds.value.splice(entries.length);
-  },
-  { immediate: true },
-);
+const kvIdentity = useEditorRowIdentities(() => kvEntries.value);
+const kvRowIds = kvIdentity.identities;
 
 const kvRows = computed(() => kvEntries.value.map((entry, idx) => ({ entry, rowId: kvRowIds.value[idx] ?? idx })));
 
-function emitKvUpdate(entries: SchemaKeyValueEntry[]) {
-  emit('update', schemaKeyValueOutput(entries, props.field.format));
+function emitKvUpdate(entries: SchemaKeyValueEntry[], operation?: { kind: 'insert' | 'remove'; index: number }) {
+  const output = schemaKeyValueOutput(entries, props.field.format);
+  kvIdentity.commit(schemaKeyValueEntries(output, props.field.format), operation);
+  emit('update', output);
 }
 
 function updateKvKey(idx: number, newKey: string) {
@@ -689,59 +661,38 @@ function removeKvEntry(idx: number) {
   }
   const entries = [...kvEntries.value];
   entries.splice(idx, 1);
-  emitKvUpdate(entries);
+  emitKvUpdate(entries, { kind: 'remove', index: idx });
 }
 
 function addKvEntry() {
-  emit('update', appendSchemaKeyValueEntry(kvEntries.value, props.field.format));
+  const output = appendSchemaKeyValueEntry(kvEntries.value, props.field.format);
+  kvIdentity.commit(schemaKeyValueEntries(output, props.field.format), { kind: 'insert', index: kvEntries.value.length });
+  emit('update', output);
 }
 
 const genericArrayItems = computed(() => (Array.isArray(props.value) ? props.value : []));
+const genericIdentity = useEditorRowIdentities(() => genericArrayItems.value);
+const genericRowIds = genericIdentity.identities;
 
 function updateGenericArrayItem(idx: number, itemValue: unknown) {
   const items = [...genericArrayItems.value];
   items[idx] = itemValue;
+  genericIdentity.commit(items);
   emit('update', items);
 }
 
 function addGenericArrayItem() {
   const items = [...genericArrayItems.value];
   items.push(props.field.item?.default ?? null);
+  genericIdentity.commit(items, { kind: 'insert', index: items.length - 1 });
   emit('update', items);
 }
 
 function removeGenericArrayItem(idx: number) {
   const items = [...genericArrayItems.value];
   items.splice(idx, 1);
+  genericIdentity.commit(items, { kind: 'remove', index: idx });
   emit('update', items);
-}
-
-function emitSchemaUiJsonText(raw: string) {
-  emit('update', parseSchemaUiJsonText(raw));
-}
-
-// Commit-boundary (blur/enter) validation: warn once when JSON-shaped text fails to parse.
-// Per-keystroke input never warns, so half-written JSON does not spam notifications.
-function warnInvalidUiJsonOnCommit(raw: string) {
-  const trimmed = raw.trim();
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return;
-  try {
-    JSON.parse(trimmed);
-  } catch {
-    feedback.warning(`${props.field.label || props.field.key} JSON 无效，已保留输入内容，请修正后再离开字段`);
-  }
-}
-
-function emitStringOrUiJsonText(raw: string) {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    const parsed = parseSchemaUiJsonText(trimmed);
-    if (parsed !== trimmed) {
-      emit('update', parsed);
-      return;
-    }
-  }
-  emit('update', raw);
 }
 
 function closeOpenSelectOnFieldClick(event: MouseEvent) {

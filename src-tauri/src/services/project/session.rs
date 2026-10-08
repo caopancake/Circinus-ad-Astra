@@ -24,7 +24,22 @@ use std::{
 };
 
 pub fn close_project_session(session_id: String) -> AppResult<()> {
-    cache::lock_registry()?.remove(&session_id);
+    let removed = cache::lock_registry()?.remove(&session_id);
+    if let Some(handle) = removed {
+        let root = cache::lock_session(&handle)?.manifest.mod_root.clone();
+        let _lease = crate::io::acquire_root_write_lock(Path::new(&root))?;
+        let remaining = cache::lock_registry()?
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut same_root = false;
+        for session in remaining {
+            same_root |= cache::lock_session(&session)?.manifest.mod_root == root;
+        }
+        if !same_root {
+            crate::services::file_history::release_history(&root)?;
+        }
+    }
     cache::clear_sprite_media_for_session(&session_id);
     Ok(())
 }
@@ -54,6 +69,7 @@ pub fn invalidate_project_session(
         &mut session,
         &changes,
     )?);
+    super::versions::refresh_versions(&mut session, &changes)?;
     Ok(ProjectSessionInvalidationResult {
         manifest: session.manifest.clone(),
         invalidation,
@@ -91,6 +107,9 @@ pub(super) fn build_project_session(
 ) -> AppResult<ProjectSession> {
     let mod_root_boundary = FsRootBoundary::new(mod_root, "mod root")?;
     let mod_root = mod_root_boundary.root();
+    let _lease = crate::io::acquire_root_write_lock(mod_root)?;
+    let source_versions = super::versions::capture_versions(mod_root)?;
+    let source_entities = super::versions::capture_entities(mod_root, &source_versions)?;
     let session_id = new_session_id();
     let starsector_root = starsector_root_override.map(Path::to_path_buf);
     let starsector_root = starsector_root
@@ -174,6 +193,7 @@ pub(super) fn build_project_session(
         skills: spec_bundle.skill_files.len(),
     };
     let manifest = ProjectManifest {
+        base_versions: vec![crate::io::file_version(&mod_root.join("mod_info.json"))?],
         session_id,
         mod_root: mod_root.to_string_lossy().to_string(),
         starsector_root: starsector_root.map(|path| path.to_string_lossy().to_string()),
@@ -186,6 +206,8 @@ pub(super) fn build_project_session(
         warnings: spec_bundle.warnings.clone(),
     };
     Ok(ProjectSession {
+        source_entities,
+        source_versions,
         manifest,
         faction_files,
         tag_map,
@@ -765,6 +787,7 @@ mod tests {
                         &session_id,
                         CsvTableKey::Ships,
                         vec![CsvRowPatch {
+                            insert_at: None,
                             row_key: format!("ships:new:{thread_index}-{round}"),
                             action: CsvRowPatchAction::Upsert,
                             row,

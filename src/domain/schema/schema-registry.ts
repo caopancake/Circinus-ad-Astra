@@ -139,6 +139,10 @@ function parseField(id: string, path: string, raw: unknown): FieldSchema {
   if (isString(record.warning)) field.warning = record.warning;
   if (isString(record.danger)) field.danger = record.danger;
   if (isString(record.source)) field.source = record.source;
+  if (record.pathBase !== undefined) {
+    if (record.pathBase !== 'mod' && record.pathBase !== 'mission') throw new Error(`schema ${id}: ${path} 路径基准无效`);
+    field.pathBase = record.pathBase;
+  }
   if (isNumber(record.min)) field.min = record.min;
   if (isNumber(record.max)) field.max = record.max;
   if (isNumber(record.step)) field.step = record.step;

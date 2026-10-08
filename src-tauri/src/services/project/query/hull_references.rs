@@ -187,7 +187,7 @@ fn build_hull_references(
 fn resolve_built_in_weapon_slots(
     session: &ProjectSession,
     reference_ids: &[String],
-) -> AppResult<BTreeMap<String, Vec<String>>> {
+) -> AppResult<BTreeMap<String, Vec<crate::models::HullWeaponSlot>>> {
     let core_ships = session
         .manifest
         .starsector_root
@@ -222,18 +222,37 @@ fn resolve_built_in_weapon_slots(
                         format!("循环舰体皮肤引用: {id}"),
                     ));
                 }
-                chain.push(&skin.data);
+                let origin = if session
+                    .skin_files
+                    .iter()
+                    .any(|candidate| std::ptr::eq(candidate, skin))
+                {
+                    ResourceSource::Mod
+                } else {
+                    ResourceSource::Core
+                };
+                chain.push((&skin.data, origin));
                 current = &skin.base_hull_id;
             }
-            let mut slots: BTreeSet<String> = session
+            let base_origin = if session.ship_files.contains_key(current) {
+                ResourceSource::Mod
+            } else {
+                ResourceSource::Core
+            };
+            let mut slots: BTreeMap<String, ResourceSource> = session
                 .ship_files
                 .get(current)
                 .or_else(|| core_ships.as_ref().and_then(|ships| ships.get(current)))
                 .and_then(|ship| ship.get("builtInWeapons"))
                 .and_then(serde_json::Value::as_object)
-                .map(|weapons| weapons.keys().cloned().collect())
+                .map(|weapons| {
+                    weapons
+                        .keys()
+                        .map(|key| (key.clone(), base_origin))
+                        .collect()
+                })
                 .unwrap_or_default();
-            for skin in chain.into_iter().rev() {
+            for (skin, origin) in chain.into_iter().rev() {
                 if let Some(removed) = skin
                     .get("removeBuiltInWeapons")
                     .and_then(serde_json::Value::as_array)
@@ -246,10 +265,16 @@ fn resolve_built_in_weapon_slots(
                     .get("builtInWeapons")
                     .and_then(serde_json::Value::as_object)
                 {
-                    slots.extend(added.keys().cloned());
+                    slots.extend(added.keys().map(|key| (key.clone(), origin)));
                 }
             }
-            Ok((id.clone(), slots.into_iter().collect()))
+            Ok((
+                id.clone(),
+                slots
+                    .into_iter()
+                    .map(|(id, origin)| crate::models::HullWeaponSlot { id, origin })
+                    .collect(),
+            ))
         })
         .collect()
 }
@@ -518,6 +543,8 @@ mod tests {
 
         let mut trace =
             crate::services::project::performance::PerformanceTrace::new("project.openSession");
+        write_utf8_no_bom(&mod_root.join("data/hulls/skins/mod_core.skin"), r#"{"skinHullId":"mod_core","baseHullId":"core_ship","builtInWeapons":{"MOD_SLOT":"mod_weapon"}}"#).unwrap();
+        write_utf8_no_bom(&mod_root.join("data/hulls/skins/mod_override.skin"), r#"{"skinHullId":"mod_override","baseHullId":"core_ship","builtInWeapons":{"CORE_SLOT":"mod_weapon"}}"#).unwrap();
         let manifest = open_project_session_traced(&mod_root, Some(&root), &mut trace).unwrap();
         let catalog = query_hull_references(&manifest.session_id, &[]).unwrap();
         let previews = query_hull_references(
@@ -602,18 +629,46 @@ mod tests {
         assert!(catalog.hull_names.is_empty());
         assert!(catalog.built_in_weapon_slots.is_empty());
         assert_eq!(
-            previews.built_in_weapon_slots["mod_ship"],
+            previews.built_in_weapon_slots["mod_ship"]
+                .iter()
+                .map(|slot| slot.id.as_str())
+                .collect::<Vec<_>>(),
             vec!["WS001", "WS002"]
         );
         assert_eq!(
-            previews.built_in_weapon_slots["mod_skin"],
+            previews.built_in_weapon_slots["mod_skin"]
+                .iter()
+                .map(|slot| slot.id.as_str())
+                .collect::<Vec<_>>(),
             vec!["WS002", "WS003"]
         );
         assert_eq!(
-            previews.built_in_weapon_slots["core_skin"],
+            previews.built_in_weapon_slots["core_skin"]
+                .iter()
+                .map(|slot| slot.id.as_str())
+                .collect::<Vec<_>>(),
             vec!["CORE_SLOT"]
         );
         assert!(previews.groups.is_empty());
+        let inherited = query_hull_references(
+            &manifest.session_id,
+            &["mod_core".to_string(), "mod_override".to_string()],
+        )
+        .unwrap();
+        assert_eq!(
+            inherited.built_in_weapon_slots["mod_core"]
+                .iter()
+                .map(|slot| (slot.id.as_str(), slot.origin))
+                .collect::<Vec<_>>(),
+            vec![
+                ("CORE_SLOT", ResourceSource::Core),
+                ("MOD_SLOT", ResourceSource::Mod)
+            ]
+        );
+        assert_eq!(
+            inherited.built_in_weapon_slots["mod_override"][0].origin,
+            ResourceSource::Mod
+        );
         assert_eq!(previews.sprites.len(), 6);
         assert_eq!(
             previews.hull_names.get("mod_ship"),

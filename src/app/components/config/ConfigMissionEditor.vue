@@ -44,7 +44,8 @@ const props = defineProps<{
     previousId: string,
     localMission: RowData,
     schema: FileSchema,
-  ) => Promise<string | null>;
+    baseVersions: import('@/shared/types').FileVersion[],
+  ) => Promise<import('@/shared/types').ConfigSaveIdentity | null>;
   deleteMission: (sessionId: string, modRoot: string, id: string, deleteDirectory: boolean) => Promise<boolean>;
 }>();
 const emit = defineEmits<{ saved: [missionId: string | null] }>();
@@ -55,7 +56,7 @@ const modRoot = computed(() => props.modRoot);
 const sessionId = computed(() => props.sessionId);
 const schema = computed(() => getSchema('mission'));
 const schemaRuntimeContext = computed(() =>
-  props.modRoot && props.sessionId ? createSchemaRuntimeContext(props.modRoot, props.sessionId) : null,
+  props.modRoot && props.sessionId ? { ...createSchemaRuntimeContext(props.modRoot, props.sessionId), missionId: props.missionId } : null,
 );
 const {
   clearMissionTarget,

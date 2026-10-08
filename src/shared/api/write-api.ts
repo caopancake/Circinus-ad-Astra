@@ -7,7 +7,6 @@ import type {
   DeleteSkinEntityWrite,
   DeleteVariantEntityWrite,
   EditorSpecKind,
-  FileChangeRecord,
   FileChangeReplayDirection,
   IndexedConfigEntityWrite,
   JsonWriteOptions,
@@ -26,14 +25,21 @@ export function saveCsvPatch(
   patches: CsvRowPatch[],
   associatedSpecs: AssociatedSpecChange[],
   jsonWrite?: JsonWriteOptions,
+  baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
   return invoke('save_csv_patch', {
-    payload: { sessionId, modRoot, table, patches, associatedSpecs, ...(jsonWrite ? { jsonWrite } : {}) },
+    payload: { baseVersions, sessionId, modRoot, table, patches, associatedSpecs, ...(jsonWrite ? { jsonWrite } : {}) },
   });
 }
 
-export function saveTextFile(sessionId: ProjectSessionId | null, modRoot: string, path: string, text: string): Promise<WriteResult> {
-  return invoke('save_text_file', { payload: { sessionId, modRoot, path, text } });
+export function saveTextFile(
+  sessionId: ProjectSessionId | null,
+  modRoot: string,
+  path: string,
+  text: string,
+  baseVersions: import('@/shared/types').FileVersion[] = [],
+): Promise<WriteResult> {
+  return invoke('save_text_file', { payload: { baseVersions, sessionId, modRoot, path, text } });
 }
 
 export function transcodeFileToUtf8(
@@ -41,8 +47,9 @@ export function transcodeFileToUtf8(
   modRoot: string,
   path: string,
   encoding: string,
+  baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  return invoke('transcode_file_to_utf8', { payload: { sessionId, modRoot, path, encoding } });
+  return invoke('transcode_file_to_utf8', { payload: { baseVersions, sessionId, modRoot, path, encoding } });
 }
 
 export function saveEditorSpec(
@@ -52,9 +59,10 @@ export function saveEditorSpec(
   id: string,
   data: RowData,
   jsonWrite?: JsonWriteOptions,
+  baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
   return invoke('save_editor_spec', {
-    payload: { sessionId, modRoot, kind, id, data, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(data) } : {}) },
+    payload: { baseVersions, sessionId, modRoot, kind, id, data, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(data) } : {}) },
   });
 }
 
@@ -63,27 +71,43 @@ export function saveModInfo(
   modRoot: string,
   data: RowData,
   jsonWrite: JsonWriteOptions,
+  baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  return invoke('save_mod_info', { payload: { sessionId, modRoot, data, jsonWrite, orderedJson: JSON.stringify(data) } });
+  return invoke('save_mod_info', { payload: { baseVersions, sessionId, modRoot, data, jsonWrite, orderedJson: JSON.stringify(data) } });
 }
 
-export function saveModFiles(sessionId: ProjectSessionId, modRoot: string, files: AssociatedFileChange[]): Promise<WriteResult> {
-  return invoke('save_mod_files', { payload: { sessionId, modRoot, files } });
+export function saveModFiles(
+  sessionId: ProjectSessionId,
+  modRoot: string,
+  files: AssociatedFileChange[],
+  baseVersions: import('@/shared/types').FileVersion[] = [],
+): Promise<WriteResult> {
+  return invoke('save_mod_files', { payload: { baseVersions, sessionId, modRoot, files } });
 }
 
 export function applyFileChangeSet(
   sessionId: ProjectSessionId,
   modRoot: string,
   direction: FileChangeReplayDirection,
-  changes: FileChangeRecord[],
+  entryId: number,
+  revision: number,
 ): Promise<WriteResult> {
-  return invoke('apply_file_change_set', { payload: { sessionId, modRoot, direction, changes } });
+  return invoke('apply_file_change_set', { payload: { sessionId, modRoot, direction, entryId, revision } });
+}
+
+export function queryFileHistory(sessionId: string, modRoot: string): Promise<import('@/shared/types').FileHistorySnapshot> {
+  return invoke('query_file_history', { payload: { sessionId, modRoot } });
+}
+
+export function clearFileHistory(sessionId: string, modRoot: string): Promise<import('@/shared/types').FileHistorySnapshot> {
+  return invoke('clear_file_history', { payload: { sessionId, modRoot } });
 }
 
 export function saveIndexedConfigEntity(write: IndexedConfigEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
   return invoke('save_indexed_config_entity', {
     payload: {
       modRoot: write.modRoot,
+      baseVersions: write.baseVersions,
       sessionId: write.sessionId,
       kind: write.kind,
       previousId: write.previousId,
@@ -102,6 +126,7 @@ export function createIndexedConfigEntity(write: IndexedConfigEntityWrite): Prom
   return invoke('create_indexed_config_entity', {
     payload: {
       modRoot: write.modRoot,
+      baseVersions: write.baseVersions,
       sessionId: write.sessionId,
       kind: write.kind,
       previousId: write.previousId,

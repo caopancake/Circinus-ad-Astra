@@ -44,10 +44,12 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
     emptyValue: '',
     load: async (target) => {
       const loaded = await loadEditableFileData(target.sessionId, target.modRoot, target.filePath);
-      return { value: loaded.text };
+      return { value: loaded.text, baseVersions: loaded.baseVersions };
     },
-    save: async (target, draft) => {
-      const result = await writeEditableFileText(target.sessionId, target.modRoot, target.filePath, draft);
+    save: async (target, draft, baseVersions) => {
+      externalReadId++;
+      const result = await writeEditableFileText(target.sessionId, target.modRoot, target.filePath, draft, baseVersions);
+      externalReadId++;
       // Recovery mode (no sessionId) must stay a side-effect-free file write:
       // no file history entry and no project session refresh.
       if (target.sessionId) {
@@ -58,7 +60,7 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
           writeResult: result,
         });
       }
-      return { value: draft };
+      return { value: draft, baseVersions: result.baseVersions };
     },
     targetKey: (target) => fileEditorTargetKey(target),
   });
@@ -103,7 +105,7 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
       if (normalizeFsPath(event.modRoot) !== normalizeFsPath(params.modRoot)) return;
       if (normalizeFsPath(event.path) !== normalizeFsPath(params.filePath)) return;
       externalReadId++;
-      applyExternalText(event.text);
+      applyExternalText(event.text, event.baseVersions);
     });
     if (disposed) {
       unlistenTextApplied?.();
@@ -127,7 +129,7 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
       try {
         const loaded = await loadEditableFileData(syncSessionId, syncModRoot, syncFilePath);
         if (disposed || requestId !== externalReadId) return;
-        applyExternalText(loaded.text);
+        applyExternalText(loaded.text, loaded.baseVersions);
       } catch (error) {
         feedback.error(error, '外部文件更新同步失败');
       }
@@ -198,11 +200,11 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
     draftSession.setDraft(textHistory.redo(text.value));
   }
 
-  function applyExternalText(nextText: string) {
+  function applyExternalText(nextText: string, baseVersions?: import('@/shared/types').FileVersion[]) {
     const target = fileEditorTarget();
     if (!target) return;
     const wasDirty = dirty.value;
-    draftSession.applyExternalForTarget(target, nextText);
+    draftSession.applyExternalForTarget(target, nextText, baseVersions);
     if (!wasDirty) textHistory.clear();
   }
 

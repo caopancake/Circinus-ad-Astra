@@ -47,6 +47,7 @@ export interface FileEditorSavedEvent {
 }
 
 export interface FileEditorTextAppliedEvent {
+  baseVersions: import('@/shared/types').FileVersion[];
   modRoot: string;
   path: string;
   sessionId: string;

@@ -49,6 +49,9 @@ const SESSION_ID = 'sess-1';
 
 function writeResult(refreshedEntity: Record<string, unknown> | null = null) {
   return {
+    baseVersions: [],
+    commitId: 1,
+    history: { revision: 1, undoStack: [], redoStack: [] },
     changes: [
       {
         path: `${MOD_ROOT}\\x.csv`,
@@ -85,9 +88,12 @@ describe('config-save orchestrator', () => {
 
     await saveModInfoAction(SESSION_ID, MOD_ROOT, { id: 'demo' });
 
-    expect(mocks.writeModFiles).toHaveBeenCalledWith(SESSION_ID, MOD_ROOT, [
-      { relPath: 'mod_info.json', afterText: JSON.stringify({ id: 'demo' }, null, 2), afterDataBase64: null },
-    ]);
+    expect(mocks.writeModFiles).toHaveBeenCalledWith(
+      SESSION_ID,
+      MOD_ROOT,
+      [{ relPath: 'mod_info.json', afterText: JSON.stringify({ id: 'demo' }, null, 2), afterDataBase64: null }],
+      [],
+    );
     expect(mocks.completeSavedWrite).toHaveBeenCalledWith(
       { modRoot: MOD_ROOT, sessionId: SESSION_ID, label: '保存 mod_info.json', result: expect.anything() },
       expect.anything(),
@@ -104,6 +110,7 @@ describe('config-save orchestrator', () => {
     mocks.writeIndexedConfigEntity.mockResolvedValue(writeResult(indexedEntity('npc_dave')));
 
     const entityId = await saveIndexedEntityAction({
+      baseVersions: [],
       sessionId: SESSION_ID,
       modRoot: MOD_ROOT,
       kind: 'faction',
@@ -114,7 +121,7 @@ describe('config-save orchestrator', () => {
       deletePreviousTarget: false,
     });
 
-    expect(entityId).toBe('npc_dave');
+    expect(entityId).toMatchObject({ entityId: 'npc_dave', baseVersions: [] });
     expect(mocks.completeSavedWrite).toHaveBeenCalledWith(
       { modRoot: MOD_ROOT, sessionId: SESSION_ID, label: '保存 npc_dave.faction', result: expect.anything() },
       expect.anything(),
@@ -125,6 +132,7 @@ describe('config-save orchestrator', () => {
     mocks.writeCreateIndexedConfigEntity.mockResolvedValue(writeResult(indexedEntity('mission_new')));
 
     const entityId = await createIndexedEntityAction({
+      baseVersions: [],
       sessionId: SESSION_ID,
       modRoot: MOD_ROOT,
       kind: 'mission',
@@ -155,6 +163,7 @@ describe('config-save orchestrator', () => {
     await deleteIndexedEntityAction(SESSION_ID, MOD_ROOT, 'faction', 'npc_old', true);
 
     expect(mocks.writeDeleteIndexedConfigEntity).toHaveBeenCalledWith({
+      baseVersions: [],
       sessionId: SESSION_ID,
       modRoot: MOD_ROOT,
       kind: 'faction',
@@ -166,6 +175,7 @@ describe('config-save orchestrator', () => {
   it('variant create seeds the default variant payload', async () => {
     mocks.writeCreateVariantEntity.mockResolvedValue(
       writeResult({
+        baseVersions: [],
         variantId: 'variant_new',
         hullId: 'npc_dave',
         path: 'data/variants/variant_new.variant',
@@ -189,6 +199,7 @@ describe('config-save orchestrator', () => {
   it('variant save forwards the previous id for renames', async () => {
     mocks.writeVariantEntity.mockResolvedValue(
       writeResult({
+        baseVersions: [],
         variantId: 'variant_b',
         hullId: 'npc_dave',
         path: 'data/variants/variant_b.variant',
@@ -204,7 +215,13 @@ describe('config-save orchestrator', () => {
     await saveVariantAction(SESSION_ID, MOD_ROOT, 'variant_b', { variantId: 'variant_b' }, 'variant_a', 'data/variants/variant_a.variant');
 
     expect(mocks.writeVariantEntity).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: SESSION_ID, modRoot: MOD_ROOT, previousId: 'variant_a', nextId: 'variant_b' }),
+      expect.objectContaining({
+        baseVersions: [],
+        sessionId: SESSION_ID,
+        modRoot: MOD_ROOT,
+        previousId: 'variant_a',
+        nextId: 'variant_b',
+      }),
       { preserveOriginalJson: false, confirmedSources: [] },
     );
   });
@@ -215,6 +232,7 @@ describe('config-save orchestrator', () => {
     await deleteVariantAction(SESSION_ID, MOD_ROOT, 'variants/old.variant', 'old');
 
     expect(mocks.writeDeleteVariantEntity).toHaveBeenCalledWith({
+      baseVersions: [],
       sessionId: SESSION_ID,
       modRoot: MOD_ROOT,
       relPath: 'variants/old.variant',
@@ -225,6 +243,7 @@ describe('config-save orchestrator', () => {
   it('skin create seeds the default skin payload', async () => {
     mocks.writeCreateSkinEntity.mockResolvedValue(
       writeResult({
+        baseVersions: [],
         skinHullId: 'skin_new',
         baseHullId: 'npc_dave',
         path: 'data/hulls/skin_new.skin',
@@ -247,6 +266,7 @@ describe('config-save orchestrator', () => {
   it('skin save forwards the previous id', async () => {
     mocks.writeSkinEntity.mockResolvedValue(
       writeResult({
+        baseVersions: [],
         skinHullId: 'skin_b',
         baseHullId: 'npc_dave',
         path: 'data/hulls/skin_b.skin',
@@ -263,7 +283,13 @@ describe('config-save orchestrator', () => {
     await saveSkinAction(SESSION_ID, MOD_ROOT, 'skin_b', { skinHullId: 'skin_b' }, 'skin_a', 'data/hulls/skins/skin_a.skin');
 
     expect(mocks.writeSkinEntity).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: SESSION_ID, modRoot: MOD_ROOT, previousId: 'skin_a', nextId: 'skin_b' }),
+      expect.objectContaining({
+        baseVersions: [],
+        sessionId: SESSION_ID,
+        modRoot: MOD_ROOT,
+        previousId: 'skin_a',
+        nextId: 'skin_b',
+      }),
       { preserveOriginalJson: false, confirmedSources: [] },
     );
   });
@@ -274,6 +300,7 @@ describe('config-save orchestrator', () => {
     await deleteSkinAction(SESSION_ID, MOD_ROOT, 'skins/old.skin', 'old');
 
     expect(mocks.writeDeleteSkinEntity).toHaveBeenCalledWith({
+      baseVersions: [],
       sessionId: SESSION_ID,
       modRoot: MOD_ROOT,
       relPath: 'skins/old.skin',

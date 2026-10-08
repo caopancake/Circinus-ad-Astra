@@ -9,7 +9,7 @@ import { configModInfoEditorModel, configModInfoSaveData } from '@/domain/config
 import { useConfigEditorDraftSession } from '@/app/composables/config/use-config-editor-draft-session';
 import type { ProjectManifest, RowData } from '@/shared/types';
 
-type ModInfoTarget = Pick<ProjectManifest, 'modInfo' | 'modRoot' | 'sessionId'>;
+type ModInfoTarget = Pick<ProjectManifest, 'modInfo' | 'modRoot' | 'sessionId' | 'baseVersions'>;
 
 export function useConfigModInfoViewModel() {
   const project = useProjectStore();
@@ -18,14 +18,14 @@ export function useConfigModInfoViewModel() {
   const draftSession = useConfigEditorDraftSession<RowData, ModInfoTarget>({
     emptyValue: {},
     modRoot: computed(() => project.activeManifest?.modRoot ?? null),
-    load: (target) => ({ value: configModInfoEditorModel(deepClone(target.modInfo ?? {})) }),
-    save: async (target, data) => {
+    load: (target) => ({ value: configModInfoEditorModel(deepClone(target.modInfo ?? {})), baseVersions: target.baseVersions }),
+    save: async (target, data, baseVersions) => {
       const schema = pendingSaveSchema;
       if (!schema) return;
       const file = configModInfoSaveData(data, schema);
-      const saved = await saveModInfoAction(target.sessionId, target.modRoot, file, feedback);
+      const saved = await saveModInfoAction(target.sessionId, target.modRoot, file, feedback, baseVersions);
       if (!saved) return;
-      return { value: configModInfoEditorModel(deepClone(file)) };
+      return { value: configModInfoEditorModel(deepClone(file)), baseVersions: saved.baseVersions };
     },
     targetKey: (target) => `${target.sessionId}\n${target.modRoot}`,
   });
@@ -41,7 +41,7 @@ export function useConfigModInfoViewModel() {
       const target = manifest;
       const data = configModInfoEditorModel(deepClone(target.modInfo ?? {}));
       if (draftSession.currentTargetKey.value !== `${target.sessionId}\n${target.modRoot}`) void draftSession.loadTarget(target);
-      else draftSession.applyExternalForTarget(target, data);
+      else draftSession.applyExternalForTarget(target, data, target.baseVersions);
     },
     { immediate: true },
   );

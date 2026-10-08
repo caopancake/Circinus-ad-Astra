@@ -81,6 +81,7 @@ import { getActivePinia } from 'pinia';
 
 function variantRecord(variantId: string, hullId: string) {
   const variant: VariantFile = {
+    baseVersions: [],
     variantId,
     hullId,
     path: '',
@@ -114,6 +115,7 @@ function activateProject(modRoot = 'M:/mod', sessionId = 'sess-1') {
   workspace.registerMod({ modRoot, displayName: 'Mod', version: '', status: 'ready' });
   workspace.activateModTab(modRoot);
   project.registerProjectManifest({
+    baseVersions: [],
     sessionId,
     modRoot,
     starsectorRoot: null,
@@ -219,7 +221,11 @@ describe('useConfigFamilyViewModel saving', () => {
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v1', 'h1')]);
     const vm = mountViewModel();
     await vm.loadFiles();
-    const current = { data: { variantId: 'v1', hullId: 'h1' }, relPath: 'data/variants/v1.variant' };
+    const current = {
+      baseVersions: [],
+      data: { variantId: 'v1', hullId: 'h1' },
+      relPath: 'data/variants/v1.variant',
+    };
 
     await expect(vm.saveFamilyEntity('sess-1', 'M:/mod', current, { variantId: '', hullId: 'h1' })).resolves.toBeNull();
     expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.stringContaining('不能为空'));
@@ -230,7 +236,11 @@ describe('useConfigFamilyViewModel saving', () => {
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v1', 'h1'), variantRecord('v2', 'h1')]);
     const vm = mountViewModel();
     await vm.loadFiles();
-    const current = { data: { variantId: 'v1', hullId: 'h1' }, relPath: 'data/variants/v1.variant' };
+    const current = {
+      baseVersions: [],
+      data: { variantId: 'v1', hullId: 'h1' },
+      relPath: 'data/variants/v1.variant',
+    };
 
     await expect(vm.saveFamilyEntity('sess-1', 'M:/mod', current, { variantId: 'v2', hullId: 'h1' })).resolves.toBeNull();
     expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.stringContaining('已存在'));
@@ -240,8 +250,16 @@ describe('useConfigFamilyViewModel saving', () => {
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v1', 'h1')]);
     const vm = mountViewModel();
     await vm.loadFiles();
-    const current = { data: { variantId: 'v1', hullId: 'h1' }, relPath: 'data/variants/v1.variant' };
-    mocks.saveVariantAction.mockResolvedValue({ data: { variantId: 'v9', hullId: 'h1' }, relPath: 'data/variants/v9.variant' });
+    const current = {
+      baseVersions: [],
+      data: { variantId: 'v1', hullId: 'h1' },
+      relPath: 'data/variants/v1.variant',
+    };
+    mocks.saveVariantAction.mockResolvedValue({
+      baseVersions: [],
+      data: { variantId: 'v9', hullId: 'h1' },
+      relPath: 'data/variants/v9.variant',
+    });
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v9', 'h1')]);
 
     const saved = await vm.saveFamilyEntity('sess-1', 'M:/mod', current, { variantId: 'v9', hullId: 'h1' });
@@ -254,7 +272,9 @@ describe('useConfigFamilyViewModel saving', () => {
       'v1',
       'data/variants/v1.variant',
       mocks.feedback,
+      [],
     );
+    vm.onSaved('v9');
     expect(vm.selectedId.value).toBe('v9');
     expect(mocks.feedback.success).toHaveBeenCalledWith(expect.stringContaining('已保存'));
   });
@@ -275,7 +295,7 @@ describe('useConfigFamilyViewModel deletion', () => {
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v1', 'h1')]);
 
     await expect(vm.deleteFamilyEntity('sess-1', 'M:/mod', 'v2', 'data/variants/v2.variant')).resolves.toBe(true);
-    expect(mocks.deleteVariantAction).toHaveBeenCalledWith('sess-1', 'M:/mod', 'data/variants/v2.variant', 'v2');
+    expect(mocks.deleteVariantAction).toHaveBeenCalledWith('sess-1', 'M:/mod', 'data/variants/v2.variant', 'v2', []);
     expect(vm.files.value.map((file) => (file as VariantFile).variantId)).toEqual(['v1']);
     // The reload clears the removed selection before the delete handler picks a fallback.
     expect(vm.selectedId.value).toBeNull();

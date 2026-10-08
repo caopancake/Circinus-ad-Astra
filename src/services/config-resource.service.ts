@@ -53,16 +53,18 @@ export async function queryHullPreviewMetadata(sessionId: ProjectSessionId, hull
 
 export async function queryBuiltInWeaponSlotOptions(sessionId: ProjectSessionId, hullId: string): Promise<SourceOptionGroup[]> {
   const result = await querySessionHullReferences(sessionId, [hullId]);
-  return [
-    {
-      origin: 'mod',
-      options: (result.builtInWeaponSlots[hullId] ?? []).map((slot) => ({
-        value: slot,
-        label: slot,
-        origin: 'mod',
-        description: null,
-        resourceRef: null,
-      })),
-    },
-  ];
+  return (['mod', 'core'] as const)
+    .map((origin) => ({
+      origin,
+      options: (result.builtInWeaponSlots[hullId] ?? [])
+        .filter((slot) => slot.origin === origin)
+        .map((slot) => ({
+          value: slot.id,
+          label: slot.id,
+          origin: slot.origin,
+          description: null,
+          resourceRef: null,
+        })),
+    }))
+    .filter((group) => group.options.length > 0);
 }

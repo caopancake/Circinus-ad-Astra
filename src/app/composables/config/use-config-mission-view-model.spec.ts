@@ -1,12 +1,13 @@
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, getActivePinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ConfigMissionRecord } from '@/domain/config/config-records';
 
 const mocks = vi.hoisted(() => ({
   createIndexedEntityAction: vi.fn(),
   deleteIndexedEntityAction: vi.fn(),
   saveIndexedEntityAction: vi.fn(async () => 'm2'),
-  listConfigMissionRecords: vi.fn(async (): Promise<Array<{ id: string; list: Record<string, string>; iconRef: null }>> => []),
+  listConfigMissionRecords: vi.fn(async (): Promise<ConfigMissionRecord[]> => []),
   getConfigMissionEditorData: vi.fn(),
   feedback: {
     success: vi.fn(),
@@ -70,12 +71,14 @@ const MISSION_SCHEMA = {
 } as never;
 
 function missionRecord(id: string, title: string) {
-  return { id, list: { mission: id, title }, iconRef: null };
+  return { id, list: { mission: id, title }, iconRef: null, baseVersions: [{ path: `M:/mod/${id}`, fingerprint: title }] };
 }
 
+let wrapper: VueWrapper;
+afterEach(() => wrapper?.unmount());
 function mountViewModel() {
   let vm!: ReturnType<typeof useConfigMissionViewModel>;
-  mount(
+  wrapper = mount(
     {
       setup() {
         vm = useConfigMissionViewModel();
@@ -93,6 +96,7 @@ function activateProject(modRoot = 'M:/mod', sessionId = 'sess-1') {
   workspace.registerMod({ modRoot, displayName: 'Mod', version: '', status: 'ready' });
   workspace.activateModTab(modRoot);
   project.registerProjectManifest({
+    baseVersions: [],
     sessionId,
     modRoot,
     starsectorRoot: null,
@@ -159,7 +163,7 @@ describe('useConfigMissionViewModel', () => {
     const vm = mountViewModel();
     const schema = MISSION_SCHEMA;
     const localMission = { list: { mission: '  ' }, descriptor: { title: 'One' }, text: 'body' };
-    const nextId = await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, schema);
+    const nextId = await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, schema, []);
     expect(nextId).toBeNull();
     expect(mocks.feedback.warning).toHaveBeenCalledWith('mission 不能为空');
     expect(mocks.saveIndexedEntityAction).not.toHaveBeenCalled();
@@ -169,8 +173,8 @@ describe('useConfigMissionViewModel', () => {
     activateProject();
     const vm = mountViewModel();
     const localMission = { list: { mission: 'bad id' }, descriptor: { title: 'One' }, text: 'body' };
-    expect(await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, MISSION_SCHEMA)).toBeNull();
-    expect(await vm.saveMission('sess-2', 'M:/mod', 'm1', localMission, MISSION_SCHEMA)).toBeNull();
+    expect(await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, MISSION_SCHEMA, [])).toBeNull();
+    expect(await vm.saveMission('sess-2', 'M:/mod', 'm1', localMission, MISSION_SCHEMA, [])).toBeNull();
     expect(mocks.saveIndexedEntityAction).not.toHaveBeenCalled();
   });
 
@@ -182,8 +186,8 @@ describe('useConfigMissionViewModel', () => {
     mocks.listConfigMissionRecords.mockResolvedValue([missionRecord('m2', 'Renamed')]);
 
     const localMission = { list: { mission: 'm2', title: 'Renamed' }, descriptor: { title: 'Renamed' }, text: 'body' };
-    const nextId = await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, MISSION_SCHEMA);
-    expect(nextId).toBe('m2');
+    const nextId = await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, MISSION_SCHEMA, []);
+    expect(nextId).toMatchObject({ id: 'm2' });
     expect(mocks.saveIndexedEntityAction).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'mission', previousId: 'm1', nextId: 'm2', deletePreviousTarget: true }),
       mocks.feedback,
@@ -204,18 +208,116 @@ describe('useConfigMissionViewModel', () => {
     mocks.deleteIndexedEntityAction.mockResolvedValue({});
     mocks.listConfigMissionRecords.mockResolvedValue([]);
     await expect(vm.deleteMission('sess-1', 'M:/mod', 'm1', true)).resolves.toBe(true);
-    expect(mocks.deleteIndexedEntityAction).toHaveBeenCalledWith('sess-1', 'M:/mod', 'mission', 'm1', true);
+    expect(mocks.deleteIndexedEntityAction).toHaveBeenCalledWith(
+      'sess-1',
+      'M:/mod',
+      'mission',
+      'm1',
+      true,
+      missionRecord('m1', 'One').baseVersions,
+    );
     expect(vm.selectedMission.value).toBeNull();
   });
 
   it('queries editor data through the service', async () => {
     activateProject();
-    mocks.getConfigMissionEditorData.mockResolvedValue({ descriptor: { title: 'T' }, list: {}, text: '', iconSrc: 'data:' });
+    mocks.getConfigMissionEditorData.mockResolvedValue({
+      baseVersions: [],
+      descriptor: { title: 'T' },
+      list: {},
+      text: '',
+      iconSrc: 'data:',
+    });
     const vm = mountViewModel();
     const data = await vm.queryMissionEditorData('sess-1', 'm1');
     expect(mocks.getConfigMissionEditorData).toHaveBeenCalledWith('sess-1', 'm1');
     expect(data).not.toBeNull();
     expect(vm.isValidMissionId('m1')).toBe(true);
     expect(vm.isValidMissionId('bad id')).toBe(false);
+  });
+
+  it('clears the previous session and uses the new deletion credentials', async () => {
+    activateProject();
+    mocks.listConfigMissionRecords.mockResolvedValue([missionRecord('same', 'A')]);
+    const vm = mountViewModel();
+    await flushPromises();
+    let release!: (records: ConfigMissionRecord[]) => void;
+    mocks.listConfigMissionRecords.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    activateProject('M:/B', 'sB');
+    await flushPromises();
+    expect(vm.selectedMission.value).toBeNull();
+    expect(vm.missionRows.value).toEqual([]);
+    expect(vm.missionIconRefs.value).toEqual({});
+    expect(await vm.deleteMission('sess-1', 'M:/mod', 'same', true)).toBe(false);
+    expect(mocks.deleteIndexedEntityAction).not.toHaveBeenCalled();
+    const next = { ...missionRecord('same', 'B'), baseVersions: [{ path: 'M:/B/same', fingerprint: 'B' }] };
+    release([next]);
+    await flushPromises();
+    mocks.listConfigMissionRecords.mockResolvedValue([]);
+    mocks.deleteIndexedEntityAction.mockResolvedValue({});
+    await vm.deleteMission('sB', 'M:/B', 'same', true);
+    expect(mocks.deleteIndexedEntityAction).toHaveBeenCalledWith('sB', 'M:/B', 'mission', 'same', true, next.baseVersions);
+  });
+
+  it('ignores old results across rapid switches and session reopening', async () => {
+    activateProject();
+    mocks.listConfigMissionRecords.mockResolvedValue([missionRecord('same', 'A')]);
+    const vm = mountViewModel();
+    await flushPromises();
+    let release!: (records: ConfigMissionRecord[]) => void;
+    mocks.listConfigMissionRecords.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    activateProject('M:/B', 'sB');
+    await flushPromises();
+    const oldRelease = release;
+    mocks.listConfigMissionRecords.mockResolvedValue([missionRecord('same', 'B reopened')]);
+    activateProject('M:/B', 'sB2');
+    await flushPromises();
+    oldRelease([missionRecord('same', 'B old')]);
+    await flushPromises();
+    expect(vm.missionRows.value[0]?.title).toBe('B reopened');
+    expect(vm.selectedMission.value).toBe('same');
+  });
+
+  it('keeps a failed new session empty until a successful retry', async () => {
+    activateProject();
+    mocks.listConfigMissionRecords.mockResolvedValue([missionRecord('same', 'A')]);
+    const vm = mountViewModel();
+    await flushPromises();
+    mocks.listConfigMissionRecords.mockRejectedValue(new Error('query failed'));
+    activateProject('M:/B', 'sB');
+    await flushPromises();
+    expect(vm.selectedMission.value).toBeNull();
+    expect(vm.missionRows.value).toEqual([]);
+    expect(mocks.feedback.error).toHaveBeenCalledTimes(1);
+    mocks.listConfigMissionRecords.mockResolvedValue([missionRecord('same', 'B')]);
+    await vm.queryMissions();
+    expect(vm.missionRows.value[0]?.title).toBe('B');
+  });
+
+  it('releases pending list responses on unmount', async () => {
+    activateProject();
+    let release!: (records: ConfigMissionRecord[]) => void;
+    mocks.listConfigMissionRecords.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const vm = mountViewModel();
+    wrapper.unmount();
+    release([missionRecord('same', 'late')]);
+    await flushPromises();
+    expect(vm.missionRows.value).toEqual([]);
+    expect(vm.selectedMission.value).toBeNull();
   });
 });

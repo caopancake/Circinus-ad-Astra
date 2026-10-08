@@ -22,13 +22,12 @@
         size="small"
         @update:value="updateField(key, $event)"
       />
-      <n-input
+      <JsonValueInput
         v-else
-        :value="JSON.stringify(model[key])"
-        type="textarea"
-        :autosize="{ minRows: 1, maxRows: 4 }"
-        size="small"
-        @update:value="updateJsonField(key, $event)"
+        :value="model[key]"
+        :label="key"
+        :shape="Array.isArray(model[key]) ? 'array' : 'object'"
+        @update="updateField(key, $event)"
       />
       <n-button class="compact-icon-button" size="tiny" quaternary title="删除字段" @click="removeField(key)">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -48,6 +47,7 @@
 import { computed, ref } from 'vue';
 import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import type { JsonValue, RowData } from '@/shared/types';
+import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
 
 const props = defineProps<{ knownKeys: string[] }>();
 
@@ -59,15 +59,6 @@ const extraKeys = computed(() => Object.keys(model.value).filter((k) => !isInter
 
 function updateField(key: string, value: JsonValue) {
   model.value = { ...model.value, [key]: value };
-}
-
-function updateJsonField(key: string, raw: string) {
-  try {
-    const parsed = JSON.parse(raw) as JsonValue;
-    updateField(key, parsed);
-  } catch {
-    updateField(key, raw);
-  }
 }
 
 function removeField(key: string) {

@@ -37,6 +37,7 @@ import { useWriteSyncStore } from '@/stores/write-sync.store';
 
 function manifestFixture(modRoot: string, sessionId: string): ProjectManifest {
   return {
+    baseVersions: [],
     sessionId,
     modRoot,
     starsectorRoot: null,
@@ -76,6 +77,9 @@ function refreshResult(modRoot: string, sessionId: string): ProjectSessionInvali
 
 function writeResult(changes: { path: string }[]): WriteResult {
   return {
+    baseVersions: [],
+    commitId: 1,
+    history: { revision: 1, undoStack: [], redoStack: [] },
     changes: changes.map((change) => ({
       kind: 'file' as const,
       path: change.path,
@@ -105,6 +109,28 @@ describe('refreshProjectSessionAfterWrite', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+  });
+
+  it('discards a refresh whose Mod was removed and reopened', async () => {
+    const root = 'C:/mods/alpha';
+    const project = useProjectStore();
+    project.registerProjectManifest(manifestFixture(root, 'old'));
+    let release!: (snapshot: ProjectSessionInvalidationResult) => void;
+    mocks.requestProjectSessionRefresh.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const pending = refreshProjectSessionAfterWrite(root, writeResult([{ path: 'notes.txt' }]), 'old');
+    useWriteSyncStore().removeModState(root);
+    project.removeProjectManifest(root);
+    project.registerProjectManifest(manifestFixture(root, 'new'));
+    release(refreshResult(root, 'old'));
+    await expect(pending).rejects.toMatchObject({ action: 'refresh-project-session-after-write' });
+    expect(project.getSessionId(root)).toBe('new');
+    expect(useWriteSyncStore().pending).toHaveLength(0);
+    expect(mocks.emitWindowEvent).not.toHaveBeenCalled();
   });
 
   it('refreshes the session, swaps the manifest and broadcasts invalidation', async () => {

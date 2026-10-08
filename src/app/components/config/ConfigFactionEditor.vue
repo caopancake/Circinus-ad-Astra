@@ -45,11 +45,19 @@ const props = defineProps<{
   dataRevision: number;
   previewRevision: number;
   factions: Record<string, RowData>;
+  factionVersions: Record<string, import('@/shared/types').FileVersion[]>;
   modRoot: string | null;
   sessionId: string | null;
   queryPreviewImages: (sessionId: string, factionId: string) => Promise<{ logoSrc: string; crestSrc: string }>;
   schemaRuntimeContext: SchemaRuntimeContext | null;
-  saveFaction: (sessionId: string, modRoot: string, previousId: string, local: RowData, schema: FileSchema) => Promise<string | null>;
+  saveFaction: (
+    sessionId: string,
+    modRoot: string,
+    previousId: string,
+    local: RowData,
+    schema: FileSchema,
+    baseVersions: import('@/shared/types').FileVersion[],
+  ) => Promise<import('@/shared/types').ConfigSaveIdentity | null>;
   deleteFaction: (sessionId: string, modRoot: string, id: string, deleteFile: boolean) => Promise<boolean>;
 }>();
 const emit = defineEmits<{ saved: [factionId: string | null] }>();
@@ -64,6 +72,7 @@ const { crestSrc, displayName, draftData, externalUpdateNotice, hasPendingExtern
     dataRevision: toRef(props, 'dataRevision'),
     factionId: toRef(props, 'factionId'),
     factions: toRef(props, 'factions'),
+    factionVersions: toRef(props, 'factionVersions'),
     modRoot: toRef(props, 'modRoot'),
     onSaved: (factionId) => emit('saved', factionId),
     previewRevision: toRef(props, 'previewRevision'),

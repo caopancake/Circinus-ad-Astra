@@ -21,7 +21,8 @@ pub(crate) use core::{
 };
 pub(crate) use csv::{
     ensure_registered_table_rows, ensure_session_table_rows, loaded_csv_rows,
-    loaded_registered_csv_rows, registered_session_table, registered_session_table_mut,
+    loaded_registered_csv_rows, refresh_faction_annotations, registered_session_table,
+    registered_session_table_mut,
 };
 pub(super) use media::clear_sprite_media_for_session;
 

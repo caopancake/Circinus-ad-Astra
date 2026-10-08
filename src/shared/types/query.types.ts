@@ -13,6 +13,7 @@ export type DiscoveredFieldType =
 export type ProjectSessionId = string;
 
 export interface ProjectManifest {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   sessionId: ProjectSessionId;
   modRoot: string;
   starsectorRoot: string | null;
@@ -100,6 +101,7 @@ export interface SourceOption {
 }
 
 export interface EntityData {
+  baseVersions: import('@/shared/types/write.types').FileVersion[];
   kind: EntityKind;
   id: string;
   data: JsonValue;
@@ -169,7 +171,7 @@ export interface HullReferencesResult {
   groups: HullReferenceGroup[];
   hullNames: Record<string, string>;
   sprites: Record<string, ResourceRef>;
-  builtInWeaponSlots: Record<string, string[]>;
+  builtInWeaponSlots: Record<string, { id: string; origin: ResourceSource }[]>;
 }
 
 export interface GameScanWarning {

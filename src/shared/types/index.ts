@@ -6,7 +6,7 @@ export type { AppLogEntry, AppLogLevel, AppLogStatus } from '@/shared/types/app-
 export { APP_LOG_LEVELS } from '@/shared/types/app-log.types';
 export type { FileChangeKind, FileChangeRecord, FileChangeReplayDirection, FileSnapshot } from '@/shared/types/history.types';
 export type { CsvDraftOperation, CsvEditHistoryEntry } from '@/shared/types/tables-edit-history.types';
-export type { FileHistoryItem, FileSaveHistoryEntry } from '@/shared/types/file-history.types';
+export type { FileHistoryItem, FileSaveHistoryEntry, FileHistorySnapshot } from '@/shared/types/file-history.types';
 export type {
   AssociatedFileChange,
   AssociatedSpecChange,
@@ -17,9 +17,12 @@ export type {
   JsonSourceConfirmation,
   JsonWriteOptions,
   WriteResult,
+  FileVersion,
 } from '@/shared/types/write.types';
 export type {
   ConfigFileEntityWrite,
+  ConfigSaveIdentity,
+  ConfigEditTarget,
   ConfigMissionEditorData,
   DeleteIndexedConfigEntityWrite,
   DeleteSkinEntityWrite,

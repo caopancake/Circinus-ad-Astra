@@ -13,10 +13,15 @@ const mocks = vi.hoisted(() => ({
   },
   replayNextFileUndo: vi.fn(),
   replayNextFileRedo: vi.fn(),
+  clearSavedFileHistory: vi.fn(async () => ({ revision: 10, undoStack: [], redoStack: [] })),
 }));
 
 vi.mock('@/app/composables/use-app-feedback', () => ({
   useAppFeedback: () => mocks.feedback,
+}));
+vi.mock('@/services/file-history.service', () => ({
+  loadFileHistory: vi.fn(async () => ({ revision: 0, undoStack: [], redoStack: [] })),
+  clearSavedFileHistory: mocks.clearSavedFileHistory,
 }));
 
 vi.mock('@/orchestrators/file-history-replay.orchestrator', () => ({
@@ -32,6 +37,7 @@ import type { ProjectManifest } from '@/shared/types';
 
 function manifestFixture(modRoot: string): ProjectManifest {
   return {
+    baseVersions: [],
     sessionId: 's1',
     modRoot,
     starsectorRoot: null,
@@ -76,8 +82,14 @@ describe('useFileHistoryViewModel', () => {
     workspace.activateModTab('C:/mods/alpha');
     project.registerProjectManifest(manifestFixture('C:/mods/alpha'));
     const fileHistory = useFileHistoryStore();
-    fileHistory.pushSavedWriteEntry('C:/mods/alpha', [changeRecord('a')], 'save one');
-    fileHistory.pushSavedWriteEntry('C:/mods/alpha', [changeRecord('b')], 'save two');
+    fileHistory.applySnapshot('C:/mods/alpha', {
+      revision: 2,
+      undoStack: [
+        { id: 1, timestamp: 1, label: 'save one', paths: ['a'] },
+        { id: 2, timestamp: 2, label: 'save two', paths: ['b'] },
+      ],
+      redoStack: [],
+    });
     const viewModel = useFileHistoryViewModel();
     expect(viewModel.historyCount.value).toBe(2);
     expect(viewModel.undoDisplayItems.value.map((entry) => entry.label)).toEqual(['save two', 'save one']);
@@ -86,18 +98,22 @@ describe('useFileHistoryViewModel', () => {
     expect(viewModel.canRedo.value).toBe(false);
   });
 
-  it('clears the active mod stacks behind a confirmation', () => {
+  it('clears the active mod stacks behind a confirmation', async () => {
     const workspace = useWorkspaceStore();
     const project = useProjectStore();
     workspace.registerMod({ modRoot: 'C:/mods/alpha', displayName: 'Alpha', version: '', status: 'ready' });
     workspace.activateModTab('C:/mods/alpha');
     project.registerProjectManifest(manifestFixture('C:/mods/alpha'));
     const fileHistory = useFileHistoryStore();
-    fileHistory.pushSavedWriteEntry('C:/mods/alpha', [changeRecord('a')], 'save one');
+    fileHistory.applySnapshot('C:/mods/alpha', {
+      revision: 1,
+      undoStack: [{ id: 1, timestamp: 1, label: 'save one', paths: ['a'] }],
+      redoStack: [],
+    });
     const viewModel = useFileHistoryViewModel();
     viewModel.confirmClear();
     expect(mocks.feedback.confirmWarning).toHaveBeenCalledTimes(1);
-    mocks.feedback.confirmWarning.mock.calls[0]![0].onConfirm();
+    await mocks.feedback.confirmWarning.mock.calls[0]![0].onConfirm();
     expect(fileHistory.getHistoryStacks('C:/mods/alpha').undoStack).toHaveLength(0);
     expect(mocks.feedback.success).toHaveBeenCalledWith('文件历史已清空');
   });
@@ -116,18 +132,3 @@ describe('useFileHistoryViewModel', () => {
     expect(mocks.replayNextFileRedo).toHaveBeenCalledTimes(1);
   });
 });
-
-function changeRecord(path: string) {
-  return {
-    kind: 'file' as const,
-    path,
-    beforeExists: true,
-    beforeText: 'before',
-    beforeDataBase64: null,
-    beforeFiles: [],
-    afterExists: true,
-    afterText: 'after',
-    afterDataBase64: null,
-    afterFiles: [],
-  };
-}

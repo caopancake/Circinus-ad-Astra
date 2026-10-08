@@ -16,8 +16,8 @@
       @select="selectFile"
     />
     <ConfigEntityFamilyEditor
-      v-if="selectedId"
-      :key="selectedId"
+      v-if="selectedId && files.some((file) => idOf(file) === selectedId)"
+      :key="JSON.stringify([sessionId, modRoot, family.id])"
       :family="family"
       :selected-id="selectedId"
       :files="files"
@@ -62,6 +62,7 @@ const {
   deleteFamilyEntity,
   onSaved,
   saveFamilyEntity,
+  idOf,
 } = familyViewModel;
 
 function selectFile(id: string | null): void {

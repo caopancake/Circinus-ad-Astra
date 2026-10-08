@@ -3,6 +3,8 @@ import { useFileHistoryStore } from '@/stores/file-history.store';
 import { refreshProjectSessionAfterWrite } from '@/orchestrators/project-session-refresh.orchestrator';
 import { AppError } from '@/shared/lib/errors';
 import type { WriteResult } from '@/shared/types';
+import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { formatError } from '@/shared/lib/errors';
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
 
@@ -18,8 +20,19 @@ export async function completeSavedWrite(completion: SavedWriteCompletion, proje
   validateSavedWriteCompletion(completion);
   assertSavedWriteSessionCurrent(completion, project);
   const fileHistory = useFileHistoryStore();
-  fileHistory.pushSavedWriteEntry(completion.modRoot, completion.result.changes, completion.label);
-  await refreshProjectSessionAfterWrite(completion.modRoot, completion.result, completion.sessionId);
+  fileHistory.applySnapshot(completion.modRoot, completion.result.history);
+  try {
+    await refreshProjectSessionAfterWrite(completion.modRoot, completion.result, completion.sessionId);
+  } catch (error) {
+    recordLogBestEffort({
+      level: 'warning',
+      code: 'write.sync_pending',
+      message: formatError(error),
+      path: completion.modRoot,
+      line: null,
+      fields: { sessionId: completion.sessionId },
+    });
+  }
 }
 
 function validateSavedWriteCompletion(completion: SavedWriteCompletion): void {

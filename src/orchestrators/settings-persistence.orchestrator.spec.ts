@@ -21,7 +21,7 @@ vi.mock('@/windows/tauri.events', () => ({
 
 import { saveLogDirectory, startSettingsMirror, startSettingsPersistence } from './settings-persistence.orchestrator';
 import { initializeSettingsStore, useSettingsStore } from '@/stores/settings.store';
-import { useFileHistoryStore } from '@/stores/file-history.store';
+import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
 
 const BASE_SETTINGS = {
   theme: 'light',
@@ -37,21 +37,6 @@ const BASE_SETTINGS = {
 
 function settingsFixture(overrides: { theme?: 'light' | 'dark'; historyLimit?: number; preserveOriginalJson?: boolean } = {}) {
   return { ...BASE_SETTINGS, ...overrides };
-}
-
-function emptyChange(path: string) {
-  return {
-    kind: 'file' as const,
-    path,
-    beforeExists: true,
-    beforeText: null,
-    beforeDataBase64: null,
-    beforeFiles: [],
-    afterExists: true,
-    afterText: null,
-    afterDataBase64: null,
-    afterFiles: [],
-  };
 }
 
 describe('settings persistence orchestration', () => {
@@ -92,21 +77,17 @@ describe('settings persistence orchestration', () => {
     await nextTick();
   });
 
-  it('syncs the history limit into the file history store', async () => {
+  it('persists the backend history limit and updates CSV history', async () => {
     const { nextTick } = await import('vue');
     const settings = useSettingsStore();
-    const fileHistory = useFileHistoryStore();
+    const setLimit = vi.spyOn(useTablesEditHistoryStore(), 'setHistoryLimit');
 
     settings.setHistoryLimit(2);
     await nextTick();
     await vi.waitFor(() => expect(mocks.saveSettings).toHaveBeenCalled());
 
-    // Stacks created after the change inherit the configured limit directly.
-    fileHistory.pushSavedWriteEntry('C:/mods/alpha', [emptyChange('a')], 'one');
-    fileHistory.pushSavedWriteEntry('C:/mods/alpha', [emptyChange('b')], 'two');
-    fileHistory.pushSavedWriteEntry('C:/mods/alpha', [emptyChange('c')], 'three');
-    const stacks = fileHistory.getHistoryStacks('C:/mods/alpha');
-    expect(stacks.undoStack.map((entry) => entry.label)).toEqual(['one', 'two', 'three'].slice(-2));
+    expect(setLimit).toHaveBeenCalledWith(2);
+    expect(mocks.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ historyLimit: 2 }));
   });
 
   it('saves a picked log directory and rebroadcasts the settings', async () => {

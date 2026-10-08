@@ -17,7 +17,7 @@
     />
     <ConfigMissionEditor
       v-if="selectedMission"
-      :key="selectedMission"
+      :key="JSON.stringify([sessionId, modRoot])"
       :mission-id="selectedMission"
       :mod-root="modRoot"
       :session-id="sessionId"

@@ -12,9 +12,10 @@
       @select="selectFaction"
     />
     <ConfigFactionEditor
-      v-if="selectedFaction"
-      :key="selectedFaction"
+      v-if="selectedFaction && factions[selectedFaction]"
+      :key="JSON.stringify([sessionId, modRoot])"
       :faction-id="selectedFaction"
+      :faction-versions="factionVersions"
       :data-revision="factionDataRevision"
       :preview-revision="factionPreviewRevision"
       :factions="factions"
@@ -42,6 +43,7 @@ const {
   factionPreviewRevision,
   listLoadStartedAt,
   factions,
+  factionVersions,
   factionCrestRefs,
   modRoot,
   sessionId,

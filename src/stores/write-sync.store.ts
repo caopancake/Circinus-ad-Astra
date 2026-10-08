@@ -8,6 +8,7 @@ export interface PendingWriteSync {
   sessionId: string;
   changes: FileChangeRecord[];
   refreshed: ProjectSessionInvalidationResult | null;
+  error: string | null;
 }
 
 export const useWriteSyncStore = defineStore('write-sync', () => {
@@ -15,7 +16,7 @@ export const useWriteSyncStore = defineStore('write-sync', () => {
   let sequence = 0;
 
   function enqueue(modRoot: string, sessionId: string, changes: FileChangeRecord[]) {
-    const entry: PendingWriteSync = { id: ++sequence, modRoot, sessionId, changes, refreshed: null };
+    const entry: PendingWriteSync = { id: ++sequence, modRoot, sessionId, changes, refreshed: null, error: null };
     pending.value.push(entry);
     return entry;
   }
@@ -32,5 +33,10 @@ export const useWriteSyncStore = defineStore('write-sync', () => {
     pending.value = pending.value.filter((entry) => entry.modRoot !== modRoot);
   }
 
-  return { pending, enqueue, markRefreshed, complete, removeModState };
+  function markFailed(id: number, error: string) {
+    const entry = pending.value.find((entry) => entry.id === id);
+    if (entry) entry.error = error;
+  }
+
+  return { pending, enqueue, markRefreshed, complete, removeModState, markFailed };
 });

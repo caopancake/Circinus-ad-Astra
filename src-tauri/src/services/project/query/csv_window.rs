@@ -45,7 +45,24 @@ pub fn query_csv_table_window(
             row: row.row.clone(),
         })
         .collect();
+    let mut base_versions = vec![super::super::versions::version_for_path(
+        &session,
+        &table_data.path,
+    )];
+    if let Some(spec) = crate::domain::editor_config_definitions::associated_spec_definition(table)
+    {
+        base_versions.extend(
+            session
+                .source_versions
+                .iter()
+                .filter(|(path, _)| {
+                    path.starts_with(&format!("{}/", spec.dir)) && path.ends_with(spec.extension)
+                })
+                .map(|(_, version)| version.clone()),
+        );
+    }
     Ok(CsvTableWindow {
+        base_versions,
         table,
         header: table_data.header.clone(),
         total_rows: rows_ref.len(),

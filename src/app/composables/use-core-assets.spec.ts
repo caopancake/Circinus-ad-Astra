@@ -4,7 +4,10 @@ import type { DiscoveredField } from '@/domain/schema/schema.types';
 
 const mocks = vi.hoisted(() => ({
   queryCoreFields: vi.fn(),
-  queryCoreGraphics: vi.fn(async () => [] as string[]),
+  queryCoreGraphics: vi.fn(async (root: string) => {
+    void root;
+    return [] as string[];
+  }),
 }));
 
 vi.mock('@/services/assets.service', () => ({
@@ -17,7 +20,7 @@ vi.mock('@/services/app-feedback-log.service', () => ({
 }));
 
 import { useCoreAssetsStore, useCoreGraphics, useCoreSchema } from './use-core-assets';
-import { initializeSettingsStore } from '@/stores/settings.store';
+import { initializeSettingsStore, useSettingsStore } from '@/stores/settings.store';
 import { useProjectStore } from '@/stores/project.store';
 
 const FIELDS: Record<string, DiscoveredField[]> = {
@@ -42,6 +45,19 @@ describe('useCoreAssetsStore', () => {
     setActivePinia(createPinia());
     initializeSettingsStore(settingsFixture(null));
     vi.clearAllMocks();
+  });
+
+  it('keeps facades reactive across first load and game root changes', async () => {
+    initializeSettingsStore(settingsFixture('D:/first'));
+    mocks.queryCoreFields.mockResolvedValue(FIELDS);
+    mocks.queryCoreGraphics.mockImplementation(async (root) => [`${root}/graphics/sprite.png`]);
+    const facade = useCoreGraphics();
+    expect(facade.graphicsPaths.value).toEqual([]);
+    await facade.loadGraphics();
+    expect(facade.graphicsPaths.value).toEqual(['D:/first/graphics/sprite.png']);
+    useSettingsStore().setStarsectorRoot('E:/second');
+    await vi.waitFor(() => expect(facade.graphicsPaths.value).toEqual(['E:/second/graphics/sprite.png']));
+    expect(facade.starsectorRoot.value).toBe('E:/second');
   });
 
   it('loads core fields for the current root and marks them loaded', async () => {
@@ -114,8 +130,8 @@ describe('useCoreAssetsStore', () => {
     expect(store.graphicsLoaded).toBe(true);
 
     const facade = useCoreGraphics();
-    expect(facade.graphicsPaths).toEqual(['graphics/ship.png']);
-    expect(facade.loaded).toBe(true);
+    expect(facade.graphicsPaths.value).toEqual(['graphics/ship.png']);
+    expect(facade.loaded.value).toBe(true);
   });
 
   it('exposes the schema facade with merged schema access', async () => {
@@ -125,8 +141,8 @@ describe('useCoreAssetsStore', () => {
     await store.loadFieldsFor('D:/games/starsector');
 
     const facade = useCoreSchema();
-    expect(facade.loaded).toBe(true);
-    expect(facade.starsectorRoot).toBe('D:/games/starsector');
+    expect(facade.loaded.value).toBe(true);
+    expect(facade.starsectorRoot.value).toBe('D:/games/starsector');
     expect(facade.getMergedSchema('faction')?.sections?.at(-1)?.fields[0]?.label).toBe('bonus');
     await facade.loadCoreFields();
   });
