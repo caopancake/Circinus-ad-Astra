@@ -71,10 +71,10 @@
 - [配置系统](modules/config.md)：说明 mod_info、Faction、Mission、Variant、Skin、目标草稿、实体 query/write 与文件级 history。
 - [字段模式系统](modules/schema.md)：说明 schema 资产加载、runtime、字段渲染、editMode、校验、引用 source、SelectOption 与资源选择。
 - [配置实体族编辑器](modules/family-editors.md)：说明装配与皮肤两族参数化编辑、family 定义、实体 query/write 和单文件保存。
-- [舰船编辑器](modules/ship-editor.md)：说明 `.ship` 画布注入、槽位、引擎、shield、资源上传与独立窗口保存。
+- [舰船编辑器](modules/ship-editor.md)：说明 `.ship` 画布注入、槽位、引擎、shield、贴图引用选择与独立窗口保存。
 - [武器、弹体与发射预览](modules/weapon-editing.md)：说明 `.wpn` 编辑、`specClass` 分支、弹体窗口、发射预览与武器工作流链路。
 - [战术系统编辑器](modules/system-editor.md)：说明 `.system` spec、schema 表单、type 条件字段与独立窗口保存。
-- [资源与原版回退](modules/assets-core-fallback.md)：说明 `ResourceRef`、Mod/Core 优先级、data URL batch、PNG 上传与派生资源索引。
+- [资源与原版回退](modules/assets-core-fallback.md)：说明 `ResourceRef`、Mod/Core 优先级、data URL batch、Mod 内 PNG 引用选择与派生资源索引。
 - [后端文件读写与变更集](modules/rust-file-io-changeset.md)：说明 UTF-8 IO、canonical 路径、父链校验、文件或目录快照与 replay。
 - [性能基线](modules/performance-baseline.md)：说明正式计时日志、可复现样本、ProjectSession 阶段、持久化索引和入口 bundle 体积。
 - [静态检查系统](modules/static-checks.md)：说明文本、格式配置、架构静态检查与模块文档契约的入口、边界和规则自检原则。

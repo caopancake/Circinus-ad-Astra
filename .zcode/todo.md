@@ -1,181 +1,155 @@
 # Todo
 
-## Phase 1: 架构收敛
+## 批次验收
 
-### Phase 1.1: 配置实体族类型契约收束
+- 文档批次：运行 `format:check`、`encoding:check`、`node scripts/check-architecture.mjs` 与 `git diff --check`。
+- 前端批次：运行 `format:check`、`encoding:check`、`lint`、`typecheck`、`test` 与 `build`。
+- Rust 批次：运行 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings` 与 `cargo test`。
+- 跨层、保存、路径、parser、workspace 或发布链路批次：运行前后端全部检查；视觉批次：验收亮暗主题、窄窗口、滚动、hover、focus、disabled 和文字布局。
+- 每批记录命令、退出码、耗时、测试数量与失败位置，核对工作树、暂存区、编码、换行和用户修改的保留状态。
 
-- [ ] `ConfigFamilyFile`、`VariantFile` 与 `SkinFile` 必须使用明确的正式记录形状，实体字段、文件元数据和列表投影必须具有明确的 ownership。
-- [ ] Variant 与 Skin 的 ID、标题、companion 和排序必须经显式 family 访问器消费；`config-entity-families.ts` 严禁使用 `as unknown as` 绕过记录类型契约。
-- [ ] Variant 与 Skin 的字段、目录、Hull 名称 hydration 和统计差异必须由 family 定义承载；共同的列表、选择、draft、保存、删除、重命名和刷新流程必须复用正式 owner。
-- [ ] Variant 与 Skin 的标题、companion、排序和输入契约必须具有对应行为测试。
-- [ ] 本子阶段必须运行前端全套检查。
+## Phase 1: 配置实体族类型契约收束
 
-### Phase 1.2: 审计基线与 Todo 事实收束
-
-- [ ] 源码文件数、行数、最大文件和测试数量必须使用统一统计口径，并附精确数值、单位与对应证据。
-- [ ] Todo 的阶段数字和完成描述必须符合当前实现；待办条目只允许描述当前待执行工作。
-- [ ] 受影响模块文档、overview、guideline 和 module map 的路径、ownership、调用链必须与当前实现一致。
-- [ ] 本子阶段必须运行 `format:check`、`encoding:check`、`node scripts/check-architecture.mjs` 与 `git diff --check`。
-
-### Phase 1.3: 复杂度热点职责收束
-
-- [ ] `ShipEditor.vue`、`source_options.rs`、`invalidation.rs` 和 `csv_patch.rs` 必须具有 ownership、调用扇出、状态写入点和保存终点的完整证据。
-- [ ] 拆分只允许依据稳定职责边界执行，wire 与 changeset 契约必须具有对应行为验证。
-- [ ] 编辑器、source options、失效推导和 CSV patch 的行为、错误语义、session 身份和 refresh 顺序必须符合正式模块契约。
-- [ ] 每个拆分批次必须运行对应前端或 Rust 全套检查，并完成窗口、资源、表格和保存链路验收。
+- [ ] 收束 `ConfigFamilyFile`、`VariantFile` 与 `SkinFile` 的记录契约，明确已加载记录、可编辑文件内容、文件元数据和列表派生信息的 ownership。
+- [ ] 统一 Variant 与 Skin 的 ID、标题、companion 和排序访问器，使用明确的记录类型，消除 `config-entity-families.ts` 中绕过记录契约的 `as unknown as`。
+- [ ] 将展示、字段和 Hull 名称 hydration 差异收口到 family，明确 Rust 对实际目录、保存路径和统计来源的归属，复用现有公共编辑流程。
+- [ ] 补齐两族标题、companion、排序和记录输入契约的行为测试，回归跨 Mod、版本凭据、dirty 和重命名交接。
 
 ## Phase 2: 沉浸式编辑器
 
-- [ ] 基于原版的 UI 界面，产生 舰船/武器 的沉浸式编辑器。
-- [ ] 沉浸式编辑器完全复刻游戏原版的界面，但允许点击进行编辑。
-- [ ] 保存走通用文件保存和文件级 history；undo/redo 后刷新对应文件内容。
-- [ ] 验收新增、编辑、保存、撤销重做和解析错误定位行为。
+- [ ] 基于游戏原版界面实现舰船与武器沉浸式编辑器，完全复刻原版界面并支持点击编辑。
+- [ ] 接入现有画布骨架、目标草稿、资源引用、编辑器保存、文件级 history 与 refresh 链路。
+- [ ] 验收新增、编辑、保存、撤销重做、dirty 外部版本交接和解析错误定位。
 
 ## Phase 3: 外置文本 JSON 支持
 
-- [ ] 读取 `data/strings/strings.json`，缺文件时返回空列表。
-- [ ] 新增外置文本模块入口，列表展示文件，详情使用基础文本编辑器或现有 JSON 文本编辑能力，不新增专用复杂编辑器。
-- [ ] 保存走通用文件保存和文件级 history；undo/redo 后刷新对应文件内容。
-- [ ] 验收新增、编辑、保存、撤销重做和解析错误定位行为。
+- [ ] 接入 `data/strings/strings.json` 的读取与外置文本模块入口，缺文件时返回空列表。
+- [ ] 文件列表与详情复用现有基础文本编辑器或 JSON 文本编辑能力，接入现有保存、文件级 history 与回放刷新链路。
+- [ ] 验收新增、编辑、保存、撤销重做、缺文件和解析错误定位。
 
 ## Phase 4: CSV Schema 覆盖审计
 
-- [ ] 检查所有项目内已接入 CSV 的每个字段是否都有对应列 schema；缺失字段必须补齐 schema 或明确记录为只能文本编辑的字段。
-- [ ] 检查所有 CSV 列 schema 字段是否都有中文名和字段解释；缺失时必须补齐。
-- [ ] 手动逐字段核对中文名和字段解释，确认译名、语义、引用关系和编辑控件都符合实际用途。
-- [ ] 审计结果必须能定位到具体 CSV、具体字段和具体 schema 文件；不得只给总量统计。
+- [ ] 以现行表注册表、已接入 CSV header 和 `schemas/csv/*.schema.json` 逐字段核对覆盖，补齐缺失 schema 或明确记录为文本编辑字段。
+- [ ] 逐字段核对并补齐中文名与解释，核实译名、语义、引用关系和控件的实际用途依据。
+- [ ] 整理可定位具体 CSV、字段、schema 文件与依据的审计台账，记录覆盖结论和待修复项。
 
 ## Phase 5: 组件动画与阻塞加载界面
 
-- [ ] 补足适当的组件动画，覆盖展开、收起、切换和局部显隐等高频交互；动画速度必须快，不拖慢操作反馈。
-- [ ] 优先复用 Naive UI 自带动画和现有组件能力；需要补充时优先只改组件封装或 CSS，不改变业务链路。
-- [ ] 等待界面只用于工作区加载、完整 Mod 读取这类耗时且 blocker 级别的流程；普通局部刷新、表格切换和轻量保存不得弹出全局等待界面。
-- [ ] 加载界面必须明确当前阻塞对象和状态，不遮挡可继续操作的非阻塞区域。
-- [ ] 验收动画不会造成布局跳动、文字重叠、滚动错位或视觉风格偏移。
+- [ ] 在已有 Naive UI 动画、组件和 CSS 基础上补齐展开、收起、切换与局部显隐的覆盖，保持快速反馈。
+- [ ] 完善现有工作区与 Mod 加载状态的呈现，明确阻塞对象和状态；为工作区加载与完整 Mod 读取等阻塞流程完善等待界面，保持可操作区域可用。
+- [ ] 验收动画与加载呈现的布局、文字、滚动和视觉一致性，以及局部刷新、表格切换和轻量保存的可操作性。
 
 ## Phase 6: 自动数据校验和警示
 
 ### Phase 6.1: 诊断模型与统一入口
 
-- [ ] 建立统一诊断模型，至少包含 severity、source kind、entity id、field/path、message 和可定位目标；诊断只描述问题，不负责写盘。
-- [ ] 建立统一校验入口，通过 session query、CSV 草稿状态、schema 资产和资源索引后产出诊断；不得让组件、store 或保存函数各自散落校验逻辑。
-- [ ] 明确 severity 行为：warning 默认允许保存；error 只用于确定会破坏写入边界、解析边界或唯一 ID 边界的问题；是否阻止保存由统一策略决定。
+- [ ] 建立描述问题的统一诊断模型，包含 severity、source kind、entity id、field/path、message 和可定位目标。
+- [ ] 建立统一诊断入口，复用现有解析、session query、CSV 草稿、schema、引用与资源解析能力，接入组件、store 和保存流程的诊断消费。
+- [ ] 定义 severity 与保存策略：warning 默认允许保存，error 表达确定破坏写入、解析或唯一 ID 边界的问题，现有边界失败接入对应诊断语义。
 
 ### Phase 6.2: CSV 表格校验
 
-- [ ] CSV 列校验适用范围固定为已注册主表格：`ships`、`weapons`、`wings`、`hullmods`、`shipSystems`、`industries`、`skills`、`abilities`、`commodities`、`specialItems`、`submarkets`、`marketConditions`、`simOpponents`。
-- [ ] CSV 列校验只依据 `schemas/csv/*.columns.json` 和当前表 header；未被列 schema 覆盖的列不做类型校验，只保留通用空值/显示能力。
-- [ ] CSV 数值列校验：`control: number` 的非空值必须能解析为有限数值，并校验 schema 中的 min、max 和 step。
-- [ ] CSV 布尔列校验：`control: boolean` 的非空值必须是当前项目允许的布尔文本。
-- [ ] CSV 枚举列校验：`control: enum` 的非空值必须在 schema options 中。
-- [ ] CSV 引用列校验：`control: reference` 的非空值必须能在当前 Mod 或原版引用源中解析；`#` 开头行不得作为合法引用；当前 Mod 覆盖原版重复 ID 的规则保持不变。
-- [ ] CSV tag / multi 列校验：按逗号拆分后检查空项、重复项和 source 引用合法性；无 source 的 tag 只做格式级检查。
-- [ ] CSV path-image / color 列校验：图片路径非空时检查资源索引可解析；颜色列按既定格式检查，未定义格式前只做非阻塞 warning。
-- [ ] CSV 行级校验：业务 ID 为空、重复 ID、`#` 开头禁用行被其它字段引用、关联 spec 候选路径冲突时给出诊断。
+- [ ] 为已注册主表格 `ships`、`weapons`、`wings`、`hullmods`、`shipSystems`、`industries`、`skills`、`abilities`、`commodities`、`specialItems`、`submarkets`、`marketConditions`、`simOpponents` 接入 CSV 列诊断。
+- [ ] 依据现有加载器返回的 `schemas/csv/*.schema.json` 和当前表 header 接入列类型诊断，schema 覆盖外的列保留通用空值与显示能力。
+- [ ] 为数值、布尔和枚举列分别接入有限数值与 min/max/step、项目允许的布尔文本和 schema options 值域诊断。
+- [ ] 复用当前 Mod 与原版引用目录，按 Mod 优先语义诊断引用可解析性，过滤 `#` 开头的禁用行。
+- [ ] 为 tag / multi 列接入逗号拆分后的空项、重复项和 source 引用诊断，无 source 的 tag 进行格式诊断。
+- [ ] 为 path-image 列接入非空图片路径的资源诊断，为 color 列接入既定格式诊断，格式未定义时产生非阻塞 warning。
+- [ ] 接入业务 ID 为空、重复 ID、禁用行被引用和关联 spec 候选路径冲突的行级诊断。
 
 ### Phase 6.3: Spec 与配置实体校验
 
-- [ ] 非 CSV 校验适用范围包括 `.ship`、`.wpn`、`.proj`、`.variant`、`.skin`、Faction `.faction`、Mission descriptor/mission_text 和贴图资源；不覆盖 Java、rules.csv、本地化文件和社区库文件，后续阶段另行接入。
-- [ ] `.ship` 校验：中心、护盾中心、护盾半径、碰撞半径、武器槽、甲板、引擎、边界点等坐标字段应为整数；缺失关键中心/护盾字段给出诊断。
-- [ ] `.ship` 几何校验：`collisionRadius` 小于 `shieldRadius`、碰撞半径未覆盖武器槽、甲板、引擎、边界点或护盾圆时给出诊断。
-- [ ] `.ship` 引用校验：内置武器、内置联队、内置插件、战术系统、装配和皮肤相关 hull 引用必须走当前 Mod + 原版引用源；`skinHullId` 必须被视作合法 hull 引用。
-- [ ] `.wpn` 校验：炮口/barrel offset 缺失、炮口坐标含小数、当前视图贴图路径缺失、武器 CSV 行与 `.wpn` 关键引用不一致时给出诊断。
-- [ ] `.proj` 校验：弹体贴图路径、碰撞/尺寸/速度等确定数值字段、武器引用弹体缺失或弹体文件孤立时给出诊断。
-- [ ] `.variant` 校验：`variantId`、`hullId`、武器槽位引用、武器 ID、插件 ID、联队 ID、模块/内置装配引用必须可解析；重复或缺必填字段沿用读取阶段 error 语义。
-- [ ] `.skin` 校验：`skinHullId`、`baseHullId`、内置武器、内置联队、内置插件、战术系统、slot change 和 engine change 引用必须可解析；`skinHullId` 参与所有 hull 引用解析。
-- [ ] Faction / Mission 校验：CSV index 与额外文件或目录之间的 ID、路径和必填字段必须一致；Mission 改名后 descriptor、mission_text 和目录资源必须保持可定位。
+- [ ] 为 `.ship`、`.wpn`、`.proj`、`.variant`、`.skin`、Faction `.faction`、Mission descriptor/mission_text 和贴图资源接入诊断。
+- [ ] 为 `.ship` 接入中心、护盾中心、半径、武器槽、甲板、引擎和边界点的整数约束，以及关键中心与护盾字段缺失诊断。
+- [ ] 为 `.ship` 接入 `collisionRadius` 小于 `shieldRadius`，以及碰撞半径未覆盖武器槽、甲板、引擎、边界点或护盾圆的几何诊断。
+- [ ] 复用当前 Mod 与原版引用源，为 `.ship` 接入内置武器、联队、插件、战术系统、装配和皮肤相关 hull 的引用诊断，包含合法的 `skinHullId`。
+- [ ] 为 `.wpn` 接入炮口/barrel offset 缺失、炮口坐标含小数、当前视图贴图路径缺失，以及武器 CSV 与 spec 关键引用不一致的诊断。
+- [ ] 为 `.proj` 接入弹体贴图路径、碰撞/尺寸/速度等确定数值字段、被武器引用的弹体缺失和弹体文件孤立诊断。
+- [ ] 为 `.variant` 接入 `variantId`、`hullId`、槽位、武器、插件、联队和模块/内置装配引用诊断，重复或缺必填字段接入现有读取 error 语义。
+- [ ] 为 `.skin` 接入 `skinHullId`、`baseHullId`、内置武器、联队、插件、战术系统、slot change 和 engine change 引用诊断，hull 引用解析包含 `skinHullId`。
+- [ ] 为 Faction / Mission 接入 CSV index 与实体文件或目录的 ID、路径和必填字段一致性诊断，验收 Mission 改名后 descriptor、mission_text 和目录资源的可定位性。
 
 ### Phase 6.4: 资源诊断
 
-- [ ] 贴图资源校验：被 spec、CSV 或 schema 引用的 PNG 资源缺失时给出诊断；贴图宽度或高度为奇数时给出 warning；hardpoint 武器贴图高度不为 4 的倍数时给出 warning。
-- [ ] 贴图资源校验不扫描未被引用的所有图片作为首期必做项；如需要全资源扫描，作为后续性能可控的独立扩展。
+- [ ] 复用资源解析诊断被 spec、CSV 或 schema 引用的 PNG 缺失，为宽度或高度为奇数、hardpoint 武器贴图高度不为 4 的倍数产生 warning。
+- [ ] 按实际引用按需读取图片及尺寸，以正式资源身份确定读取和失效范围。
 
 ### Phase 6.5: 诊断展示与同步
 
-- [ ] 设计诊断展示位置：表格行/单元格标记、右侧字段速览提示、配置 schema 字段提示、舰船/武器/弹体编辑器字段提示、资源预览提示、保存前汇总和工作区级汇总。
-- [ ] CSV 展示与交互：诊断必须能映射到具体表、行和列；右侧字段速览显示当前行诊断；保存 CSV 前汇总本表诊断。
-- [ ] 文件历史 replay 和保存后同步必须刷新受影响实体的诊断结果；二进制贴图变化只刷新资源相关诊断，不尝试解析为文本。
+- [ ] 接入表格行/单元格、右侧字段速览、配置 schema、舰船/武器/弹体字段、资源预览、保存前汇总和工作区汇总的诊断呈现。
+- [ ] 将 CSV 诊断映射到具体表、行和列，在右侧字段速览呈现当前行诊断，保存前汇总本表诊断。
+- [ ] 订阅现有保存与文件 history replay 的结构化失效，刷新受影响诊断；二进制贴图变化刷新资源相关诊断。
 
 ### Phase 6.6: 校验覆盖检查
 
-- [ ] 补最小测试或静态检查：CSV schema 控件类型对应校验器、引用源过滤 `#` 行、hull 引用包含 skin、典型 `.ship/.wpn/.variant/.skin` 异常、贴图尺寸异常和保存前汇总。
+- [ ] 补齐 CSV schema 控件与诊断器映射、禁用行引用、含 skin 的 hull 引用、典型 `.ship/.wpn/.variant/.skin` 异常、贴图尺寸和保存前汇总的行为测试或静态检查。
 
 ## Phase 7: 定义右键行为
 
 ### Phase 7.1: 表格与详情右键
 
-- [ ] 定义主表格行、单元格和右侧详情区的右键菜单范围。
-- [ ] 覆盖复制 ID、打开可用编辑器、删除记录、定位资源和复制字段值等常用动作。
-- [ ] 右键菜单必须复用现有确认、保存边界和文件历史链路，不新增绕过路径。
+- [ ] 实现主表格行、单元格和右侧详情区的右键菜单，覆盖复制 ID、打开可用编辑器、删除记录、定位资源和复制字段值。
+- [ ] 菜单动作接入现有动作、确认、保存边界和文件 history 链路。
 
 ### Phase 7.2: 配置页右键
 
-- [ ] 定义配置列表和 schema 字段的右键行为，覆盖复制 ID、复制字段、删除、定位文件等动作。
-- [ ] Faction、Mission、Variant、Skin 的删除和定位动作必须沿用现有配置保存与文件历史链路。
+- [ ] 实现配置列表和 schema 字段的复制 ID、复制字段、删除和定位文件菜单。
+- [ ] Faction、Mission、Variant、Skin 菜单复用现有配置动作、保存与文件 history 链路。
 
 ### Phase 7.3: 编辑器画布右键
 
-- [ ] 定义舰船画布右键行为：添加点、删除点、切换模式、复制坐标等。
-- [ ] 定义武器画布右键行为：添加 barrel、删除 barrel、复制坐标等。
-- [ ] 定义弹体编辑器右键行为：复制字段、重置字段、定位贴图等。
-- [ ] 右键菜单不得破坏画布右键拖动平移体验。
+- [ ] 为舰船画布接入添加点、删除点、切换模式和复制坐标菜单，为武器画布接入添加 barrel、删除 barrel 和复制坐标菜单。
+- [ ] 为弹体编辑器接入复制字段、重置字段和定位贴图菜单，复用现有草稿与资源动作。
+- [ ] 明确菜单点击与画布右键拖动平移的动作边界，接入两种交互。
 
 ### Phase 7.4: 右键行为验收
 
-- [ ] 为表格、配置页和编辑器右键菜单补手动验收清单。
-- [ ] 验收输入框、文本域和弹窗内右键行为不会被业务菜单误拦截。
+- [ ] 整理表格、配置页和编辑器菜单的手动验收清单，覆盖动作、确认、保存、历史及画布平移。
+- [ ] 回归输入框、文本域和弹窗中的原生右键行为。
 
 ## Phase 8: 重新梳理主界面快捷键
 
 ### Phase 8.1: 主窗口导航快捷键
 
-- [ ] 定义搜索、模块切换、记录选择、多 Mod 导航、总览页和设置页之间的快捷键范围。
-- [ ] 快捷键必须按当前视图和焦点状态生效，避免跨页面误触。
+- [ ] 定义并接入搜索、模块切换、记录选择、多 Mod 导航、总览页和设置页的导航快捷键。
+- [ ] 将新增快捷键接入现有统一分发器，按当前视图和焦点状态分派。
 
 ### Phase 8.2: 主窗口编辑快捷键
 
-- [x] Ctrl+S 全局保存：主窗口 table 视图、config 各编辑器、编辑器子窗口和文件编辑器均支持 Ctrl+S 触发保存。
-- [ ] 统一新建、删除和关闭工作区等通用行为的快捷键。
-- [ ] 快捷键必须接入现有 CSV 草稿历史、文件级 history、配置保存和确认链路。
+- [ ] 统一并接入新建、删除和关闭工作区的命令键位及当前视图动作。
+- [ ] 新增编辑命令复用现有 CSV 草稿历史、文件级 history、配置保存和确认链路。
 
 ### Phase 8.3: 输入焦点与提示
 
-- [x] Ctrl+S 保存在输入框和文本域内也能正常触发，不被 editable 判断阻断。
-- [ ] 避免其他快捷键和输入框、文本域、schema 控件、CSV 单元格编辑器、文件编辑器和系统快捷键冲突。
-- [ ] 在合适位置提供主界面快捷键提示或设置入口。
+- [ ] 为新增命令补齐输入框、文本域、schema、CSV 单元格、文件编辑器与系统键位的焦点和冲突回归，回归现有保存与撤销重做策略。
+- [ ] 提供主界面快捷键提示或设置入口。
 
 ## Phase 9: 高级配置
 
+本阶段目标位于 Mod 的 `data/config/`，游戏配置与工具私有 settings 具有独立归属。
+
+- 各目标接入现有 schema 加载器、表单、额外字段与字段控件，保留未知字段。
+- 各目标接入现有配置保存、文件 history 和回放刷新链路，验收编辑、保存、撤销重做、未知字段保留和解析错误定位。
+
 ### Phase 9.1: 游戏全局设置
 
-- [ ] 添加 `data/config/settings.json` 编辑支持。
-- [ ] 提供按战斗、生涯、市场、UI 等大类浏览的 schema 表单。
-- [ ] Schema 覆盖已知设置项；未知字段保留到额外字段区。
-- [ ] 保存走配置保存和文件级 history 链路。
+- [ ] 接入 `data/config/settings.json`，提供按战斗、生涯、市场和 UI 分类的 schema 表单，覆盖已知设置项。
 
 ### Phase 9.2: 战斗目标配置
 
-- [ ] 添加 `data/config/battle_objectives.json` 编辑支持。
-- [ ] 使用 schema 表单编辑目标定义；未知字段保留。
-- [ ] 保存走配置保存和文件级 history 链路。
+- [ ] 接入 `data/config/battle_objectives.json`，以 schema 表单编辑战斗目标定义。
 
 ### Phase 9.3: 引擎样式配置
 
-- [ ] 添加 `data/config/engine_styles.json` 编辑支持。
-- [ ] 使用 schema 表单编辑样式定义；颜色、数值和贴图字段使用已有控件能力。
-- [ ] 保存走配置保存和文件级 history 链路。
+- [ ] 接入 `data/config/engine_styles.json`，以 schema 表单编辑样式，颜色、数值和贴图字段复用已有控件。
 
 ### Phase 9.4: 舰体样式配置
 
-- [ ] 添加 `data/config/hull_styles.json` 编辑支持。
-- [ ] 使用 schema 表单编辑样式定义；未知字段保留。
-- [ ] 保存走配置保存和文件级 history 链路。
+- [ ] 接入 `data/config/hull_styles.json`，以 schema 表单编辑舰体样式定义。
 
 ### Phase 9.5: 声音配置
 
-- [ ] 添加 `data/config/sounds.json` 编辑支持。
-- [ ] 使用 schema 表单编辑声音定义；路径字段保持文本或既有路径控件。
-- [ ] 保存走配置保存和文件级 history 链路。
+- [ ] 接入 `data/config/sounds.json`，以 schema 表单编辑声音定义，路径字段复用文本或既有路径控件。
 
 ## Phase 10: 禁止项：可视化逻辑编辑器（蓝图系统）
 
@@ -240,7 +214,7 @@
 - [ ] Schema 驱动的库配置编辑：MagicLib 赏金的势力/市场引用使用 Schema source 字段解析。
 - [ ] Schema 驱动的库配置编辑：MagicLib 赏金的 fleet_composition 使用嵌套 array-of-object + 舰船 ID 选择器。
 - [ ] Schema 驱动的库配置编辑验收：完整编辑 magicBounty_data.json → 保存 → 游戏中正常加载。
-- [ ] CSV 列 Schema 系统：定义 CSV 列 Schema 格式（`schemas/csv/ship_data.columns.json` 等）。
+- [ ] CSV 列 Schema 系统：定义 CSV 列 Schema 格式（`schemas/csv/ships.schema.json` 等）。
 - [ ] CSV 列 Schema 系统：配置模块页面 / 主表格根据列 Schema 渲染富控件。
 - [ ] CSV 列 Schema 系统：GraphicsLib `texture_data.csv` 的 `path` 列自动关联 path-image 富编辑。
 - [ ] CSV 列 Schema 系统：GraphicsLib `light_data.csv` 的 `color` 列自动关联 color-rgb 编辑器。
@@ -254,9 +228,7 @@
 
 ## Phase 12: 最终硬化、回归与整理
 
-- [ ] 统一回查前后端模块边界、命名一致性、状态链路和保存语义。
-- [ ] 清理临时兼容层和死代码。
-- [ ] 重新审视 store、service、component、composable 和 shared API 是否再次出现职责漂移。
-- [ ] 更新 `.zcode/module-map.md`、`.zcode/modules/`、`.zcode/frontend-guidelines.md`、`.zcode/backend-guidelines.md` 和 `README.md`。
-- [ ] 跑前后端全套检查，并补最关键的回归清单。
-- [ ] 记录仍然存在但可接受的技术债和后续改进方向。
+- [ ] 按最终实现回查前后端模块边界、命名、状态归属、保存语义，以及 store、service、component、composable 和 shared API 的职责。
+- [ ] 整理具有文件、符号、行号和完整链路证据的清理清单，按证据处理兼容包装、重复入口和死代码。
+- [ ] 同步最终契约对应的 module map、模块文档、前后端 guideline 和 `README.md`。
+- [ ] 完成前后端全量检查及关键入口、保存、回放、窗口与资源链路回归，交付验收结果和剩余问题证据台账。
