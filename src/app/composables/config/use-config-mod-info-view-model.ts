@@ -1,6 +1,6 @@
 import { computed, watch } from 'vue';
 import { useProjectStore } from '@/stores/project.store';
-import { saveModInfoAction } from '@/orchestrators/config-save.orchestrator';
+import { completeConfigSave, saveModInfoAction } from '@/orchestrators/config-save.orchestrator';
 import { deepClone } from '@/shared/lib/starsector';
 import type { FileSchema } from '@/domain/schema/schema.types';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
@@ -9,25 +9,40 @@ import { configModInfoEditorModel, configModInfoSaveData } from '@/domain/config
 import { useConfigEditorDraftSession } from '@/app/composables/config/use-config-editor-draft-session';
 import type { ProjectManifest, RowData } from '@/shared/types';
 
-type ModInfoTarget = Pick<ProjectManifest, 'modInfo' | 'modRoot' | 'sessionId' | 'baseVersions'>;
+type ModInfoTarget = Pick<ProjectManifest, 'modRoot' | 'sessionId'>;
 
 export function useConfigModInfoViewModel() {
   const project = useProjectStore();
   const feedback = useAppFeedback();
   const schemaRuntimeContext = useSchemaRuntimeContext(() => project.activeManifest);
-  const draftSession = useConfigEditorDraftSession<RowData, ModInfoTarget>({
+  const draftSession = useConfigEditorDraftSession<RowData, ModInfoTarget, import('@/shared/types').WriteResult | null>({
     emptyValue: {},
     modRoot: computed(() => project.activeManifest?.modRoot ?? null),
-    load: (target) => ({ value: configModInfoEditorModel(deepClone(target.modInfo ?? {})), baseVersions: target.baseVersions }),
+    load: (target) => {
+      const manifest = project.getManifest(target.modRoot)!;
+      return {
+        target,
+        value: configModInfoEditorModel(deepClone(manifest.modInfo ?? {})),
+        baseVersions: manifest.baseVersions,
+        meta: null,
+      };
+    },
     save: async (target, data, baseVersions) => {
       const schema = pendingSaveSchema;
       if (!schema) return;
       const file = configModInfoSaveData(data, schema);
       const saved = await saveModInfoAction(target.sessionId, target.modRoot, file, feedback, baseVersions);
       if (!saved) return;
-      return { value: configModInfoEditorModel(deepClone(file)), baseVersions: saved.baseVersions };
+      return {
+        target,
+        value: configModInfoEditorModel(deepClone(saved.refreshedEntity!)),
+        baseVersions: saved.baseVersions,
+        meta: saved,
+        commitId: saved.commitId,
+      };
     },
     targetKey: (target) => `${target.sessionId}\n${target.modRoot}`,
+    afterSaved: (snapshot) => completeConfigSave(snapshot.target.modRoot, snapshot.target.sessionId, snapshot.meta!, '保存 mod_info.json'),
   });
   let pendingSaveSchema: FileSchema | null = null;
 
@@ -41,12 +56,16 @@ export function useConfigModInfoViewModel() {
       const target = manifest;
       const data = configModInfoEditorModel(deepClone(target.modInfo ?? {}));
       if (draftSession.currentTargetKey.value !== `${target.sessionId}\n${target.modRoot}`) void draftSession.loadTarget(target);
-      else draftSession.applyExternalForTarget(target, data, target.baseVersions);
+      else draftSession.applyExternalForTarget({ target, value: data, baseVersions: manifest.baseVersions, meta: null });
     },
     { immediate: true },
   );
 
   async function saveModInfo(schema: FileSchema | null) {
+    if (draftSession.saving.value) {
+      await draftSession.waitForSave();
+      return;
+    }
     const manifest = project.activeManifest;
     if (!manifest || !schema) return;
     pendingSaveSchema = schema;

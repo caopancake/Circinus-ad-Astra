@@ -96,6 +96,17 @@ pub struct CsvTable {
 
 pub type ProjectSessionId = String;
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum EditorResourceKind {
+    Ship,
+    Weapon,
+    Projectile,
+    System,
+    Faction,
+    Mission,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectManifest {

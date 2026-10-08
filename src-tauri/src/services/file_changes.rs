@@ -25,17 +25,19 @@ pub fn save_mod_info(
     data: Value,
     options: JsonWriteOptions,
     ordered_json: Option<&str>,
-) -> AppResult<WriteResult> {
+) -> AppResult<WriteResult<Value>> {
     let mut builder = FileChangeSetBuilder::new(Path::new(mod_root))?;
     let mut json = JsonWriteBatch::new(options);
     let target = builder.root().join("mod_info.json");
     let text = json.render(&target, &data, ordered_json)?;
     json.finish()?;
     if target.exists() && crate::io::read_utf8_no_bom(&target)? == text {
-        return Ok(WriteResult::from_changes(Vec::new()));
+        return Ok(WriteResult::from_refreshed_entity(Vec::new(), data));
     }
     builder.text_file("mod_info.json", Some(text))?;
-    builder.apply().map(write_result)
+    builder
+        .apply()
+        .map(|changes| WriteResult::from_refreshed_entity(changes, data))
 }
 
 pub fn apply_file_change_set(
@@ -115,10 +117,32 @@ mod tests {
         .unwrap();
         assert!(result.changes.is_empty());
         assert_eq!(
+            result.refreshed_entity,
+            Some(serde_json::json!({"id":"demo"}))
+        );
+        assert_eq!(
             read_utf8_no_bom(&path).unwrap(),
             "{\n  # note\n  id: 'demo'\n}\n"
         );
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn mod_info_receipt_matches_persisted_content() {
+        let root = temp_dir("mod_info_receipt");
+        let data = serde_json::json!({"id":"demo", "name":"Saved", "dependencies":[{"id":"dep"}]});
+        let result = save_mod_info(
+            &root.to_string_lossy(),
+            data,
+            JsonWriteOptions::default(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            result.refreshed_entity,
+            Some(crate::io::read_json_file(&root.join("mod_info.json")).unwrap())
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -10,7 +10,12 @@
       >
         <div class="ship-mode-controls">
           <div class="segmented ship-mode-tabs">
-            <button v-for="m in modes" :key="m.value" :class="{ active: mode === m.value }" @click="setMode(m.value)">
+            <button
+              v-for="m in modes"
+              :key="m.value"
+              :class="{ active: mode === m.value }"
+              @click="canvas.runAction(() => setMode(m.value))"
+            >
               {{ m.label }} <span class="ship-mode-shortcut">{{ m.shortcut }}</span>
             </button>
           </div>
@@ -30,7 +35,12 @@
             @contextmenu.prevent
           />
         </div>
-        <EditorInspector title="舰船检查器">
+        <EditorInspector
+          title="舰船检查器"
+          @focusin.capture="canvas.beginField"
+          @focusout.capture="canvas.fieldBlur"
+          @keyup.capture="canvas.fieldKey"
+        >
           <n-collapse
             v-model:expanded-names="expandedSections"
             :theme-overrides="editorCollapseTheme"
@@ -53,8 +63,8 @@
                   :options="toOptions(['LOW_TECH', 'MIDLINE', 'HIGH_TECH', 'OMEGA', 'CUSTOM'])"
                   @update:value="setField('style', $event)"
                 />
-                <label>width</label><n-input-number :value="localShip.width" @update:value="setVisualField('width', $event)" />
-                <label>height</label><n-input-number :value="localShip.height" @update:value="setVisualField('height', $event)" />
+                <label>width</label><NumberValueInput :value="localShip.width" @update:value="setVisualField('width', $event)" />
+                <label>height</label><NumberValueInput :value="localShip.height" @update:value="setVisualField('height', $event)" />
               </div>
             </n-collapse-item>
             <n-collapse-item title="贴图" name="sprite">
@@ -67,7 +77,7 @@
                     tertiary
                     title="浏览贴图（引用 Mod 内文件）"
                     aria-label="浏览贴图"
-                    @click="pickShipSprite"
+                    @click="canvas.runAction(pickShipSprite)"
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M4 19V5h6l2 2h8v12H4z" />
@@ -75,25 +85,26 @@
                     </svg>
                   </n-button>
                 </div>
-                <label>sprite width</label><n-input-number :value="spriteSize.width || null" disabled /> <label>sprite height</label
-                ><n-input-number :value="spriteSize.height || null" disabled />
+                <label>sprite width</label><NumberValueInput :value="spriteSize.width || null" disabled /> <label>sprite height</label
+                ><NumberValueInput :value="spriteSize.height || null" disabled />
               </div>
               <div class="sprite-actions">
-                <n-button :disabled="!canSyncSpriteSize" @click="syncSpriteSize">更新贴图宽高</n-button>
+                <n-button :disabled="!canSyncSpriteSize" @click="canvas.runAction(syncSpriteSize)">更新贴图宽高</n-button>
               </div>
             </n-collapse-item>
             <n-collapse-item title="中心与护盾" name="props">
               <div class="form-grid">
                 <label data-inspector-field="center-x">center X</label
-                ><n-input-number :value="center[0]" @update:value="setArray('center', 0, $event)" />
+                ><NumberValueInput :value="center[0]" @update:value="setArray('center', 0, $event)" />
                 <label data-inspector-field="center-y">center Y</label
-                ><n-input-number :value="center[1]" @update:value="setArray('center', 1, $event)" /> <label>collisionRadius</label
-                ><n-input-number :value="localShip.collisionRadius" @update:value="setVisualField('collisionRadius', $event)" />
+                ><NumberValueInput :value="center[1]" @update:value="setArray('center', 1, $event)" /> <label>collisionRadius</label
+                ><NumberValueInput :value="localShip.collisionRadius" @update:value="setVisualField('collisionRadius', $event)" />
                 <label data-inspector-field="shield-x">shield X</label
-                ><n-input-number :value="shieldCenter[0]" @update:value="setArray('shieldCenter', 0, $event)" />
+                ><NumberValueInput :value="shieldCenter[0]" @update:value="setArray('shieldCenter', 0, $event)" />
                 <label data-inspector-field="shield-y">shield Y</label
-                ><n-input-number :value="shieldCenter[1]" @update:value="setArray('shieldCenter', 1, $event)" /> <label>shieldRadius</label
-                ><n-input-number :value="localShip.shieldRadius" @update:value="setVisualField('shieldRadius', $event)" />
+                ><NumberValueInput :value="shieldCenter[1]" @update:value="setArray('shieldCenter', 1, $event)" />
+                <label>shieldRadius</label
+                ><NumberValueInput :value="localShip.shieldRadius" @update:value="setVisualField('shieldRadius', $event)" />
               </div>
             </n-collapse-item>
             <n-collapse-item title="武器槽" name="weapons">
@@ -103,7 +114,7 @@
                   :key="item.index"
                   :data-inspector-target="`weapon-${item.index}`"
                   :class="{ selected: mode === 'weapon' && selected === item.index }"
-                  @click="selectInspectorItem('weapon', item.index, 'weapon')"
+                  @click="canvas.runAction(() => selectInspectorItem('weapon', item.index, 'weapon'))"
                 >
                   {{ item.slot.id || `slot ${item.index}` }} <span>{{ item.slot.size }} {{ item.slot.type }}</span>
                 </button>
@@ -141,13 +152,14 @@
                   :options="toOptions(['TURRET', 'HARDPOINT', 'HIDDEN'])"
                   @update:value="setSlotField('mount', $event)"
                 />
-                <label>angle</label><n-input-number :value="selectedSlot.angle" @update:value="setSlotField('angle', $event)" />
-                <label>arc</label><n-input-number :value="selectedSlot.arc" @update:value="setSlotField('arc', $event)" />
-                <label>loc X</label><n-input-number :value="slotLoc[0]" @update:value="setSlotLoc(0, $event)" /> <label>loc Y</label
-                ><n-input-number :value="slotLoc[1]" @update:value="setSlotLoc(1, $event)" />
+                <label>angle</label><NumberValueInput :value="selectedSlot.angle" @update:value="setSlotField('angle', $event)" />
+                <label>arc</label><NumberValueInput :value="selectedSlot.arc" @update:value="setSlotField('arc', $event)" />
+                <label>loc X</label><NumberValueInput :value="slotLoc[0]" @update:value="setSlotLoc(0, $event)" /> <label>loc Y</label
+                ><NumberValueInput :value="slotLoc[1]" @update:value="setSlotLoc(1, $event)" />
               </div>
               <div class="action-row button-row">
-                <n-button @click="addWeaponSlot">添加</n-button><n-button type="error" ghost @click="deleteSelected">删除</n-button>
+                <n-button @click="canvas.runAction(addWeaponSlot)">添加</n-button
+                ><n-button type="error" ghost @click="canvas.runAction(deleteSelected)">删除</n-button>
               </div>
             </n-collapse-item>
             <n-collapse-item title="甲板" name="launchBays">
@@ -157,7 +169,7 @@
                   :key="item.index"
                   :data-inspector-target="`launchBay-${item.index}`"
                   :class="{ selected: mode === 'launchBay' && selected === item.index }"
-                  @click="selectInspectorItem('launchBay', item.index, 'weapon')"
+                  @click="canvas.runAction(() => selectInspectorItem('launchBay', item.index, 'weapon'))"
                 >
                   {{ item.slot.id || `LB ${item.index + 1}` }} <span>甲板 · {{ bayPorts(item.slot.locations).length }}</span>
                 </button>
@@ -171,17 +183,20 @@
                   :key="portIndex"
                   class="port-row"
                   :class="{ selected: portIndex === selectedPort }"
-                  @click="selectedPort = portIndex"
+                  @click="canvas.runAction(() => (selectedPort = portIndex))"
                 >
                   <span>P{{ portIndex + 1 }}</span>
-                  <n-input-number size="small" :value="port[0]" @update:value="setBayPortCoord(portIndex, 0, $event)" @click.stop />
-                  <n-input-number size="small" :value="port[1]" @update:value="setBayPortCoord(portIndex, 1, $event)" @click.stop />
-                  <n-button size="tiny" quaternary type="error" @click.stop="removeBayPortAt(portIndex)">删</n-button>
+                  <NumberValueInput size="small" :value="port[0]" @update:value="setBayPortCoord(portIndex, 0, $event)" @click.stop />
+                  <NumberValueInput size="small" :value="port[1]" @update:value="setBayPortCoord(portIndex, 1, $event)" @click.stop />
+                  <n-button size="tiny" quaternary type="error" @click.stop="canvas.runAction(() => removeBayPortAt(portIndex))"
+                    >删</n-button
+                  >
                 </div>
               </div>
               <div class="action-row button-row">
-                <n-button :disabled="!selectedSlot" @click="addBayPortFromPanel">添加港口</n-button>
-                <n-button @click="addLaunchBay">添加</n-button><n-button type="error" ghost @click="deleteSelected">删除</n-button>
+                <n-button :disabled="!selectedSlot" @click="canvas.runAction(addBayPortFromPanel)">添加港口</n-button>
+                <n-button @click="canvas.runAction(addLaunchBay)">添加</n-button
+                ><n-button type="error" ghost @click="canvas.runAction(deleteSelected)">删除</n-button>
               </div>
             </n-collapse-item>
             <n-collapse-item title="引擎" name="engines">
@@ -191,17 +206,17 @@
                   :key="entryKey('engine-slot', eng, i)"
                   :data-inspector-target="`engine-${i}`"
                   :class="{ selected: mode === 'engine' && selected === i }"
-                  @click="selectInspectorItem('engine', i, 'engine')"
+                  @click="canvas.runAction(() => selectInspectorItem('engine', i, 'engine'))"
                 >
                   引擎 {{ i }} <span>{{ eng.width }}x{{ eng.length }}</span>
                 </button>
               </div>
               <div v-if="mode === 'engine' && selectedEngine" class="form-grid">
-                <label>angle</label><n-input-number :value="selectedEngine.angle" @update:value="setEngineField('angle', $event)" />
-                <label>width</label><n-input-number :value="selectedEngine.width" @update:value="setEngineField('width', $event)" />
-                <label>length</label><n-input-number :value="selectedEngine.length" @update:value="setEngineField('length', $event)" />
+                <label>angle</label><NumberValueInput :value="selectedEngine.angle" @update:value="setEngineField('angle', $event)" />
+                <label>width</label><NumberValueInput :value="selectedEngine.width" @update:value="setEngineField('width', $event)" />
+                <label>length</label><NumberValueInput :value="selectedEngine.length" @update:value="setEngineField('length', $event)" />
                 <label>contrailSize</label
-                ><n-input-number :value="selectedEngine.contrailSize" @update:value="setEngineField('contrailSize', $event)" />
+                ><NumberValueInput :value="selectedEngine.contrailSize" @update:value="setEngineField('contrailSize', $event)" />
                 <label>style</label
                 ><n-select
                   :value="selectedEngine.style"
@@ -210,11 +225,12 @@
                   :options="toOptions(['LOW_TECH', 'MIDLINE', 'HIGH_TECH', 'OMEGA', 'CUSTOM'])"
                   @update:value="setEngineField('style', $event)"
                 />
-                <label>loc X</label><n-input-number :value="engineLoc[0]" @update:value="setEngineLoc(0, $event)" /> <label>loc Y</label
-                ><n-input-number :value="engineLoc[1]" @update:value="setEngineLoc(1, $event)" />
+                <label>loc X</label><NumberValueInput :value="engineLoc[0]" @update:value="setEngineLoc(0, $event)" /> <label>loc Y</label
+                ><NumberValueInput :value="engineLoc[1]" @update:value="setEngineLoc(1, $event)" />
               </div>
               <div class="action-row button-row">
-                <n-button @click="addEngine">添加</n-button><n-button type="error" ghost @click="deleteSelected">删除</n-button>
+                <n-button @click="canvas.runAction(addEngine)">添加</n-button
+                ><n-button type="error" ghost @click="canvas.runAction(deleteSelected)">删除</n-button>
               </div>
             </n-collapse-item>
             <n-collapse-item title="碰撞边界" name="bounds">
@@ -224,15 +240,16 @@
                   :key="`bound-${i}`"
                   :data-inspector-target="`bound-${i}`"
                   :class="{ selected: mode === 'bounds' && selected === i }"
-                  @click="selectInspectorItem('bounds', i, 'bound')"
+                  @click="canvas.runAction(() => selectInspectorItem('bounds', i, 'bound'))"
                 >
                   <span>{{ i }}</span>
-                  <n-input-number :value="bounds[i * 2]" @update:value="setBound(i * 2, $event)" />
-                  <n-input-number :value="bounds[i * 2 + 1]" @update:value="setBound(i * 2 + 1, $event)" />
+                  <NumberValueInput :value="bounds[i * 2]" @update:value="setBound(i * 2, $event)" />
+                  <NumberValueInput :value="bounds[i * 2 + 1]" @update:value="setBound(i * 2 + 1, $event)" />
                 </div>
               </div>
               <div class="action-row button-row">
-                <n-button @click="addBound">添加点</n-button><n-button type="error" ghost @click="deleteSelected">删除点</n-button>
+                <n-button @click="canvas.runAction(addBound)">添加点</n-button
+                ><n-button type="error" ghost @click="canvas.runAction(deleteSelected)">删除点</n-button>
               </div>
             </n-collapse-item>
             <n-collapse-item title="高级属性" name="advanced">
@@ -244,8 +261,10 @@
                   placeholder="R,G,B,A (如 255,255,255,255)"
                   @update:value="setField('coversColor', $event)"
                 />
-                <label>moduleAnchor X</label><n-input-number :value="moduleAnchor[0]" @update:value="setArray('moduleAnchor', 0, $event)" />
-                <label>moduleAnchor Y</label><n-input-number :value="moduleAnchor[1]" @update:value="setArray('moduleAnchor', 1, $event)" />
+                <label>moduleAnchor X</label
+                ><NumberValueInput :value="moduleAnchor[0]" @update:value="setArray('moduleAnchor', 0, $event)" />
+                <label>moduleAnchor Y</label
+                ><NumberValueInput :value="moduleAnchor[1]" @update:value="setArray('moduleAnchor', 1, $event)" />
               </div>
             </n-collapse-item>
             <n-collapse-item title="内置装备" name="builtins">
@@ -273,7 +292,8 @@ import EditorFooter from '@/app/components/editors/common/EditorFooter.vue';
 import EditorHeader from '@/app/components/editors/common/EditorHeader.vue';
 import EditorInspector from '@/app/components/editors/common/EditorInspector.vue';
 import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
-import type { RowData } from '@/shared/types';
+import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
+import type { RowData, EditContext } from '@/shared/types';
 import { arr, deepClone, num, str } from '@/shared/lib/starsector';
 import { entryKey } from '@/shared/lib/entry-keys';
 import { normalizeShipSpec } from '@/domain/editors/lib/normalize';
@@ -327,7 +347,7 @@ const props = defineProps<{
   hullId: string;
   ship: RowData;
   spriteData?: string;
-  draftRevision: number;
+  editContext: EditContext | null;
   dirty: boolean;
   canSave: boolean;
   saving: boolean;
@@ -364,6 +384,7 @@ const { scale } = viewport;
 const editorState = createCanvasEditorState<HoverPreview>();
 const { activeTarget, clearPreview, dragKind, hoverPreview, hovered, inspectorLock, mirrorMode, mirrorPair, selected } = editorState;
 const canvas = useCanvasEditor({
+  context: computed(() => props.editContext),
   stageRef,
   windowRef: editorWindowRef,
   expandedSections,
@@ -371,6 +392,7 @@ const canvas = useCanvasEditor({
   state: editorState,
   hooks: {
     value: localShip,
+    sourceValue: () => props.ship,
     onDraftMutated: (value) => emit('draft-changed', value),
     normalize: normalizeShipSpec,
     deleteSelected,
@@ -408,7 +430,7 @@ const canvas = useCanvasEditor({
   },
 });
 const {
-  commitDraft,
+  commitEdit,
   drawBase,
   drawCursorPosition,
   drawHoverPreview,
@@ -420,7 +442,7 @@ const {
   onMove,
   onUp,
   onWheel,
-  pushUndo,
+  beginEdit,
 } = canvas;
 const modes = [
   { shortcut: 'P', value: 'overview', label: '总览' },
@@ -479,14 +501,14 @@ const builtInMods = computed({
   get: () => (Array.isArray(localShip.value.builtInMods) ? (localShip.value.builtInMods as string[]) : []),
   set: (v) => {
     localShip.value.builtInMods = v;
-    commitDraft();
+    commitEdit();
   },
 });
 const builtInWings = computed({
   get: () => (Array.isArray(localShip.value.builtInWings) ? (localShip.value.builtInWings as string[]) : []),
   set: (v) => {
     localShip.value.builtInWings = v;
-    commitDraft();
+    commitEdit();
   },
 });
 
@@ -555,10 +577,10 @@ function loadSprite() {
 const canSyncSpriteSize = computed(() => spriteSize.value.width > 0 && spriteSize.value.height > 0);
 function syncSpriteSize() {
   if (!canSyncSpriteSize.value) return;
-  pushUndo();
+  beginEdit();
   localShip.value.width = spriteSize.value.width;
   localShip.value.height = spriteSize.value.height;
-  commitDraft();
+  commitEdit();
   draw();
 }
 
@@ -1197,7 +1219,7 @@ function actionDown(e: MouseEvent, mx: number, my: number) {
   const coord = canvasToShip(mx, my);
   const relativeCoord = canvasToRelative(mx, my);
   if (mode.value === 'bounds' && e.shiftKey) {
-    pushUndo();
+    beginEdit();
     bounds.value.push(relativeCoord[0], relativeCoord[1]);
     const sourceIndex = bounds.value.length / 2 - 1;
     if (mirrorMode.value && Math.abs(relativeCoord[1] || 0) > MIRROR_EPSILON) {
@@ -1212,12 +1234,12 @@ function actionDown(e: MouseEvent, mx: number, my: number) {
     return 'bound';
   }
   if (mode.value === 'bounds' && e.ctrlKey) {
-    pushUndo();
+    beginEdit();
     startBoundsInsert(relativeCoord, nearestBoundsSegmentIndex(relativeCoord));
     return 'bound';
   }
   if (mode.value === 'launchBay' && e.ctrlKey) {
-    pushUndo();
+    beginEdit();
     addLaunchBayAt(coord);
     return 'launchBayPort';
   }
@@ -1226,17 +1248,17 @@ function actionDown(e: MouseEvent, mx: number, my: number) {
       feedback.warning('先选中甲板，再为其新增港口');
       return null;
     }
-    pushUndo();
+    beginEdit();
     addBayPortAt(relativeCoord);
     return 'launchBayPort';
   }
   if (mode.value === 'weapon' && e.shiftKey) {
-    pushUndo();
+    beginEdit();
     copyWeaponSlotAt(coord);
     return 'weapon';
   }
   if (mode.value === 'engine' && e.shiftKey) {
-    pushUndo();
+    beginEdit();
     copyEngineAt(coord);
     return 'engine';
   }
@@ -1244,32 +1266,32 @@ function actionDown(e: MouseEvent, mx: number, my: number) {
 }
 function setField(key: string, value: RowData[string]) {
   localShip.value[key] = value;
-  commitDraft();
+  commitEdit();
 }
 function setVisualField(key: string, value: RowData[string]) {
   localShip.value[key] = value;
   draw();
-  commitDraft();
+  commitEdit();
 }
 function setSlotField(key: string, value: RowData[string]) {
   if (!selectedSlot.value) return;
   selectedSlot.value[key] = value;
   draw();
-  commitDraft();
+  commitEdit();
 }
 function setEngineField(key: string, value: RowData[string]) {
   if (!selectedEngine.value) return;
   selectedEngine.value[key] = value;
   draw();
-  commitDraft();
+  commitEdit();
 }
 function setArray(key: string, idx: number, value: number | null) {
-  pushUndo();
+  beginEdit();
   const v = arr(localShip.value[key], [0, 0]);
   v[idx] = value || 0;
   localShip.value[key] = v;
   draw();
-  commitDraft();
+  commitEdit();
 }
 function setSlotLoc(idx: number, value: number | null) {
   if (!selectedSlot.value) return;
@@ -1277,7 +1299,7 @@ function setSlotLoc(idx: number, value: number | null) {
   loc[idx] = value || 0;
   selectedSlot.value.locations = loc;
   draw();
-  commitDraft();
+  commitEdit();
 }
 function setBayPortCoord(portIndex: number, axis: 0 | 1, value: number | null) {
   if (!selectedSlot.value) return;
@@ -1286,12 +1308,12 @@ function setBayPortCoord(portIndex: number, axis: 0 | 1, value: number | null) {
   coord[axis] = value || 0;
   selectedSlot.value.locations = updateBayPort(selectedSlot.value.locations, portIndex, coord);
   draw();
-  commitDraft();
+  commitEdit();
 }
 function removeBayPortAt(portIndex: number) {
   const slot = selectedSlot.value;
   if (!slot) return;
-  pushUndo();
+  beginEdit();
   const remaining = removeBayPort(slot.locations, portIndex);
   if (!remaining.length) {
     const bayIndex = selected.value;
@@ -1305,18 +1327,18 @@ function removeBayPortAt(portIndex: number) {
     slot.locations = remaining;
     selectedPort.value = Math.min(selectedPort.value ?? 0, bayPorts(remaining).length - 1);
   }
-  commitDraft();
+  commitEdit();
   draw();
 }
 function addBayPortFromPanel() {
   const slot = selectedSlot.value;
   if (!slot) return;
-  pushUndo();
+  beginEdit();
   const ports = bayPorts(slot.locations);
   const anchor = ports[ports.length - 1] ?? [0, 0];
   slot.locations = appendBayPort(slot.locations, [anchor[0] || 0, anchor[1] || 0]);
   selectedPort.value = ports.length;
-  commitDraft();
+  commitEdit();
   draw();
 }
 function setEngineLoc(idx: number, value: number | null) {
@@ -1325,14 +1347,14 @@ function setEngineLoc(idx: number, value: number | null) {
   loc[idx] = value || 0;
   selectedEngine.value.location = loc;
   draw();
-  commitDraft();
+  commitEdit();
 }
 function setBound(idx: number, value: number | null) {
   const b = bounds.value;
   b[idx] = value || 0;
   localShip.value.bounds = b;
   draw();
-  commitDraft();
+  commitEdit();
 }
 function selectInspectorItem(nextMode: typeof mode.value, index: number, kind: string) {
   mode.value = nextMode;
@@ -1360,7 +1382,7 @@ function nextLaunchBayId() {
   return nextFormattedId(used, formatLaunchBayId);
 }
 function addWeaponSlot() {
-  pushUndo();
+  beginEdit();
   weaponSlots.value.push({
     id: nextWeaponSlotId(),
     size: 'MEDIUM',
@@ -1372,11 +1394,11 @@ function addWeaponSlot() {
   });
   mode.value = 'weapon';
   selected.value = weaponSlots.value.length - 1;
-  commitDraft();
+  commitEdit();
   draw();
 }
 function addLaunchBay() {
-  pushUndo();
+  beginEdit();
   weaponSlots.value.push({
     id: nextLaunchBayId(),
     size: 'LARGE',
@@ -1388,11 +1410,11 @@ function addLaunchBay() {
   });
   mode.value = 'launchBay';
   selected.value = weaponSlots.value.length - 1;
-  commitDraft();
+  commitEdit();
   draw();
 }
 function addEngine() {
-  pushUndo();
+  beginEdit();
   const sourceIndex = engineSlots.value.length;
   const created = { angle: 180, contrailSize: 12, length: 30, width: 10, location: [-50, 0], style: 'LOW_TECH' };
   engineSlots.value.push(created);
@@ -1405,22 +1427,22 @@ function addEngine() {
   }
   mode.value = 'engine';
   selected.value = sourceIndex;
-  commitDraft();
+  commitEdit();
   draw();
 }
 function addBound() {
-  pushUndo();
+  beginEdit();
   bounds.value.push(0, 0);
   mode.value = 'bounds';
   selected.value = bounds.value.length / 2 - 1;
-  commitDraft();
+  commitEdit();
   draw();
 }
 function deleteSelected() {
   if (selected.value === null) return false;
   const selectedIndex = selected.value;
   let deleted = false;
-  pushUndo();
+  beginEdit();
   if (mode.value === 'weapon' || mode.value === 'launchBay') {
     const isLaunchBay = str(weaponSlots.value[selectedIndex]?.type).toUpperCase() === 'LAUNCH_BAY';
     if ((mode.value === 'weapon' && !isLaunchBay) || (mode.value === 'launchBay' && isLaunchBay)) {
@@ -1448,35 +1470,25 @@ function deleteSelected() {
   hovered.value = null;
   activeTarget.value = null;
   inspectorLock.value = null;
-  commitDraft();
+  commitEdit();
   draw();
   return true;
 }
 function builtInWeaponsUpdated(value: RowData) {
   localShip.value.builtInWeapons = value;
-  commitDraft();
+  commitEdit();
 }
 async function pickShipSprite() {
-  const relative = await pickModImageReference({ sessionId: props.sessionId, modRoot: props.modRoot, title: '选择舰船贴图' });
+  const accepts = canvas.captureActionContext();
+  const relative = await pickModImageReference({ sessionId: props.sessionId, modRoot: props.modRoot, title: '选择舰船贴图', accepts });
   if (!relative) return;
   localShip.value.spriteName = relative;
-  commitDraft();
+  commitEdit();
   loadSprite();
 }
 function save() {
   emit('save-requested');
 }
-watch(
-  () => props.draftRevision,
-  () => {
-    localShip.value = normalizeShipSpec(props.ship);
-    selected.value = null;
-    selectedPort.value = null;
-    activeTarget.value = null;
-    inspectorLock.value = null;
-    clearPreview();
-  },
-);
 watch(selected, (value) => {
   if (value === null) selectedPort.value = null;
 });

@@ -29,7 +29,7 @@ vi.mock('@/app/composables/use-app-feedback', () => ({
 import { useResourceReference } from './use-resource-reference';
 
 function referenceOptions() {
-  return { sessionId: 's1', modRoot: 'C:/mods/alpha', title: '选择舰船贴图' };
+  return { sessionId: 's1', modRoot: 'C:/mods/alpha', title: '选择舰船贴图', accepts: () => true };
 }
 
 describe('useResourceReference.pickModImageReference', () => {
@@ -60,7 +60,28 @@ describe('useResourceReference.pickModImageReference', () => {
   it('falls back to the default dialog title', async () => {
     mocks.pickImageFileDialog.mockResolvedValue(null);
     const { pickModImageReference } = useResourceReference();
-    await pickModImageReference({ sessionId: 's1', modRoot: 'C:/mods/alpha' });
+    await pickModImageReference({ sessionId: 's1', modRoot: 'C:/mods/alpha', accepts: () => true });
     expect(mocks.pickImageFileDialog).toHaveBeenCalledWith({ defaultPath: 'C:/mods/alpha', title: '选择贴图文件' });
+  });
+
+  it.each(['resolve', 'reject'] as const)('revokes a pending resource %s without a late update or feedback', async (completion) => {
+    mocks.pickImageFileDialog.mockResolvedValueOnce('C:/mods/alpha/graphics/image.png');
+    let release!: (path: string) => void;
+    let reject!: (error: Error) => void;
+    let current = true;
+    mocks.resolveModImageReference.mockImplementationOnce(
+      () =>
+        new Promise((yes, no) => {
+          release = yes;
+          reject = no;
+        }),
+    );
+    const pending = useResourceReference().pickModImageReference({ ...referenceOptions(), accepts: () => current });
+    await Promise.resolve();
+    current = false;
+    if (completion === 'resolve') release('graphics/image.png');
+    else reject(new Error('obsolete'));
+    expect(await pending).toBeNull();
+    expect(mocks.feedback.error).not.toHaveBeenCalled();
   });
 });

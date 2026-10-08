@@ -9,14 +9,14 @@ import JsonValueInput from './JsonValueInput.vue';
 
 describe('JSON field save boundary', () => {
   it('validates the declared shape and preserves unrelated raw buffers', async () => {
-    const save = vi.fn(async (_target: string, value: RowData) => ({ value }));
+    const save = vi.fn(async (_target: string, value: RowData) => ({ target: 'one', baseVersions: [], meta: null, value }));
     let session!: ReturnType<typeof useEditTargetDraftSession<RowData, string>>;
     const wrapper = mount(
       {
         setup() {
           session = useEditTargetDraftSession<RowData, string>({
             emptyValue: {},
-            load: () => ({ value: { first: {}, second: {}, third: [] } }),
+            load: () => ({ target: 'one', baseVersions: [], meta: null, value: { first: {}, second: {}, third: [] } }),
             save,
             targetKey: (key) => key,
           });
@@ -55,14 +55,14 @@ describe('JSON field save boundary', () => {
     wrapper.unmount();
   });
   it('commits multiple pending objects into the same save snapshot', async () => {
-    const save = vi.fn(async (_target: string, value: RowData) => ({ value }));
+    const save = vi.fn(async (_target: string, value: RowData) => ({ target: 'one', baseVersions: [], meta: null, value }));
     let session!: ReturnType<typeof useEditTargetDraftSession<RowData, string>>;
     const wrapper = mount(
       {
         setup() {
           session = useEditTargetDraftSession<RowData, string>({
             emptyValue: {},
-            load: () => ({ value: { first: { x: 1 }, second: { y: 1 } } }),
+            load: () => ({ target: 'one', baseVersions: [], meta: null, value: { first: { x: 1 }, second: { y: 1 } } }),
             save,
             targetKey: (id) => id,
           });
@@ -85,14 +85,14 @@ describe('JSON field save boundary', () => {
     wrapper.unmount();
   });
   it('keeps unfinished input dirty, blocks saving and commits the corrected object', async () => {
-    const save = vi.fn(async (_target: string, value: RowData) => ({ value }));
+    const save = vi.fn(async (_target: string, value: RowData) => ({ target: 'one', baseVersions: [], meta: null, value }));
     let session!: ReturnType<typeof useEditTargetDraftSession<RowData, string>>;
     const wrapper = mount(
       {
         setup() {
           session = useEditTargetDraftSession<RowData, string>({
             emptyValue: {},
-            load: () => ({ value: { nested: { x: 1 } } }),
+            load: () => ({ target: 'one', baseVersions: [], meta: null, value: { nested: { x: 1 } } }),
             save,
             targetKey: (id) => id,
           });
@@ -112,7 +112,12 @@ describe('JSON field save boundary', () => {
     await expect(session.saveDraft()).rejects.toMatchObject({ action: 'commit-field-inputs' });
     expect(save).not.toHaveBeenCalled();
     expect(session.draftValue.value.nested).toEqual({ x: 1 });
-    session.applyExternalForTarget('one', { nested: { x: 9 } });
+    session.applyExternalForTarget({
+      target: 'one',
+      value: { nested: { x: 9 } },
+      baseVersions: [{ path: 'one', fingerprint: 'new' }],
+      meta: null,
+    });
     expect(session.hasPendingExternalValue.value).toBe(true);
     expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('{"x":');
     await wrapper.get('textarea').setValue('{"x":2}');

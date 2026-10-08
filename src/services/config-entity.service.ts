@@ -1,4 +1,4 @@
-import { querySessionEntity, querySessionEntityList } from '@/services/query.service';
+import { querySessionEditorDraftResources, querySessionEntity, querySessionEntityList } from '@/services/query.service';
 import { hydrateFactionPreviewImages, hydrateMissionIcon } from '@/services/config-resource.service';
 import {
   missionEditorDataFromEntity,
@@ -8,7 +8,7 @@ import {
   toConfigVariantRecord,
   type ConfigFactionPreviewImages,
 } from '@/domain/config/config-records';
-import type { ConfigMissionEditorData, ProjectSessionId } from '@/shared/types';
+import type { ConfigMissionEditorData, ProjectSessionId, RowData } from '@/shared/types';
 
 /**
  * Read service for config entities: the only wrapper around config entity queries
@@ -36,14 +36,23 @@ export async function listSkinRecords(sessionId: ProjectSessionId) {
   return entities.map(toConfigSkinRecord);
 }
 
-export async function queryFactionPreviewImages(sessionId: ProjectSessionId, id: string): Promise<ConfigFactionPreviewImages> {
-  const entity = await querySessionEntity(sessionId, 'faction', id);
-  return hydrateFactionPreviewImages(sessionId, entity);
+export async function queryFactionPreviewImages(
+  sessionId: ProjectSessionId,
+  id: string,
+  draft: RowData,
+): Promise<ConfigFactionPreviewImages> {
+  const resources = await querySessionEditorDraftResources(sessionId, 'faction', id, draft);
+  return hydrateFactionPreviewImages(sessionId, resources);
+}
+
+export async function queryMissionDraftIcon(sessionId: ProjectSessionId, id: string, draft: RowData): Promise<string> {
+  const resources = await querySessionEditorDraftResources(sessionId, 'mission', id, draft);
+  return hydrateMissionIcon(sessionId, resources.icon ?? null);
 }
 
 export async function getConfigMissionEditorData(sessionId: ProjectSessionId, id: string): Promise<ConfigMissionEditorData | null> {
   const entity = await querySessionEntity(sessionId, 'mission', id);
   if (!entity) return null;
-  const iconSrc = await hydrateMissionIcon(sessionId, entity);
+  const iconSrc = await hydrateMissionIcon(sessionId, entity.resourceRefs.icon ?? null);
   return missionEditorDataFromEntity(entity, iconSrc);
 }

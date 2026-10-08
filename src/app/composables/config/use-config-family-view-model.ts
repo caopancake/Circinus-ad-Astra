@@ -19,7 +19,7 @@ import { listSkinRecords, listVariantRecords } from '@/services/config-entity.se
 import { queryHullPreviewMetadata, queryHullReferenceOptions } from '@/services/config-resource.service';
 import { useProjectStore } from '@/stores/project.store';
 import { useSettingsStore } from '@/stores/settings.store';
-import type { ResourceRef, RowData, SkinFile, VariantFile } from '@/shared/types';
+import type { ResourceRef, RowData, SavedConfig, SkinFile, VariantFile } from '@/shared/types';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import type { SelectOption } from '@/domain/schema/schema-options';
 import { hasEntityInvalidation, hasQueryInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
@@ -204,7 +204,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     saveModRoot: string,
     current: ConfigFamilyFile,
     data: RowData,
-  ): Promise<ConfigFamilyFile | null> {
+  ): Promise<SavedConfig<ConfigFamilyFile> | null> {
     const manifest = project.activeManifest;
     if (disposed || !manifest || manifest.modRoot !== saveModRoot || manifest.sessionId !== saveSessionId) return null;
     const currentId = idOfFamilyFile(current);
@@ -225,7 +225,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     const renameContext = configEntityRenameContext(currentId, nextId);
     savingSessions.add(saveSessionId);
     filesRequestId++;
-    let saved: ConfigFamilyFile | null;
+    let saved: SavedConfig<ConfigFamilyFile> | null;
     try {
       saved =
         family.id === 'variant'
@@ -250,11 +250,12 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
               current.baseVersions,
             );
     } finally {
+      filesRequestId++;
       savingSessions.delete(saveSessionId);
     }
     if (!saved) return null;
     if (disposed || project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId) return saved;
-    files.value = files.value.map((file) => (idOf(file) === currentId ? (saved as VariantFile | SkinFile) : file));
+    files.value = files.value.map((file) => (idOf(file) === currentId ? (saved.entity as VariantFile | SkinFile) : file));
     feedback.success(`${family.displayName} "${nextId}" 已保存`);
     return saved;
   }

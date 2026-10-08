@@ -10,10 +10,10 @@
       >
         <div class="ship-mode-controls">
           <div class="segmented ship-mode-tabs">
-            <button :class="{ active: viewMode === 'turret' }" @click="setView('turret')">
+            <button :class="{ active: viewMode === 'turret' }" @click="canvas.runAction(() => setView('turret'))">
               炮塔视图 <span class="ship-mode-shortcut">U</span>
             </button>
-            <button :class="{ active: viewMode === 'hardpoint' }" @click="setView('hardpoint')">
+            <button :class="{ active: viewMode === 'hardpoint' }" @click="canvas.runAction(() => setView('hardpoint'))">
               固定视图 <span class="ship-mode-shortcut">H</span>
             </button>
           </div>
@@ -33,7 +33,12 @@
             @contextmenu.prevent
           />
         </div>
-        <EditorInspector title="武器检查器">
+        <EditorInspector
+          title="武器检查器"
+          @focusin.capture="canvas.beginField"
+          @focusout.capture="canvas.fieldBlur"
+          @keyup.capture="canvas.fieldKey"
+        >
           <n-collapse
             v-model:expanded-names="expandedSections"
             :theme-overrides="editorCollapseTheme"
@@ -85,7 +90,7 @@
                       tertiary
                       title="浏览贴图（引用 Mod 内文件）"
                       aria-label="浏览贴图"
-                      @click="pickWeaponSprite(field)"
+                      @click="canvas.runAction(() => pickWeaponSprite(field))"
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 19V5h6l2 2h8v12H4z" />
@@ -107,7 +112,7 @@
                       tertiary
                       title="浏览贴图（引用 Mod 内文件）"
                       aria-label="浏览贴图"
-                      @click="pickWeaponSprite(field)"
+                      @click="canvas.runAction(() => pickWeaponSprite(field))"
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 19V5h6l2 2h8v12H4z" />
@@ -125,20 +130,20 @@
                   :key="`barrel-turret-${i}`"
                   :data-inspector-target="`turret-barrel-${i}`"
                   :class="{ selected: viewMode === 'turret' && selected === i }"
-                  @click="selectBarrel('turret', i)"
+                  @click="canvas.runAction(() => selectBarrel('turret', i))"
                 >
                   发射点 {{ i }}
                   <span>[{{ offsetsFor('turret')[i * 2] }}, {{ offsetsFor('turret')[i * 2 + 1] }}] {{ anglesFor('turret')[i] || 0 }}°</span>
                 </button>
               </div>
               <div v-if="viewMode === 'turret' && selected !== null" class="form-grid">
-                <label>X</label><n-input-number :value="offsets[selected * 2]" @update:value="setOffset(0, $event)" /> <label>Y</label
-                ><n-input-number :value="offsets[selected * 2 + 1]" @update:value="setOffset(1, $event)" /> <label>角度偏移</label
-                ><n-input-number :value="angles[selected] || 0" @update:value="setAngle($event)" />
+                <label>X</label><NumberValueInput :value="offsets[selected * 2]" @update:value="setOffset(0, $event)" /> <label>Y</label
+                ><NumberValueInput :value="offsets[selected * 2 + 1]" @update:value="setOffset(1, $event)" /> <label>角度偏移</label
+                ><NumberValueInput :value="angles[selected] || 0" @update:value="setAngle($event)" />
               </div>
               <div class="action-row button-row">
-                <n-button @click="addBarrelFor('turret')">添加</n-button
-                ><n-button type="error" ghost @click="deleteBarrelFor('turret')">删除</n-button>
+                <n-button @click="canvas.runAction(() => addBarrelFor('turret'))">添加</n-button
+                ><n-button type="error" ghost @click="canvas.runAction(() => deleteBarrelFor('turret'))">删除</n-button>
               </div>
             </n-collapse-item>
             <n-collapse-item title="固定发射点" name="hardpointBarrels">
@@ -148,7 +153,7 @@
                   :key="`barrel-hardpoint-${i}`"
                   :data-inspector-target="`hardpoint-barrel-${i}`"
                   :class="{ selected: viewMode === 'hardpoint' && selected === i }"
-                  @click="selectBarrel('hardpoint', i)"
+                  @click="canvas.runAction(() => selectBarrel('hardpoint', i))"
                 >
                   发射点 {{ i }}
                   <span
@@ -158,13 +163,13 @@
                 </button>
               </div>
               <div v-if="viewMode === 'hardpoint' && selected !== null" class="form-grid">
-                <label>X</label><n-input-number :value="offsets[selected * 2]" @update:value="setOffset(0, $event)" /> <label>Y</label
-                ><n-input-number :value="offsets[selected * 2 + 1]" @update:value="setOffset(1, $event)" /> <label>角度偏移</label
-                ><n-input-number :value="angles[selected] || 0" @update:value="setAngle($event)" />
+                <label>X</label><NumberValueInput :value="offsets[selected * 2]" @update:value="setOffset(0, $event)" /> <label>Y</label
+                ><NumberValueInput :value="offsets[selected * 2 + 1]" @update:value="setOffset(1, $event)" /> <label>角度偏移</label
+                ><NumberValueInput :value="angles[selected] || 0" @update:value="setAngle($event)" />
               </div>
               <div class="action-row button-row">
-                <n-button @click="addBarrelFor('hardpoint')">添加</n-button
-                ><n-button type="error" ghost @click="deleteBarrelFor('hardpoint')">删除</n-button>
+                <n-button @click="canvas.runAction(() => addBarrelFor('hardpoint'))">添加</n-button
+                ><n-button type="error" ghost @click="canvas.runAction(() => deleteBarrelFor('hardpoint'))">删除</n-button>
               </div>
             </n-collapse-item>
             <n-collapse-item title="发射模式" name="barrelMode">
@@ -186,7 +191,7 @@
                   @update:value="setField('animationType', $event)"
                 />
                 <label>visualRecoil</label
-                ><n-input-number :value="localWeapon.visualRecoil" @update:value="setField('visualRecoil', $event)" />
+                ><NumberValueInput :value="localWeapon.visualRecoil" @update:value="setField('visualRecoil', $event)" />
               </div>
               <JsonValueInput
                 :value="muzzleFlashSpec"
@@ -212,7 +217,7 @@
               <ColorPicker label="coreColor" v-model="coreColor" />
               <ColorPicker label="glowColor" v-model="glowColor" />
               <div class="form-grid">
-                <label>width</label><n-input-number :value="localWeapon.width" @update:value="setField('width', $event)" />
+                <label>width</label><NumberValueInput :value="localWeapon.width" @update:value="setField('width', $event)" />
                 <label>textureType</label
                 ><n-select
                   :options="toOptions(['ROUGH', 'SMOOTH', 'NONE'])"
@@ -220,9 +225,9 @@
                   @update:value="setField('textureType', $event)"
                 />
                 <label>textureScrollSpeed</label
-                ><n-input-number :value="localWeapon.textureScrollSpeed" @update:value="setField('textureScrollSpeed', $event)" />
+                ><NumberValueInput :value="localWeapon.textureScrollSpeed" @update:value="setField('textureScrollSpeed', $event)" />
                 <label>pixelsPerTexel</label
-                ><n-input-number :value="localWeapon.pixelsPerTexel" @update:value="setField('pixelsPerTexel', $event)" />
+                ><NumberValueInput :value="localWeapon.pixelsPerTexel" @update:value="setField('pixelsPerTexel', $event)" />
                 <label>convergeOnPoint</label
                 ><n-checkbox :checked="localWeapon.convergeOnPoint" @update:checked="setField('convergeOnPoint', $event)" />
                 <label>darkCore</label><n-checkbox :checked="localWeapon.darkCore" @update:checked="setField('darkCore', $event)" />
@@ -255,8 +260,9 @@ import EditorFooter from '@/app/components/editors/common/EditorFooter.vue';
 import EditorHeader from '@/app/components/editors/common/EditorHeader.vue';
 import EditorInspector from '@/app/components/editors/common/EditorInspector.vue';
 import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
+import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
-import type { RowData } from '@/shared/types';
+import type { RowData, EditContext } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
 import { normalizeWeaponSpec } from '@/domain/editors/lib/normalize';
 import { pointAngleScreen } from '@/domain/editors/lib/geometry';
@@ -295,7 +301,7 @@ const props = defineProps<{
   weapon: RowData;
   spriteData?: Record<string, string>;
   projectileOptions: { label: string; value: string }[];
-  draftRevision: number;
+  editContext: EditContext | null;
   dirty: boolean;
   canSave: boolean;
   saving: boolean;
@@ -321,8 +327,9 @@ const spriteImages = new Map<string, InstanceType<typeof Image>>();
 const viewport = useCanvasViewport(canvasRef, 2, 20);
 const { scale } = viewport;
 const editorState = createCanvasEditorState<BarrelPreview>();
-const { activeTarget, clearPreview, hoverPreview, hovered, inspectorLock, mirrorMode, mirrorPair, selected, setPreview } = editorState;
+const { activeTarget, hoverPreview, hovered, inspectorLock, mirrorMode, mirrorPair, selected, setPreview } = editorState;
 const canvas = useCanvasEditor({
+  context: computed(() => props.editContext),
   stageRef,
   windowRef: editorWindowRef,
   expandedSections,
@@ -330,6 +337,7 @@ const canvas = useCanvasEditor({
   state: editorState,
   hooks: {
     value: localWeapon,
+    sourceValue: () => props.weapon,
     onDraftMutated: (value) => emit('draft-changed', value),
     normalize: normalizeWeaponSpec,
     deleteSelected: deleteSelectedBarrel,
@@ -360,7 +368,7 @@ const canvas = useCanvasEditor({
   },
 });
 const {
-  commitDraft,
+  commitEdit,
   drawBase,
   drawCursorPosition,
   drawHoverPreview,
@@ -371,9 +379,9 @@ const {
   onMove,
   onUp,
   onWheel,
-  pushUndo,
+  beginEdit,
 } = canvas;
-const { bindObjectField } = useObjectField(localWeapon, { onCommit: () => commitDraft() });
+const { bindObjectField } = useObjectField(localWeapon, { onCommit: () => commitEdit() });
 const { pickModImageReference } = useResourceReference();
 const turretSpriteFields = TURRET_WEAPON_SPRITE_FIELDS;
 const hardpointSpriteFields = HARDPOINT_WEAPON_SPRITE_FIELDS;
@@ -395,7 +403,7 @@ const projectileSpecId = computed({
   get: () => str(localWeapon.value.projectileSpecId),
   set: (v) => {
     localWeapon.value.projectileSpecId = v;
-    commitDraft();
+    commitEdit();
   },
 });
 const projectileOptions = computed(() => props.projectileOptions);
@@ -403,21 +411,21 @@ const fringeColor = computed({
   get: () => arr(localWeapon.value.fringeColor, [255, 255, 255, 255]),
   set: (v) => {
     localWeapon.value.fringeColor = v;
-    commitDraft();
+    commitEdit();
   },
 });
 const coreColor = computed({
   get: () => arr(localWeapon.value.coreColor, [255, 255, 255, 255]),
   set: (v) => {
     localWeapon.value.coreColor = v;
-    commitDraft();
+    commitEdit();
   },
 });
 const glowColor = computed({
   get: () => arr(localWeapon.value.glowColor, [255, 255, 255, 255]),
   set: (v) => {
     localWeapon.value.glowColor = v;
-    commitDraft();
+    commitEdit();
   },
 });
 const muzzleFlashSpec = bindObjectField('muzzleFlashSpec');
@@ -436,12 +444,12 @@ function setField(key: string, value: RowData[string]) {
   if (key === 'specClass') {
     void commitBefore(() => {
       localWeapon.value[key] = value;
-      commitDraft();
+      commitEdit();
     });
     return;
   }
   localWeapon.value[key] = value;
-  commitDraft();
+  commitEdit();
 }
 function selectBarrel(mode: WeaponViewMode, index: number) {
   viewMode.value = mode;
@@ -639,18 +647,18 @@ function setOffset(axis: 0 | 1, value: number | null) {
   if (selected.value === null) return;
   offsets.value[selected.value * 2 + axis] = value || 0;
   draw();
-  commitDraft();
+  commitEdit();
 }
 function setAngle(value: number | null) {
   if (selected.value === null) return;
   angles.value[selected.value] = value || 0;
   draw();
-  commitDraft();
+  commitEdit();
 }
 function addBarrelFor(mode: WeaponViewMode) {
-  pushUndo();
+  beginEdit();
   addBarrelAt(mode, { x: 0, y: 0 });
-  commitDraft();
+  commitEdit();
   draw();
 }
 function addBarrelAt(mode: WeaponViewMode, coord: { x: number; y: number }) {
@@ -674,16 +682,16 @@ function addBarrelAt(mode: WeaponViewMode, coord: { x: number; y: number }) {
 }
 function deleteBarrelFor(mode: WeaponViewMode) {
   if (viewMode.value !== mode || selected.value === null) return;
-  pushUndo();
+  beginEdit();
   deleteSelectedBarrelData(mode);
-  commitDraft();
+  commitEdit();
   draw();
 }
 function deleteSelectedBarrel(): boolean {
   if (selected.value === null) return false;
-  pushUndo();
+  beginEdit();
   deleteSelectedBarrelData(viewMode.value);
-  commitDraft();
+  commitEdit();
   draw();
   return true;
 }
@@ -704,30 +712,20 @@ function deleteSelectedBarrelData(mode: WeaponViewMode) {
 }
 function actionDown(e: MouseEvent, mx: number, my: number) {
   if (!e.shiftKey) return null;
-  pushUndo();
+  beginEdit();
   addBarrelAt(viewMode.value, toWeapon(mx, my));
   return 'offset';
 }
 async function pickWeaponSprite(field: WeaponSpriteField) {
-  const relative = await pickModImageReference({ sessionId: props.sessionId, modRoot: props.modRoot, title: '选择武器贴图' });
+  const accepts = canvas.captureActionContext();
+  const relative = await pickModImageReference({ sessionId: props.sessionId, modRoot: props.modRoot, title: '选择武器贴图', accepts });
   if (!relative) return;
   localWeapon.value[field] = relative;
-  commitDraft();
+  commitEdit();
 }
 function save() {
   emit('save-requested');
 }
-watch(
-  () => props.draftRevision,
-  () => {
-    localWeapon.value = normalizeWeaponSpec(props.weapon);
-    selected.value = null;
-    hovered.value = null;
-    activeTarget.value = null;
-    inspectorLock.value = null;
-    clearPreview();
-  },
-);
 watch(
   () => props.spriteData,
   (spriteData) => {

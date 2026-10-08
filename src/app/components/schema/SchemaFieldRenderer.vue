@@ -98,26 +98,33 @@
           @update:value="emitValue($event)"
         />
 
-        <n-input-number
+        <NumberValueInput
           v-else-if="field.type === 'integer'"
           :value="numVal"
+          :input-key="fieldInputKey"
+          :clear-action="field.required ? 'required' : 'remove'"
+          @remove="emit('update', { kind: 'remove' })"
           :min="field.min ?? undefined"
           :max="field.max ?? undefined"
           :step="field.step ?? 1"
           :show-button="false"
           size="small"
-          @update:value="emitControlNumber($event, true)"
+          integer
+          @update:value="emitValue($event)"
         />
 
-        <n-input-number
+        <NumberValueInput
           v-else-if="field.type === 'float'"
           :value="numVal"
+          :input-key="fieldInputKey"
+          :clear-action="field.required ? 'required' : 'remove'"
+          @remove="emit('update', { kind: 'remove' })"
           :min="field.min ?? undefined"
           :max="field.max ?? undefined"
           :step="field.step ?? 0.1"
           :show-button="false"
           size="small"
-          @update:value="emitControlNumber($event, false)"
+          @update:value="emitValue($event)"
         />
 
         <n-switch
@@ -348,10 +355,8 @@ import type { SchemaFieldUpdate } from '@/domain/schema/schema.types';
 import {
   appendSchemaKeyValueEntry,
   applySchemaFieldUpdate,
-  convertSchemaScalarInput,
   formatSchemaCommaList,
   formatSchemaKeyValueText,
-  parseSchemaControlNumber,
   parseSchemaCommaList,
   parseSchemaKeyValueText,
   schemaArrayStringValues,
@@ -374,6 +379,7 @@ import {
 import ColorPicker from '@/shared/ui/ColorPicker.vue';
 import { useEditorRowIdentities } from '@/app/composables/editors/use-editor-row-identities';
 import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
+import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
 import { useCoreGraphics } from '@/app/composables/use-core-assets';
 import SchemaScalarInput from '@/app/components/schema/SchemaScalarInput.vue';
 import { useInputEditMode } from '@/app/composables/use-input-edit-mode';
@@ -433,15 +439,6 @@ const tagSelectVal = computed(() => schemaTagValues(props.value));
 
 function wrapTags(tags: string[]): unknown {
   return wrapSchemaTagValues(props.value, tags);
-}
-
-function emitControlNumber(value: number | null, integer: boolean) {
-  if (value === null) {
-    const converted = convertSchemaScalarInput('', props.field);
-    if (converted.kind !== 'error') emit('update', converted);
-    return;
-  }
-  emitValue(parseSchemaControlNumber(value, integer));
 }
 
 function emitPlainStringArray(raw: string) {

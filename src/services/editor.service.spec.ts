@@ -201,6 +201,20 @@ describe('bundle refresh', () => {
     expect(emptied.kind === 'weapon' && emptied.projectileSpecs).toEqual({});
   });
 
+  it('loads projectile dependencies from the current weapon reference', async () => {
+    mocks.querySessionEntity.mockImplementation(async (_session: string, kind: string, id: string) =>
+      kind === 'weapon' ? entity({ id, spec: { id, projectileSpecId: 'old' }, csvRow: {} }) : entity({ id }),
+    );
+    const loaded = await queryEditorEntityBundle('s1', 'weapon', 'weapon');
+    if (loaded.kind !== 'weapon') throw new Error('weapon bundle expected');
+    const refreshed = await refreshBundleProjectiles(
+      's1',
+      { ...loaded, weapon: { ...loaded.weapon, projectileSpecId: 'next' } },
+      { projectileSpecs: true, projectileOptions: false },
+    );
+    expect(refreshed.kind === 'weapon' && refreshed.projectileSpecs).toEqual({ next: { id: 'next' } });
+  });
+
   it('leaves projectile and system bundles untouched by resource refresh', async () => {
     mocks.querySessionEntity.mockResolvedValue(entity({ id: 'p1' }));
     const bundle = await queryEditorEntityBundle('s1', 'projectile', 'p1');
@@ -221,8 +235,9 @@ describe('saveEditorSpecByKind and import', () => {
 
   it('passes successful writes through unchanged', async () => {
     const result = writeResultFixture();
+    result.refreshedEntity = { id: 'S1' };
     mocks.writeEditorSpec.mockResolvedValue(result);
-    await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', 'system', 'S1', { id: 'S1' })).resolves.toBe(result);
+    await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', 'system', 'S1', { id: 'S1' })).resolves.toEqual(result);
   });
 
   it('rejects saves without a mod root or id before touching the writer', async () => {

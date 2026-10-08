@@ -1,4 +1,5 @@
 export type { JsonInputShape, JsonInputValue, JsonValue, RowData } from '@/shared/types/json.types';
+export type { EditContext } from '@/shared/types/edit-context.types';
 export type { CreatedMod, CreateModRequest, NewModDestination, NewModTemplate } from '@/shared/types/mod-creation.types';
 export type { AccentPreset, AppSettings, AppTheme, EditMode, LogLevel } from '@/shared/types/settings.types';
 export { ACCENT_PRESET_VALUES, APP_THEMES, EDIT_MODES, LOG_LEVELS } from '@/shared/types/settings.types';
@@ -22,6 +23,7 @@ export type {
 export type {
   ConfigFileEntityWrite,
   ConfigSaveIdentity,
+  SavedConfig,
   ConfigEditTarget,
   ConfigMissionEditorData,
   DeleteIndexedConfigEntityWrite,
@@ -85,7 +87,7 @@ export type {
   TableSummary,
 } from '@/shared/types/query.types';
 export { RESOURCE_OWNER_KINDS, RESOURCE_SOURCES } from '@/shared/types/query.types';
-export type { EditableFileData, EditorKind, EditorSpecKind, EditorWindowKind } from '@/shared/types/editor.types';
+export type { EditableFileData, EditorKind, EditorResourceKind, EditorSpecKind, EditorWindowKind } from '@/shared/types/editor.types';
 export { EDITOR_KINDS, EDITOR_WINDOW_KINDS } from '@/shared/types/editor.types';
 export type {
   ConfigView,

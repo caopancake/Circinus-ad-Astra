@@ -6,7 +6,10 @@ import type { AppFeedback } from '@/shared/types';
 import { useConfigFactionViewModel } from './use-config-faction-view-model';
 
 const mocks = vi.hoisted(() => ({
-  saveIndexedEntityAction: vi.fn(() => Promise.resolve({ changes: [], refreshed: {} })),
+  saveIndexedEntityAction: vi.fn(async () => ({
+    entity: { entityId: 'existing', entityData: { file: { id: 'existing' } }, baseVersions: [] },
+    receipt: {},
+  })),
   createIndexedEntityAction: vi.fn(() => Promise.resolve({ changes: [], refreshed: {} })),
   deleteIndexedEntityAction: vi.fn(() => Promise.resolve({ changes: [], refreshed: {} })),
   listConfigFactionRecords: vi.fn(() => Promise.resolve([])),

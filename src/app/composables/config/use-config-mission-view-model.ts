@@ -1,5 +1,5 @@
 import { computed, onUnmounted, ref, watch } from 'vue';
-import { getConfigMissionEditorData, listConfigMissionRecords } from '@/services/config-entity.service';
+import { getConfigMissionEditorData, listConfigMissionRecords, queryMissionDraftIcon } from '@/services/config-entity.service';
 import { useProjectStore } from '@/stores/project.store';
 import type { ConfigMissionEditorData, ResourceRef, RowData } from '@/shared/types';
 import { createIndexedEntityAction, deleteIndexedEntityAction, saveIndexedEntityAction } from '@/orchestrators/config-save.orchestrator';
@@ -7,6 +7,7 @@ import {
   buildMissionIndexRow,
   configEntityIdInvalidMessage,
   configMissionSaveDraft,
+  configMissionEditorModel,
   isConfigEntityId,
   missionItemsFromRows,
   type ConfigMissionSaveDraft,
@@ -140,7 +141,14 @@ export function useConfigMissionViewModel() {
       return null;
     }
     const saved = await saveMissionDraft(saveSessionId, saveModRoot, previousId, draft, baseVersions);
-    return saved ? { id: draft.nextId, baseVersions: saved.baseVersions } : null;
+    if (!saved) return null;
+    const data = configMissionEditorModel({
+      list: saved.entity.indexRows.find((row) => row.mission === saved.entity.entityId)!,
+      descriptor: saved.entity.entityData!.descriptor as RowData,
+      text: saved.entity.entityData!.text as string,
+      iconSrc: '',
+    }).localMission;
+    return { id: saved.entity.entityId, data, receipt: saved.receipt, baseVersions: saved.entity.baseVersions };
   }
 
   async function saveMissionDraft(
@@ -174,6 +182,7 @@ export function useConfigMissionViewModel() {
         feedback,
       );
     } finally {
+      missionsRequestId++;
       savingSessions.delete(activeSessionId);
     }
     if (!saved) return null;
@@ -251,6 +260,7 @@ export function useConfigMissionViewModel() {
     queryMissions,
     refreshMissionList,
     queryMissionEditorData,
+    queryMissionIcon: queryMissionDraftIcon,
     missionExists,
     isValidMissionId,
     saveMission,

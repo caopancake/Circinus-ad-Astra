@@ -50,7 +50,7 @@ pub fn load_imported_editor_spec_file(
 }
 
 #[tauri::command(async)]
-pub fn save_editor_spec(payload: SaveEditorSpecPayload) -> Result<WriteResult, AppError> {
+pub fn save_editor_spec(payload: SaveEditorSpecPayload) -> Result<WriteResult<Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
     let result = services::editor_config::save_editor_spec_with_json_options(
         &payload.mod_root,

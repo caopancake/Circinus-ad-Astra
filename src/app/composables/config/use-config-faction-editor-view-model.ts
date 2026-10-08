@@ -1,11 +1,12 @@
+import { completeConfigSave } from '@/orchestrators/config-save.orchestrator';
 import type { ConfigEditTarget } from '@/shared/types';
-import { computed, ref, watch, type Ref } from 'vue';
+import { computed, onScopeDispose, ref, watch, type Ref } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useConfigEditorDraftSession } from '@/app/composables/config/use-config-editor-draft-session';
 import { configFactionEditorModel } from '@/domain/config/config-entities';
 import type { FileSchema } from '@/domain/schema/schema.types';
 import { cell, deepClone } from '@/shared/lib/starsector';
-import type { RowData } from '@/shared/types';
+import type { RowData, WriteResult } from '@/shared/types';
 
 export function useConfigFactionEditorViewModel(params: {
   dataRevision: Ref<number>;
@@ -13,9 +14,9 @@ export function useConfigFactionEditorViewModel(params: {
   factions: Ref<Record<string, RowData>>;
   factionVersions: Ref<Record<string, import('@/shared/types').FileVersion[]>>;
   modRoot: Ref<string | null>;
-  onSaved: (factionId: string | null) => void;
+  onSaved: (factionId: string | null) => void | Promise<void>;
   previewRevision: Ref<number>;
-  queryPreviewImages: (sessionId: string, factionId: string) => Promise<{ crestSrc: string; logoSrc: string }>;
+  queryPreviewImages: (sessionId: string, factionId: string, draft: RowData) => Promise<{ crestSrc: string; logoSrc: string }>;
   saveFaction: (
     sessionId: string,
     modRoot: string,
@@ -32,10 +33,12 @@ export function useConfigFactionEditorViewModel(params: {
     return { sessionId: params.sessionId.value!, modRoot: params.modRoot.value!, kind: 'faction', id, relPath: null };
   }
 
-  const draftSession = useConfigEditorDraftSession<RowData, ConfigEditTarget, void, string>({
+  const draftSession = useConfigEditorDraftSession<RowData, ConfigEditTarget, { id: string; receipt: WriteResult | null }>({
     emptyValue: {},
     modRoot: params.modRoot,
     load: (target) => ({
+      target,
+      meta: { id: target.id, receipt: null },
       baseVersions: params.factionVersions.value[target.id] ?? [],
       value: params.factions.value[target.id]
         ? configFactionEditorModel(deepClone(params.factions.value[target.id]!))
@@ -48,11 +51,24 @@ export function useConfigFactionEditorViewModel(params: {
       if (!currentSchema || !saveModRoot || !saveSessionId) return;
       const savedId = await params.saveFaction(saveSessionId, saveModRoot, target.id, data, currentSchema, baseVersions);
       if (!savedId) return;
-      if (params.modRoot.value !== saveModRoot || params.sessionId.value !== saveSessionId) return;
-      return { meta: savedId.id, value: data, baseVersions: savedId.baseVersions };
+      return {
+        target: { ...target, id: savedId.id },
+        meta: { id: savedId.id, receipt: savedId.receipt },
+        value: savedId.data,
+        baseVersions: savedId.baseVersions,
+        commitId: savedId.receipt.commitId,
+      };
     },
     targetKey: (target) => JSON.stringify(target),
-    savedTarget: (target, snapshot) => ({ ...target, id: snapshot.meta ?? target.id }),
+    afterSaved: async (snapshot) => {
+      await completeConfigSave(
+        snapshot.target.modRoot,
+        snapshot.target.sessionId,
+        snapshot.meta.receipt!,
+        `保存势力 ${snapshot.target.id}`,
+      );
+      if (draftSession.isTargetCurrent(snapshot.target)) await params.onSaved(snapshot.target.id);
+    },
   });
   const draftData = draftSession.draftValue;
   const factionFile = computed<RowData>(() => {
@@ -62,6 +78,11 @@ export function useConfigFactionEditorViewModel(params: {
   const logoSrc = ref('');
   const crestSrc = ref('');
   let previewRequestId = 0;
+  let disposed = false;
+  onScopeDispose(() => {
+    disposed = true;
+    previewRequestId++;
+  });
 
   watch(
     () => [params.factionId.value, params.dataRevision.value, params.sessionId.value, params.modRoot.value] as const,
@@ -70,7 +91,13 @@ export function useConfigFactionEditorViewModel(params: {
         ? configFactionEditorModel(deepClone(params.factions.value[id]))
         : configFactionEditorModel({ id });
       if (!draftSession.isTargetCurrent(editTarget(id))) void loadFactionEditorData(id);
-      else draftSession.applyExternalForTarget(editTarget(id), data, params.factionVersions.value[id]);
+      else
+        draftSession.applyExternalForTarget({
+          target: editTarget(id),
+          value: data,
+          meta: { id, receipt: null },
+          baseVersions: params.factionVersions.value[id] ?? [],
+        });
     },
     { immediate: true },
   );
@@ -91,6 +118,8 @@ export function useConfigFactionEditorViewModel(params: {
 
   async function refreshImagePreviews() {
     const requestId = ++previewRequestId;
+    logoSrc.value = '';
+    crestSrc.value = '';
     const factionId = params.factionId.value;
     const sessionId = params.sessionId.value;
     if (!sessionId) {
@@ -99,20 +128,24 @@ export function useConfigFactionEditorViewModel(params: {
       return;
     }
     try {
-      const images = await params.queryPreviewImages(sessionId, factionId);
-      if (requestId !== previewRequestId || sessionId !== params.sessionId.value || factionId !== params.factionId.value) return;
+      const images = await params.queryPreviewImages(sessionId, factionId, deepClone(factionFile.value));
+      if (disposed || requestId !== previewRequestId || sessionId !== params.sessionId.value || factionId !== params.factionId.value)
+        return;
       logoSrc.value = images.logoSrc;
       crestSrc.value = images.crestSrc;
     } catch (error) {
-      if (requestId !== previewRequestId) return;
+      if (disposed || requestId !== previewRequestId) return;
       feedback.error(error, '刷新势力预览失败');
     }
   }
 
   async function save() {
+    if (draftSession.saving.value) {
+      await draftSession.waitForSave();
+      return;
+    }
     try {
-      const saved = await draftSession.saveDraft();
-      if (saved?.meta) params.onSaved(saved.meta);
+      await draftSession.saveDraft();
     } catch (error) {
       feedback.error(error, '保存势力失败');
     }

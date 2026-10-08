@@ -1,4 +1,4 @@
-import { computed, ref, type Ref } from 'vue';
+import { computed, shallowRef, type Ref } from 'vue';
 import { createEditSessionValue, type EditSessionValueOptions } from '@/domain/edit-session';
 
 const DEFAULT_EXTERNAL_NOTICE = '外部版本已更新，当前未保存草稿已保留。';
@@ -18,7 +18,7 @@ export interface DraftSession<T> {
   applyExternal: (value: T, preserveDraft?: boolean) => void;
   clear: (value: T) => void;
   commitSaved: (value?: T) => void;
-  commitSavedBaseline: (value: T) => void;
+  commitSavedBaseline: (value: T, preservePendingExternal?: boolean) => void;
   loadBase: (value: T) => void;
   loadPendingExternal: () => void;
   resetDraft: () => void;
@@ -29,28 +29,30 @@ export function useDraftSession<T>(initialValue: T, options: DraftSessionOptions
   const { externalNotice, ...sessionOptions } = options;
   const session = createEditSessionValue(initialValue, sessionOptions);
 
-  // The session is a plain (non-reactive) state machine; the refs below are the reactive
-  // projection kept in sync at the single dispatch boundary. Computeds must not read the
-  // session getters directly: plain getters never invalidate, so the value would be cached.
-  const baseValue = ref<T>(session.baseline) as Ref<T>;
-  const draftProjection = ref<T>(session.draft) as Ref<T>;
+  function capture() {
+    return {
+      base: session.baseline,
+      draft: session.draft,
+      pending: session.pendingExternal,
+      revision: session.revision,
+      dirty: session.dirty,
+      hasPending: session.hasPendingExternal,
+    };
+  }
+  const projection = shallowRef(capture());
+  const baseValue = computed(() => projection.value.base);
   const draftValue = computed({
-    get: () => draftProjection.value,
+    get: () => projection.value.draft,
     set: (value: T) => dispatch(() => session.setDraft(value)),
   });
-  const pendingExternalValue = ref<T | null>(session.pendingExternal) as Ref<T | null>;
-  const revision = ref(session.revision);
-  const dirty = ref(session.dirty);
-  const hasPendingExternalValue = ref(session.hasPendingExternal);
+  const pendingExternalValue = computed(() => projection.value.pending);
+  const revision = computed(() => projection.value.revision);
+  const dirty = computed(() => projection.value.dirty);
+  const hasPendingExternalValue = computed(() => projection.value.hasPending);
 
   function dispatch(action: () => void): void {
     action();
-    baseValue.value = session.baseline;
-    draftProjection.value = session.draft;
-    pendingExternalValue.value = session.pendingExternal;
-    revision.value = session.revision;
-    dirty.value = session.dirty;
-    hasPendingExternalValue.value = session.hasPendingExternal;
+    projection.value = capture();
   }
 
   const externalUpdateNotice = computed(() => (hasPendingExternalValue.value ? (externalNotice ?? DEFAULT_EXTERNAL_NOTICE) : ''));
@@ -66,7 +68,7 @@ export function useDraftSession<T>(initialValue: T, options: DraftSessionOptions
     applyExternal: (value, preserveDraft) => dispatch(() => session.applyExternal(value, preserveDraft)),
     clear: (value) => dispatch(() => session.clear(value)),
     commitSaved: (value) => dispatch(() => session.commitSaved(value)),
-    commitSavedBaseline: (value) => dispatch(() => session.commitSavedBaseline(value)),
+    commitSavedBaseline: (value, preservePendingExternal) => dispatch(() => session.commitSavedBaseline(value, preservePendingExternal)),
     loadBase: (value) => dispatch(() => session.loadBaseline(value)),
     loadPendingExternal: () => dispatch(() => session.loadPendingExternal()),
     resetDraft: () => dispatch(() => session.resetDraft()),

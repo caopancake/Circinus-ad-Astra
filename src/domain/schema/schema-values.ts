@@ -1,6 +1,7 @@
 import type { RowData } from '@/shared/types';
 import { pathBasename } from '@/shared/lib/paths';
 import type { FieldSchema, SchemaFieldUpdate } from '@/domain/schema/schema.types';
+import { parseInputNumber } from '@/shared/lib/input-number';
 
 export interface SchemaKeyValueEntry {
   key: string;
@@ -48,12 +49,7 @@ export function parseSchemaPlainBoolean(raw: string): boolean | string {
 }
 
 export function parseSchemaPlainNumber(raw: string, integer: boolean): number | string {
-  const trimmed = raw.trim();
-  if (trimmed === '') return '';
-  if (integer && !/^[+-]?\d+$/.test(trimmed)) return raw;
-  if (!integer && !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) return raw;
-  const parsed = Number(trimmed);
-  return (integer ? Number.isSafeInteger(parsed) : Number.isFinite(parsed)) ? parsed : raw;
+  return parseInputNumber(raw, integer);
 }
 
 export function convertSchemaScalarInput(raw: string, field: FieldSchema): SchemaFieldUpdate | { kind: 'error'; message: string } {

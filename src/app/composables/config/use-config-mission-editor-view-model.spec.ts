@@ -1,3 +1,5 @@
+vi.mock('@/orchestrators/config-save.orchestrator', () => ({ completeConfigSave: vi.fn(async () => {}) }));
+import { savedWriteFixture } from '@/test/write-result';
 import { mount } from '@vue/test-utils';
 import { createPinia, getActivePinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -66,7 +68,7 @@ function mountEditor() {
   } as never);
   const queryMissionEditorData = vi.fn(async (_sessionId: string, id: string) => editorDataFixture(id));
   const saveMission = vi.fn(async (_sessionId: string, _modRoot: string, _previousId: string, local: RowData) => {
-    return { id: String((local.list as RowData)?.mission ?? 'm1'), baseVersions: [] };
+    return { id: String((local.list as RowData)?.mission ?? 'm1'), data: local, receipt: savedWriteFixture(), baseVersions: [] };
   });
   const onSaved = vi.fn();
   let vm!: ReturnType<typeof useConfigMissionEditorViewModel>;
@@ -80,6 +82,7 @@ function mountEditor() {
           modRoot: ref('M:/mod'),
           onSaved,
           queryMissionEditorData,
+          queryMissionIcon: async () => 'data:icon',
           saveMission,
           schema: schema as never,
           sessionId: ref('sess-1'),

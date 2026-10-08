@@ -2,6 +2,8 @@ import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import type { SchemaRuntimeContext } from '@/domain/schema/schema-runtime';
 import { joinRootRelativePath, pathBelongsToRoot, relativePathFromRoot } from '@/shared/lib/paths';
 import { pickFileDialog, pickImageFileDialog } from '@/shared/runtime/dialog.runtime';
+import { onScopeDispose } from 'vue';
+import { useFieldInputs } from '@/shared/runtime/field-inputs';
 
 export function useSchemaPathPicker(args: {
   runtimeContext: () => SchemaRuntimeContext | null | undefined;
@@ -9,8 +11,15 @@ export function useSchemaPathPicker(args: {
   pathBase?: () => 'mod' | 'mission' | undefined;
 }) {
   const feedback = useAppFeedback();
+  const inputs = useFieldInputs();
+  let released = false;
+  onScopeDispose(() => {
+    released = true;
+  });
 
   async function pickPathFile(options: { imageFilter?: boolean } = {}) {
+    const accepts = inputs?.captureContext() ?? (() => true);
+    const sessionId = args.runtimeContext()?.sessionId;
     const modRoot = args.runtimeContext()?.modRoot;
     if (!modRoot) return;
     const missionId = args.runtimeContext()?.missionId;
@@ -23,7 +32,15 @@ export function useSchemaPathPicker(args: {
           defaultPath: baseRoot,
         });
 
-    if (!selected || typeof selected !== 'string') return;
+    if (
+      !selected ||
+      typeof selected !== 'string' ||
+      released ||
+      !accepts() ||
+      args.runtimeContext()?.sessionId !== sessionId ||
+      args.runtimeContext()?.modRoot !== modRoot
+    )
+      return;
 
     if (pathBelongsToRoot(selected, baseRoot)) {
       args.setPath(relativePathFromRoot(baseRoot, selected));

@@ -10,6 +10,8 @@
       :status="invalid ? 'error' : undefined"
       @update:value="updateRaw"
       @change="commitOnBlur"
+      @blur="commitOnBlur"
+      @keydown.ctrl.enter.prevent="commitOnBlur"
     />
   </div>
 </template>

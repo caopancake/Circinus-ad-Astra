@@ -18,7 +18,7 @@ pub fn save_editor_spec(
     kind: EditorSpecKind,
     id: &str,
     data: Value,
-) -> AppResult<WriteResult> {
+) -> AppResult<WriteResult<Value>> {
     save_editor_spec_with_json_options(mod_root, kind, id, data, JsonWriteOptions::default(), None)
 }
 
@@ -29,7 +29,7 @@ pub fn save_editor_spec_with_json_options(
     data: Value,
     options: JsonWriteOptions,
     ordered_json: Option<&str>,
-) -> AppResult<WriteResult> {
+) -> AppResult<WriteResult<Value>> {
     let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
     let id = validate_config_id(id, editor_spec_definition(kind)?.invalid_id_message)?;
     let target = find_editor_spec_target(Path::new(mod_root), kind, id)?;
@@ -39,7 +39,7 @@ pub fn save_editor_spec_with_json_options(
     let text = json.render(&target, &clean, ordered_json)?;
     json.finish()?;
     if preserve_original_json && target.exists() && crate::io::read_utf8_no_bom(&target)? == text {
-        return Ok(WriteResult::from_changes(Vec::new()));
+        return Ok(WriteResult::from_refreshed_entity(Vec::new(), clean));
     }
     let change = build_text_change(&target, Some(text))?;
     apply_file_change_set_with_lock(
@@ -48,7 +48,7 @@ pub fn save_editor_spec_with_json_options(
         vec![change.clone()],
         write_lock,
     )?;
-    Ok(WriteResult::from_changes(vec![change]))
+    Ok(WriteResult::from_refreshed_entity(vec![change], clean))
 }
 
 pub fn load_imported_editor_spec_file(kind: EditorSpecKind, path: String) -> AppResult<Value> {
@@ -121,6 +121,45 @@ mod tests {
     use crate::io::{read_utf8_no_bom, write_utf8_no_bom};
     use crate::testutil::{temp_dir, temp_linked_file};
     use std::fs;
+
+    #[test]
+    fn editor_spec_receipts_match_persisted_content_and_preserved_noops() {
+        for kind in [
+            EditorSpecKind::Ship,
+            EditorSpecKind::Weapon,
+            EditorSpecKind::Projectile,
+            EditorSpecKind::System,
+        ] {
+            let definition = editor_spec_definition(kind).unwrap();
+            let root = temp_dir(&format!(
+                "spec_receipt_{}",
+                definition.extension_without_dot()
+            ));
+            fs::create_dir_all(root.join(definition.dir)).unwrap();
+            let target = root
+                .join(definition.dir)
+                .join(format!("demo.{}", definition.extension_without_dot()));
+            let data = serde_json::json!({definition.id_field: "demo", "nested": {"value": 2}, "_tool": true});
+            let result = save_editor_spec(&root.to_string_lossy(), kind, "demo", data).unwrap();
+            let persisted = read_json_file(&target).unwrap();
+            assert_eq!(result.refreshed_entity, Some(persisted.clone()));
+            let noop = save_editor_spec_with_json_options(
+                &root.to_string_lossy(),
+                kind,
+                "demo",
+                persisted.clone(),
+                JsonWriteOptions {
+                    preserve_original_json: true,
+                    confirmed_sources: Vec::new(),
+                },
+                None,
+            )
+            .unwrap();
+            assert!(noop.changes.is_empty());
+            assert_eq!(noop.refreshed_entity, Some(persisted));
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
 
     #[test]
     fn save_editor_spec_uses_fixed_weapon_target_boundary() {
@@ -337,7 +376,7 @@ mod tests {
         assert_eq!(value.get("id").and_then(Value::as_str), Some("demo"));
     }
 
-    fn invalidation_paths(result: &WriteResult) -> Vec<PathBuf> {
+    fn invalidation_paths(result: &WriteResult<Value>) -> Vec<PathBuf> {
         result
             .invalidation
             .paths

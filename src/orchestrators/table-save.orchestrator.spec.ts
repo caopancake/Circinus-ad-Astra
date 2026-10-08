@@ -201,6 +201,27 @@ describe('table-save orchestrator', () => {
     expect(completeSavedWrite).not.toHaveBeenCalled();
   });
 
+  it('keeps the persisted baseline and receipt when post-save synchronization fails', async () => {
+    const project = useProjectStore();
+    const manifest = buildManifest();
+    project.manifests.set(MOD_ROOT, manifest);
+    const state = hydrateActiveTable();
+    state.originalTables.ships = [{ ...state.tables.ships[0] }];
+    const tables = useTablesStore();
+    const generation = tables.tableReadGeneration(MOD_ROOT, 'ships');
+    tables.updateCellValue({ sessionId: SESSION_ID, modRoot: MOD_ROOT, table: 'ships', rowKey: 'ships:r1', column: 'hullName' }, 'Written');
+    const result = writeResult({ baseVersions: [{ path: 'ships.csv', fingerprint: 'v2' }] });
+    writeCsvPatch.mockResolvedValueOnce(result);
+    completeSavedWrite.mockRejectedValueOnce(new Error('sync failed'));
+    await expect(saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] })).rejects.toThrow('sync failed');
+    expect(state.originalTables.ships[0]?.hullName).toBe('Written');
+    expect(state.baseVersions.ships).toEqual(result.baseVersions);
+    expect(state.dirty.ships).toEqual({});
+    expect(tables.tableReadGeneration(MOD_ROOT, 'ships')).toBeGreaterThan(generation);
+    expect(tables.saving).toBe(false);
+    expect(result.keyMap).toEqual([]);
+  });
+
   it('submits upsert patches without the internal row key and clears dirty after recording history', async () => {
     const tables = useTablesStore();
     const project = useProjectStore();
@@ -213,8 +234,8 @@ describe('table-save orchestrator', () => {
     writeCsvPatch.mockResolvedValue(writeResult());
     const manifest = project.getManifest(MOD_ROOT);
     completeSavedWrite.mockImplementationOnce(async () => {
-      // Invalidation and history recording must happen before the draft cleanup.
-      expect(Object.keys(state.dirty.ships).length).toBe(1);
+      expect(Object.keys(state.dirty.ships).length).toBe(0);
+      expect(state.originalTables.ships[0]?.hullName).toBe('B');
     });
 
     expect(await saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] })).toBe('saved');
@@ -349,7 +370,7 @@ describe('table-save orchestrator', () => {
     expect(state.dirty.ships['ships:row:2']).toBeUndefined();
   });
 
-  it('preserves drafts and history when the backend returns no file changes', async () => {
+  it('accepts the persisted baseline when the backend reports an unchanged file', async () => {
     const project = useProjectStore();
     project.manifests.set(MOD_ROOT, buildManifest());
     const state = hydrateActiveTable();
@@ -357,8 +378,9 @@ describe('table-save orchestrator', () => {
     tables.updateCellValue({ sessionId: SESSION_ID, modRoot: MOD_ROOT, table: 'ships', rowKey: 'ships:r1', column: 'hullName' }, 'B');
     writeCsvPatch.mockResolvedValueOnce(writeResult({ changes: [] }));
     await saveActiveTableChanges({ manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
-    expect(state.dirty.ships['ships:r1']).toBeDefined();
-    expect(useTablesEditHistoryStore().canUndoCsvEdit(MOD_ROOT, 'ships')).toBe(true);
+    expect(state.dirty.ships['ships:r1']).toBeUndefined();
+    expect(state.originalTables.ships[0]?.hullName).toBe('B');
+    expect(useTablesEditHistoryStore().canUndoCsvEdit(MOD_ROOT, 'ships')).toBe(false);
   });
 
   it('rebases a deletion undone during saving into an insert at the original position', async () => {

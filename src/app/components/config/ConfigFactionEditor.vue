@@ -48,7 +48,7 @@ const props = defineProps<{
   factionVersions: Record<string, import('@/shared/types').FileVersion[]>;
   modRoot: string | null;
   sessionId: string | null;
-  queryPreviewImages: (sessionId: string, factionId: string) => Promise<{ logoSrc: string; crestSrc: string }>;
+  queryPreviewImages: (sessionId: string, factionId: string, draft: RowData) => Promise<{ logoSrc: string; crestSrc: string }>;
   schemaRuntimeContext: SchemaRuntimeContext | null;
   saveFaction: (
     sessionId: string,

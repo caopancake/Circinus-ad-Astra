@@ -60,7 +60,7 @@ export function querySessionEntityList(sessionId: ProjectSessionId, kind: Entity
 
 export function querySessionEditorDraftResources(
   sessionId: ProjectSessionId,
-  kind: import('@/shared/types').EditorSpecKind,
+  kind: import('@/shared/types').EditorResourceKind,
   id: string,
   draft: RowData,
 ): Promise<Record<string, ResourceRef>> {

@@ -1,7 +1,14 @@
 import type { RowData } from '@/shared/types/json.types';
 
+export interface SavedConfig<T> {
+  entity: T;
+  receipt: import('@/shared/types/write.types').WriteResult;
+}
+
 export interface ConfigSaveIdentity {
   id: string;
+  data: RowData;
+  receipt: import('@/shared/types/write.types').WriteResult;
   baseVersions: import('@/shared/types/write.types').FileVersion[];
 }
 

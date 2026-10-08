@@ -6,7 +6,15 @@ import type { ConfigMissionRecord } from '@/domain/config/config-records';
 const mocks = vi.hoisted(() => ({
   createIndexedEntityAction: vi.fn(),
   deleteIndexedEntityAction: vi.fn(),
-  saveIndexedEntityAction: vi.fn(async () => 'm2'),
+  saveIndexedEntityAction: vi.fn(async () => ({
+    entity: {
+      entityId: 'm2',
+      indexRows: [{ mission: 'm2', title: 'Renamed' }],
+      entityData: { descriptor: { title: 'Renamed' }, text: 'body' },
+      baseVersions: [],
+    },
+    receipt: {},
+  })),
   listConfigMissionRecords: vi.fn(async (): Promise<ConfigMissionRecord[]> => []),
   getConfigMissionEditorData: vi.fn(),
   feedback: {
@@ -29,6 +37,7 @@ vi.mock('@/orchestrators/config-save.orchestrator', () => ({
 vi.mock('@/services/config-entity.service', () => ({
   listConfigMissionRecords: mocks.listConfigMissionRecords,
   getConfigMissionEditorData: mocks.getConfigMissionEditorData,
+  queryMissionDraftIcon: vi.fn(async () => ''),
 }));
 
 vi.mock('@/services/query-cache.service', () => ({

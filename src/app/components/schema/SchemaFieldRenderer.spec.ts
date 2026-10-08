@@ -78,7 +78,7 @@ describe('SchemaFieldRenderer smart mode', () => {
         setup() {
           const draft = useEditTargetDraftSession({
             emptyValue: [{ name: 'A' }, { name: 'B' }],
-            load: () => ({ value: [] as { name: string }[] }),
+            load: () => ({ target: 'one', baseVersions: [], meta: null, value: [] as { name: string }[] }),
             targetKey: (id: string) => id,
           });
           return () =>
@@ -225,14 +225,19 @@ describe('SchemaFieldRenderer plain mode', () => {
   });
 
   it('keeps incomplete scalar text outside the typed draft and removes optional keys on commit', async () => {
-    let session!: ReturnType<typeof useEditTargetDraftSession<Record<string, import('@/shared/types').JsonValue>, string>>;
-    const save = vi.fn(async (_target: string, value: Record<string, import('@/shared/types').JsonValue>) => ({ value }));
+    let session!: ReturnType<typeof useEditTargetDraftSession<Record<string, import('@/shared/types').JsonValue>, string, null>>;
+    const save = vi.fn(async (_target: string, value: Record<string, import('@/shared/types').JsonValue>) => ({
+      target: 'one',
+      baseVersions: [],
+      meta: null,
+      value,
+    }));
     wrapper = mount(
       {
         setup() {
           session = useEditTargetDraftSession({
             emptyValue: {},
-            load: () => ({ value: { count: 4 } }),
+            load: () => ({ target: 'one', baseVersions: [], meta: null, value: { count: 4 } }),
             save,
             targetKey: (key: string) => key,
           });

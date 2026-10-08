@@ -1,4 +1,5 @@
 import type { Ref } from 'vue';
+import { useSaveCommandStore } from '@/stores/save-command.store';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import type { UnlistenFn } from '@/windows/tauri.events';
 import { destroyCurrentWindow, listenCurrentWindowCloseRequest } from '@/windows/current.window';
@@ -11,6 +12,7 @@ interface DirtyWindowCloseGuardOptions {
 
 export function useDirtyWindowCloseGuard(options: DirtyWindowCloseGuardOptions) {
   const feedback = useAppFeedback();
+  const commands = useSaveCommandStore();
   let disposed = false;
   let prompting = false;
   let unlisten: UnlistenFn | null = null;
@@ -32,13 +34,20 @@ export function useDirtyWindowCloseGuard(options: DirtyWindowCloseGuardOptions) 
   }
 
   async function handleCloseRequested(event: { preventDefault: () => void }): Promise<void> {
-    if (disposed || !options.dirty.value) return;
+    if (disposed || (!options.dirty.value && !commands.hasPendingSave())) return;
     event.preventDefault();
     if (prompting) {
       return;
     }
     prompting = true;
     try {
+      const pending = commands.waitForSaves();
+      if (pending && !(await pending)) return;
+      if (disposed) return;
+      if (!options.dirty.value) {
+        await destroyCurrentWindow();
+        return;
+      }
       const choice = await feedback.choose({
         choices: [{ label: '放弃修改并关闭', value: 'discard', type: 'warning' }],
         content: options.content,

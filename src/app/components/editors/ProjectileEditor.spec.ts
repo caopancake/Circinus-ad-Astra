@@ -44,7 +44,7 @@ function mountEditor(projectile: RowData) {
       sessionId: 'sess-1',
       projectileId: 'proj1',
       projectile,
-      draftRevision: 0,
+      editContext: null,
       dirty: false,
       canSave: false,
       saving: false,

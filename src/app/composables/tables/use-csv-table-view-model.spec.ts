@@ -91,6 +91,8 @@ vi.mock('@/stores/tables.store', () => ({
     get saving() {
       return Boolean(tablesState.saving);
     },
+    tableReadGeneration: () => tablesState.readGeneration ?? 0,
+    getModTableState: () => tablesState,
     hasTableDirtyChanges: vi.fn(() => false),
     getTableInputs: vi.fn(() => ({ dirty: { value: false }, cancel: vi.fn() })),
     get hasCurrentTableExternalUpdate() {
@@ -180,6 +182,27 @@ describe('useCsvTableViewModel', () => {
     await vi.waitFor(() => expect(mocks.queryTableWindow).toHaveBeenCalledTimes(2));
   });
 
+  it.each(['resolve', 'reject'] as const)('revokes an older window %s after local baseline acceptance', async (completion) => {
+    let release!: (window: CsvTableWindow) => void;
+    let reject!: (error: Error) => void;
+    mocks.queryTableWindow.mockImplementationOnce(
+      () =>
+        new Promise((yes, no) => {
+          release = yes;
+          reject = no;
+        }),
+    );
+    mountViewModel();
+    await vi.waitFor(() => expect(mocks.queryTableWindow).toHaveBeenCalled());
+    tablesState.readGeneration = 1;
+    if (completion === 'resolve') release(windowFixture(2));
+    else reject(new Error('old read'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(tablesState.appliedWindow).toBeUndefined();
+    expect(mocks.feedback.error).not.toHaveBeenCalled();
+  });
+
   it('persists column width overrides per mod and table', () => {
     const vm = mountViewModel();
     vm.setColumnWidth('name', 180);
@@ -205,6 +228,6 @@ describe('useCsvTableViewModel', () => {
     const onInvalidation = mocks.subscribeQueryInvalidations.mock.calls[0]![0] as (event: { sessionId: string }) => void;
     onInvalidation({ sessionId: 'sess-1' });
     expect(mocks.queryTableWindow).toHaveBeenCalledTimes(queryCount);
-    expect(vm.tables.markTableExternalUpdate).toHaveBeenCalledWith('ships');
+    expect(vm.tables.markTableExternalUpdate).not.toHaveBeenCalled();
   });
 });

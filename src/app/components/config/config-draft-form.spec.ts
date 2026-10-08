@@ -60,10 +60,10 @@ afterEach(() => {
 });
 
 async function mountDraftForm(fixture: (typeof cases)[number]) {
-  let resolveSave!: (snapshot: { value: RowData }) => void;
+  let resolveSave!: (snapshot: { target: string; value: RowData; baseVersions: []; meta: null }) => void;
   const save = vi.fn((...args: [string, RowData]) => {
     void args;
-    return new Promise<{ value: RowData }>((resolve) => (resolveSave = resolve));
+    return new Promise<{ target: string; value: RowData; baseVersions: []; meta: null }>((resolve) => (resolveSave = resolve));
   });
   let session!: ReturnType<typeof useConfigEditorDraftSession<RowData, string>>;
   const schema: FileSchema = {
@@ -79,7 +79,7 @@ async function mountDraftForm(fixture: (typeof cases)[number]) {
           emptyValue: {},
           modRoot: ref('M:/mod'),
           targetKey: (id) => id,
-          load: () => ({ value: deepClone(fixture.initial) }),
+          load: () => ({ target: 'target', value: deepClone(fixture.initial), baseVersions: [], meta: null }),
           save,
         });
         return { draftData: session.draftValue, schema };
@@ -89,7 +89,12 @@ async function mountDraftForm(fixture: (typeof cases)[number]) {
     { global: { stubs: editorUiStubs } },
   );
   await session.loadTarget('target');
-  return { session, save, resolveSave: (snapshot: { value: RowData }) => resolveSave(snapshot), form: wrapper };
+  return {
+    session,
+    save,
+    resolveSave: (snapshot: { target: string; value: RowData; baseVersions: []; meta: null }) => resolveSave(snapshot),
+    form: wrapper,
+  };
 }
 
 describe('config draft form integration', () => {
@@ -99,7 +104,12 @@ describe('config draft form integration', () => {
     expect(session.dirty.value).toBe(true);
     expect(useDraftSessionsStore().hasUnsavedWorkForMod('M:/mod')).toBe(true);
     const local = deepClone(session.draftValue.value);
-    session.applyExternalForTarget('target', fixture.initial);
+    session.applyExternalForTarget({
+      target: 'target',
+      value: fixture.initial,
+      baseVersions: [{ path: 'target', fingerprint: 'new' }],
+      meta: null,
+    });
     expect(session.draftValue.value).toEqual(local);
     expect(session.hasPendingExternalValue.value).toBe(true);
     session.loadPendingExternal();
@@ -113,7 +123,7 @@ describe('config draft form integration', () => {
     const pending = session.saveDraft();
     const submitted = save.mock.calls[0]![1] as RowData;
     await form.get('input').setValue('later');
-    resolveSave({ value: submitted });
+    resolveSave({ target: 'target', value: submitted, baseVersions: [], meta: null });
     await pending;
     expect((form.get('input').element as HTMLInputElement).value).toBe('later');
     expect(session.dirty.value).toBe(true);

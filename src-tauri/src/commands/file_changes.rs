@@ -15,7 +15,9 @@ pub fn save_mod_files(payload: SaveModFilesPayload) -> Result<WriteResult, AppEr
 }
 
 #[tauri::command(async)]
-pub fn save_mod_info(payload: SaveModInfoPayload) -> Result<WriteResult, AppError> {
+pub fn save_mod_info(
+    payload: SaveModInfoPayload,
+) -> Result<WriteResult<serde_json::Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
     let result = services::file_changes::save_mod_info(
         &payload.mod_root,

@@ -53,7 +53,7 @@
               ><n-switch :value="localSystem.clampMaxSpeedAfter" @update:value="setField('clampMaxSpeedAfter', $event)" />
               <label>持续加速</label><n-switch :value="localSystem.alwaysAccelerate" @update:value="setField('alwaysAccelerate', $event)" />
               <label>撞击失控概率</label
-              ><n-input-number
+              ><NumberValueInput
                 :value="localSystem.flameoutOnImpactChance"
                 :step="0.1"
                 @update:value="setField('flameoutOnImpactChance', $event)"
@@ -82,28 +82,36 @@
                 @update:value="setField('soundFilterType', $event)"
               />
               <label>滤波增益</label
-              ><n-input-number :value="localSystem.soundFilterGain" :step="0.05" @update:value="setField('soundFilterGain', $event)" />
+              ><NumberValueInput :value="localSystem.soundFilterGain" :step="0.05" @update:value="setField('soundFilterGain', $event)" />
               <label>高频滤波增益</label
-              ><n-input-number :value="localSystem.soundFilterGainHF" :step="0.05" @update:value="setField('soundFilterGainHF', $event)" />
+              ><NumberValueInput
+                :value="localSystem.soundFilterGainHF"
+                :step="0.05"
+                @update:value="setField('soundFilterGainHF', $event)"
+              />
             </div>
           </n-collapse-item>
 
           <n-collapse-item title="引擎视觉" name="engine">
             <div class="form-grid">
               <label>光柱长度倍率</label
-              ><n-input-number
+              ><NumberValueInput
                 :value="localSystem.engineGlowLengthMult"
                 :step="0.1"
                 @update:value="setField('engineGlowLengthMult', $event)"
               />
               <label>光柱宽度倍率</label
-              ><n-input-number
+              ><NumberValueInput
                 :value="localSystem.engineGlowWidthMult"
                 :step="0.1"
                 @update:value="setField('engineGlowWidthMult', $event)"
               />
               <label>辉光强度倍率</label
-              ><n-input-number :value="localSystem.engineGlowGlowMult" :step="0.1" @update:value="setField('engineGlowGlowMult', $event)" />
+              ><NumberValueInput
+                :value="localSystem.engineGlowGlowMult"
+                :step="0.1"
+                @update:value="setField('engineGlowGlowMult', $event)"
+              />
             </div>
             <ColorPicker label="引擎发光颜色" v-model="engineGlowColor" />
             <ColorPicker label="引擎尾迹颜色" v-model="engineGlowContrailColor" />
@@ -125,12 +133,13 @@
           <n-collapse-item title="抖动效果" name="jitter">
             <ColorPicker label="抖动颜色" v-model="jitterColor" />
             <div class="form-grid">
-              <label>抖动副本数</label><n-input-number :value="localSystem.jitterCopies" @update:value="setField('jitterCopies', $event)" />
+              <label>抖动副本数</label
+              ><NumberValueInput :value="localSystem.jitterCopies" @update:value="setField('jitterCopies', $event)" />
               <label>最小范围</label
-              ><n-input-number :value="localSystem.jitterMinRange" @update:value="setField('jitterMinRange', $event)" />
-              <label>抖动范围</label><n-input-number :value="localSystem.jitterRange" @update:value="setField('jitterRange', $event)" />
+              ><NumberValueInput :value="localSystem.jitterMinRange" @update:value="setField('jitterMinRange', $event)" />
+              <label>抖动范围</label><NumberValueInput :value="localSystem.jitterRange" @update:value="setField('jitterRange', $event)" />
               <label>范围半径比例</label
-              ><n-input-number
+              ><NumberValueInput
                 :value="localSystem.jitterRangeRadiusFraction"
                 :step="0.1"
                 @update:value="setField('jitterRangeRadiusFraction', $event)"
@@ -139,13 +148,13 @@
             <ColorPicker label="底层抖动颜色" v-model="jitterUnderColor" />
             <div class="form-grid">
               <label>底层副本数</label
-              ><n-input-number :value="localSystem.jitterUnderCopies" @update:value="setField('jitterUnderCopies', $event)" />
+              ><NumberValueInput :value="localSystem.jitterUnderCopies" @update:value="setField('jitterUnderCopies', $event)" />
               <label>底层最小范围</label
-              ><n-input-number :value="localSystem.jitterUnderMinRange" @update:value="setField('jitterUnderMinRange', $event)" />
+              ><NumberValueInput :value="localSystem.jitterUnderMinRange" @update:value="setField('jitterUnderMinRange', $event)" />
               <label>底层抖动范围</label
-              ><n-input-number :value="localSystem.jitterUnderRange" @update:value="setField('jitterUnderRange', $event)" />
+              ><NumberValueInput :value="localSystem.jitterUnderRange" @update:value="setField('jitterUnderRange', $event)" />
               <label>底层范围半径比例</label
-              ><n-input-number
+              ><NumberValueInput
                 :value="localSystem.jitterUnderRangeRadiusFraction"
                 :step="0.1"
                 @update:value="setField('jitterUnderRangeRadiusFraction', $event)"
@@ -160,7 +169,7 @@
               <label>高光贴图后缀</label><n-input :value="localSystem.phaseHighlight" @update:value="setField('phaseHighlight', $event)" />
               <label>漫射贴图后缀</label><n-input :value="localSystem.phaseDiffuse" @update:value="setField('phaseDiffuse', $event)" />
               <label>舰船透明度</label
-              ><n-input-number :value="localSystem.shipAlpha" :step="0.05" @update:value="setField('shipAlpha', $event)" />
+              ><NumberValueInput :value="localSystem.shipAlpha" :step="0.05" @update:value="setField('shipAlpha', $event)" />
             </div>
           </n-collapse-item>
 
@@ -169,13 +178,13 @@
             <ColorPicker label="护盾内部颜色" v-model="shieldInnerColor" />
             <div class="form-grid">
               <label>护盾厚度倍率</label
-              ><n-input-number
+              ><NumberValueInput
                 :value="localSystem.shieldThicknessMult"
                 :step="0.1"
                 @update:value="setField('shieldThicknessMult', $event)"
               />
               <label>护盾波动倍率</label
-              ><n-input-number
+              ><NumberValueInput
                 :value="localSystem.shieldFluctuationMult"
                 :step="0.1"
                 @update:value="setField('shieldFluctuationMult', $event)"
@@ -185,8 +194,8 @@
 
           <n-collapse-item v-if="showDisplacerSection" title="位移器参数" name="displacer">
             <div class="form-grid">
-              <label>位移距离</label><n-input-number :value="localSystem.range" @update:value="setField('range', $event)" />
-              <label>随机偏移</label><n-input-number :value="localSystem.randomRange" @update:value="setField('randomRange', $event)" />
+              <label>位移距离</label><NumberValueInput :value="localSystem.range" @update:value="setField('range', $event)" />
+              <label>随机偏移</label><NumberValueInput :value="localSystem.randomRange" @update:value="setField('randomRange', $event)" />
               <label>传送时渲染副本</label
               ><n-switch :value="localSystem.renderCopyDuringTeleport" @update:value="setField('renderCopyDuringTeleport', $event)" />
             </div>
@@ -202,10 +211,10 @@
             <div class="form-grid">
               <label>无人机装配 ID</label><n-input :value="localSystem.droneVariant" @update:value="setField('droneVariant', $event)" />
               <label>允许自由漫游</label><n-switch :value="localSystem.allowFreeRoam" @update:value="setField('allowFreeRoam', $event)" />
-              <label>发射速度</label><n-input-number :value="localSystem.launchSpeed" @update:value="setField('launchSpeed', $event)" />
+              <label>发射速度</label><NumberValueInput :value="localSystem.launchSpeed" @update:value="setField('launchSpeed', $event)" />
               <label>发射延迟</label
-              ><n-input-number :value="localSystem.launchDelay" :step="0.1" @update:value="setField('launchDelay', $event)" />
-              <label>最大无人机数</label><n-input-number :value="localSystem.maxDrones" @update:value="setField('maxDrones', $event)" />
+              ><NumberValueInput :value="localSystem.launchDelay" :step="0.1" @update:value="setField('launchDelay', $event)" />
+              <label>最大无人机数</label><NumberValueInput :value="localSystem.maxDrones" @update:value="setField('maxDrones', $event)" />
             </div>
             <h4 class="system-editor-heading">无人机行为定义</h4>
             <JsonValueInput :value="localSystem.droneBehavior ?? []" label="droneBehavior" shape="array" @update="droneBehaviorUpdated" />
@@ -213,8 +222,8 @@
 
           <n-collapse-item title="伤害（AI 理解用）" name="damage">
             <div class="form-grid">
-              <label>EMP 伤害</label><n-input-number :value="localSystem.empDamage" @update:value="setField('empDamage', $event)" />
-              <label>伤害值</label><n-input-number :value="localSystem.damage" @update:value="setField('damage', $event)" />
+              <label>EMP 伤害</label><NumberValueInput :value="localSystem.empDamage" @update:value="setField('empDamage', $event)" />
+              <label>伤害值</label><NumberValueInput :value="localSystem.damage" @update:value="setField('damage', $event)" />
               <label>伤害类型</label
               ><n-select
                 :value="localSystem.damageType"
@@ -251,8 +260,9 @@ import JsonFieldEditor from '@/shared/ui/JsonFieldEditor.vue';
 import EditorFooter from '@/app/components/editors/common/EditorFooter.vue';
 import EditorHeader from '@/app/components/editors/common/EditorHeader.vue';
 import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
+import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
-import type { JsonValue, RowData } from '@/shared/types';
+import type { JsonValue, RowData, EditContext } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
 import { isInternalJsonFieldKey } from '@/shared/lib/json-fields';
 import { normalizeSystemSpec } from '@/domain/editors/lib/normalize';
@@ -264,7 +274,7 @@ import { editorCollapseTheme, toOptions } from '@/domain/editors/lib/editor-cons
 const props = defineProps<{
   systemId: string;
   system?: RowData;
-  draftRevision: number;
+  editContext: EditContext | null;
   dirty: boolean;
   canSave: boolean;
   saving: boolean;
@@ -275,7 +285,7 @@ const emit = defineEmits<{ close: []; 'save-requested': []; 'draft-changed': [sy
 const localSystem = ref<RowData>(normalizeSystemSpec(props.system || { id: props.systemId, type: 'STAT_MOD' }));
 const { commitBefore } = useFieldInputActions();
 const expandedSections = ref(['basic']);
-const { bindObjectField } = useObjectField(localSystem, { onCommit: commitDraft });
+const { bindObjectField } = useObjectField(localSystem, { onCommit: commitEdit });
 
 const AI_TYPES = [
   'BURN_DRIVE',
@@ -343,17 +353,17 @@ const shieldInnerColor = computed({
 
 const aiHintsJson = bindObjectField('aiHints');
 
-function commitDraft() {
+function commitEdit() {
   emit('draft-changed', localSystem.value);
 }
 function setField(key: string, value: RowData[string]) {
   localSystem.value[key] = value;
-  commitDraft();
+  commitEdit();
 }
 
 function droneBehaviorUpdated(value: JsonValue[]) {
   localSystem.value.droneBehavior = value;
-  commitDraft();
+  commitEdit();
 }
 
 const structuredKnownKeys = [...SYSTEM_STRUCTURED_FIELD_KEYS];
@@ -377,19 +387,20 @@ function onExtraUpdate(nextExtra: RowData) {
   }
   Object.assign(nextSystem, nextExtra);
   localSystem.value = nextSystem;
-  commitDraft();
+  commitEdit();
 }
 
 function onTypeChange(newType: string) {
   void commitBefore(() => {
     localSystem.value.type = newType;
-    commitDraft();
+    commitEdit();
   });
 }
 
 watch(
-  () => props.draftRevision,
+  () => props.editContext,
   () => {
+    if (props.editContext?.handoff === 'save') return;
     localSystem.value = normalizeSystemSpec(props.system || { id: props.systemId, type: 'STAT_MOD' });
   },
 );

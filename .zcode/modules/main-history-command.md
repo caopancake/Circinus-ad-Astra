@@ -10,7 +10,7 @@
 `src/app/composables/use-shortcut-dispatch.ts`：快捷键分发唯一 owner，拥有 window 监听、命令路由、纯键表分发与命中拦截。
 `src/app/composables/use-main-window-shortcuts.ts`：主窗口快捷键装配 owner，连接保存注册表与历史编排。
 `src/app/composables/canvas/use-canvas-editor.ts`：画布骨架快捷键消费方，经分发器路由 undo/redo 与画布纯键。
-`src/stores/save-command.store.ts`：活动保存目标注册表。
+`src/stores/save-command.store.ts`：活动保存命令、目标保存句柄和交接意图序号 owner。
 `src/orchestrators/main-history-command.orchestrator.ts`：历史分派 owner，CSV 草稿优先于文件 history。
 `src/orchestrators/file-history-replay.orchestrator.ts`：文件历史回放 owner。
 `src/app/AppContent.vue`：主窗口装配入口，注册活动保存目标与窗口快捷键。
@@ -21,7 +21,8 @@
 - 主窗口快捷键装配严禁内联解析键盘事件细节，严禁直接依赖 history store。
 - Ctrl+S 为全局保存语义，不受输入焦点限制；undo/redo 默认豁免输入焦点，文本编辑面可显式开启。
 - 撤销重做分派优先当前 CSV 草稿历史；当前表无 entry 才进入文件 history 回放。
-- 保存分派只允许触发当前注册的活动保存目标，无目标时静默放行。
+- 保存分派只允许触发当前活动命令；目标句柄必须登记身份、saving 与等待能力，重复触发必须消费已有任务。
+- 导航、实体选择、外部接纳、Mod 移除与关闭必须消费所属保存句柄；连续导航只允许执行最新意图。
 - 命中的命令必须阻止默认行为；未注册处理器的命令静默放行。
 - 子窗口编辑器与主窗口共用同一键位表，键位语义严禁按窗口漂移。
 
@@ -58,7 +59,7 @@
 - 快捷键纯键命中必须阻止默认行为；命令命中但无处理器时不得阻止默认行为。
 - 输入焦点豁免只适用于 undo/redo 与纯键，严禁豁免 save 与 close。
 - undo/redo 的可编辑目标豁免必须可按表面开启，文本编辑面必须开启。
-- 撤销重做严禁在 input、textarea、select 或 contenteditable 内抢占原生撤销。
+- 检查器与 schema 的输入焦点必须保留原生撤销体验；文本文件编辑面必须按已声明的焦点策略消费文本快照历史。
 - 快捷键触发必须避免与输入控件、schema 控件、CSV 单元格编辑器和系统快捷键冲突。
 - 主窗口历史分派失败只呈现反馈，严禁改变历史栈状态。
 

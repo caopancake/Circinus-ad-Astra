@@ -1,210 +1,258 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  useEditTargetDraftSession,
-  type EditTargetDraftSession,
-  type EditTargetDraftSessionOptions,
-  type EditTargetSnapshot,
-} from './use-edit-target-draft-session';
+import { ref } from 'vue';
+import { useEditTargetDraftSession, type EditTargetDraftSessionOptions, type EditTargetSnapshot } from './use-edit-target-draft-session';
 
 interface SampleValue {
   a: number;
 }
-
 interface SampleTarget {
   id: string;
 }
-
-const target: SampleTarget = { id: 't1' };
-const targetKey = (value: SampleTarget) => value.id;
-
-type SampleSessionOptions = Partial<EditTargetDraftSessionOptions<SampleValue, SampleTarget>>;
-
-function createSession(options: SampleSessionOptions = {}): EditTargetDraftSession<SampleValue, SampleTarget> {
-  return useEditTargetDraftSession<SampleValue, SampleTarget>({
-    emptyValue: { a: 1 },
-    targetKey,
-    load: () => ({ value: { a: 1 } }),
+type Snapshot = EditTargetSnapshot<SampleValue, SampleTarget, { label: string }>;
+const target = { id: 't1' };
+function snapshot(a: number, fingerprint = 'v1', label = 'loaded', id = target.id): Snapshot {
+  return { target: { id }, value: { a }, baseVersions: [{ path: 'target.json', fingerprint }], meta: { label } };
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+function createSession(options: Partial<EditTargetDraftSessionOptions<SampleValue, SampleTarget, { label: string }>> = {}) {
+  const session = useEditTargetDraftSession({
+    emptyValue: { a: 0 },
+    targetKey: (value: SampleTarget) => value.id,
+    load: () => snapshot(1),
     ...options,
   });
+  session.loadBaseForTarget(snapshot(1));
+  return session;
 }
 
-describe('useEditTargetDraftSession dirty binding', () => {
-  it('flips dirty reactively when the draft diverges from the baseline', () => {
+describe('target snapshots', () => {
+  it('owns isolated draft, baseline, versions and metadata', () => {
     const session = createSession();
-    expect(session.dirty.value).toBe(false);
-    session.setDraft({ a: 2 });
+    const draft = { a: 2 };
+    session.setDraft(draft);
+    draft.a = 99;
+    expect(session.draftValue.value).toEqual({ a: 2 });
+    expect(session.baselineSnapshot.value).toEqual(snapshot(1));
     expect(session.dirty.value).toBe(true);
-  });
-
-  it('clears dirty when the draft returns to the baseline value', () => {
-    const session = createSession();
-    session.setDraft({ a: 2 });
     session.setDraft({ a: 1 });
     expect(session.dirty.value).toBe(false);
   });
-
-  it('keeps the mirrored draft isolated from the submitted value object', () => {
+  it('stages a complete external snapshot and accepts it atomically', () => {
     const session = createSession();
-    const submitted: SampleValue = { a: 2 };
-    session.setDraft(submitted);
-    submitted.a = 99;
-    expect(session.draftValue.value).toEqual({ a: 2 });
-    expect(session.dirty.value).toBe(true);
-  });
-
-  it('restores the baseline through resetDraft', () => {
-    const session = createSession();
-    session.loadBaseForTarget(target, { a: 1 });
     session.setDraft({ a: 2 });
-    session.resetDraft();
+    expect(session.applyExternalForTarget(snapshot(3, 'v3', 'external'))).toBe('pending');
+    expect(session.pendingSnapshot.value).toEqual(snapshot(3, 'v3', 'external'));
+    expect(session.baselineSnapshot.value).toEqual(snapshot(1));
+    session.loadPendingExternal();
+    expect(session.baselineSnapshot.value).toEqual(snapshot(3, 'v3', 'external'));
+    expect(session.draftValue.value).toEqual({ a: 3 });
+    expect(session.context.value?.handoff).toBe('external');
     expect(session.dirty.value).toBe(false);
-    expect(session.draftValue.value).toEqual({ a: 1 });
+  });
+  it('advances generation for same content with a new version', () => {
+    const session = createSession();
+    const generation = session.context.value!.baselineGeneration;
+    session.applyExternalForTarget(snapshot(1, 'v2'));
+    expect(session.context.value!.baselineGeneration).toBe(generation + 1);
+    expect(session.baselineSnapshot.value!.baseVersions).toEqual(snapshot(1, 'v2').baseVersions);
+  });
+  it('refreshes metadata without breaking the edit context for the same baseline', () => {
+    const session = createSession();
+    const context = session.context.value;
+    session.setDraft({ a: 2 });
+    session.applyExternalForTarget(snapshot(1, 'v1', 'hydrated'));
+    expect(session.baselineSnapshot.value?.meta.label).toBe('hydrated');
+    expect(session.context.value).toBe(context);
+    expect(session.draftValue.value).toEqual({ a: 2 });
+  });
+  it('rejects other targets and releases pending inputs on reset', () => {
+    const session = createSession();
+    expect(session.applyExternalForTarget(snapshot(9, 'v9', '', 'other'))).toBe('obsolete');
+    const raw = ref(true);
+    const cancel = vi.fn(() => {
+      raw.value = false;
+    });
+    session.inputs.register({ key: 'a', label: 'a', dirty: raw, commit: () => null, cancel, focus: vi.fn() });
+    session.resetDraft();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(session.dirty.value).toBe(false);
+    expect(session.context.value?.handoff).toBe('reset');
   });
 
-  it('dispatches two-way model assignments through the draft state machine', () => {
+  it('retains the source order after a metadata-only authoritative refresh', () => {
     const session = createSession();
-    session.loadBaseForTarget(target, { a: 1 });
-    session.draftValue.value = { a: 2 };
-    expect(session.dirty.value).toBe(true);
-    session.applyExternalForTarget(target, { a: 3 });
-    expect(session.draftValue.value).toEqual({ a: 2 });
-    expect(session.pendingExternalValue.value).toEqual({ a: 3 });
+    expect(session.applyExternalForTarget({ ...snapshot(2, 'v2'), commitId: 20 })).toBe('baseline');
+    session.applyExternalForTarget(snapshot(2, 'v2', 'hydrated'));
+    expect(session.applyExternalForTarget({ ...snapshot(1), commitId: 19 })).toBe('obsolete');
+    expect(session.baselineSnapshot.value?.value).toEqual({ a: 2 });
+    expect(session.baselineSnapshot.value?.meta.label).toBe('hydrated');
   });
 });
 
-describe('useEditTargetDraftSession save binding', () => {
-  it('commits the saved snapshot and clears dirty', async () => {
-    const save = vi.fn(async (_target: SampleTarget, draft: SampleValue) => ({ value: draft }));
-    const session = createSession({ save });
-    session.loadBaseForTarget(target, { a: 1 });
+describe('read acceptance', () => {
+  it.each(['resolve', 'reject'] as const)('revokes a pre-save read %s', async (completion) => {
+    const read = deferred<Snapshot>();
+    const session = createSession({ load: () => read.promise, save: () => snapshot(2, 'v2', 'saved') });
+    const loading = session.refreshTarget(target);
     session.setDraft({ a: 2 });
-    const result = await session.saveDraft();
-    expect(save).toHaveBeenCalledWith(target, { a: 2 }, []);
-    expect(result).toEqual({ value: { a: 2 } });
-    expect(session.dirty.value).toBe(false);
-    expect(session.draftValue.value).toEqual({ a: 2 });
-    expect(session.saving.value).toBe(false);
+    await session.saveDraft();
+    if (completion === 'resolve') read.resolve(snapshot(1));
+    else read.reject(new Error('late error'));
+    expect(await loading).toBeNull();
+    expect(session.baselineSnapshot.value).toEqual(snapshot(2, 'v2', 'saved'));
+    expect(session.loading.value).toBe(false);
   });
-
-  it('stages the save result as pending external when the draft moved during the request', async () => {
-    let resolveSave: (snapshot: EditTargetSnapshot<SampleValue>) => void = () => {};
-    const save = vi.fn(
-      () =>
-        new Promise<EditTargetSnapshot<SampleValue>>((resolve) => {
-          resolveSave = resolve;
-        }),
-    );
-    const session = createSession({ save });
-    session.loadBaseForTarget(target, { a: 1 });
-    session.setDraft({ a: 2 });
-    const pending = session.saveDraft();
-    expect(session.saving.value).toBe(true);
-    session.setDraft({ a: 9 });
-    resolveSave({ value: { a: 2 } });
-    const result = await pending;
-    expect(result).toEqual({ value: { a: 2 } });
-    expect(session.dirty.value).toBe(true);
-    expect(session.draftValue.value).toEqual({ a: 9 });
-    expect(session.pendingExternalValue.value).toEqual({ a: 2 });
-    expect(session.hasPendingExternalValue.value).toBe(true);
-    expect(session.saving.value).toBe(false);
-    session.draftValue.value = { a: 1 };
-    expect(session.dirty.value).toBe(true);
-    session.resetDraft();
-    expect(session.draftValue.value).toEqual({ a: 2 });
-    expect(session.dirty.value).toBe(false);
+  it('allows save while an already-ready target refreshes', async () => {
+    const read = deferred<Snapshot>();
+    const save = vi.fn(() => snapshot(1, 'v2'));
+    const session = createSession({ load: () => read.promise, save });
+    const loading = session.refreshTarget(target);
+    await session.saveDraft();
+    expect(save).toHaveBeenCalledOnce();
+    read.resolve(snapshot(9));
+    expect(await loading).toBeNull();
   });
-
-  it('preserves a return to the old baseline while a save is pending', async () => {
-    let resolveSave!: (snapshot: EditTargetSnapshot<SampleValue>) => void;
-    const session = createSession({ save: () => new Promise((resolve) => (resolveSave = resolve)) });
-    session.loadBaseForTarget(target, { a: 1 });
-    session.draftValue.value = { a: 2 };
-    const pending = session.saveDraft();
-    session.draftValue.value = { a: 1 };
-    resolveSave({ value: { a: 2 } });
-    await pending;
-    expect(session.draftValue.value).toEqual({ a: 1 });
-    expect(session.dirty.value).toBe(true);
-    session.loadPendingExternal();
-    expect(session.draftValue.value).toEqual({ a: 2 });
-    expect(session.dirty.value).toBe(false);
+  it('accepts only the latest request and ignores errors after disposal', async () => {
+    const first = deferred<Snapshot>();
+    const second = deferred<Snapshot>();
+    const load = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const session = createSession({ load });
+    const one = session.refreshTarget(target);
+    const two = session.refreshTarget(target);
+    first.resolve(snapshot(8));
+    expect(await one).toBeNull();
+    expect(session.loading.value).toBe(true);
+    session.dispose();
+    second.reject(new Error('disposed'));
+    expect(await two).toBeNull();
+    expect(session.currentTarget.value).toBeNull();
   });
-
-  it('keeps rejected saves dirty and skips the saved callback', async () => {
-    const onSaved = vi.fn();
-    const session = createSession({ save: async () => {}, onSaved });
-    session.loadBaseForTarget(target, { a: 1 });
-    session.draftValue.value = { a: 2 };
+  it('clears readiness while switching to a new target', async () => {
+    const read = deferred<Snapshot>();
+    const save = vi.fn();
+    const session = createSession({ load: () => read.promise, save });
+    const loading = session.loadTarget({ id: 't2' });
+    expect(session.baselineSnapshot.value).toBeNull();
     expect(await session.saveDraft()).toBeNull();
-    expect(session.dirty.value).toBe(true);
-    expect(onSaved).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    read.resolve(snapshot(4, 'v4', '', 't2'));
+    await loading;
+    expect(session.currentTarget.value).toEqual({ id: 't2' });
   });
 });
 
-describe('useEditTargetDraftSession external updates', () => {
-  it('stages external updates while dirty and exposes the notice reactively', () => {
-    const session = createSession({ externalNotice: '外部更新' });
-    session.loadBaseForTarget(target, { a: 1 });
+describe('save operation', () => {
+  it('reuses one promise and keeps edits against actual persisted content', async () => {
+    const write = deferred<Snapshot>();
+    const save = vi.fn(() => write.promise);
+    const session = createSession({ save });
     session.setDraft({ a: 2 });
-    session.applyExternalForTarget(target, { a: 3 });
+    const pending = session.saveDraft();
+    expect(session.saveDraft()).toBe(pending);
+    session.setDraft({ a: 9 });
+    write.resolve(snapshot(20, 'v2', 'persisted'));
+    await pending;
+    expect(save).toHaveBeenCalledWith(target, { a: 2 }, snapshot(1).baseVersions);
+    expect(session.baselineSnapshot.value).toEqual(snapshot(20, 'v2', 'persisted'));
+    expect(session.draftValue.value).toEqual({ a: 9 });
+    expect(session.pendingSnapshot.value).toBeNull();
+    expect(session.externalUpdateNotice.value).toBe('');
     expect(session.dirty.value).toBe(true);
-    expect(session.draftValue.value).toEqual({ a: 2 });
-    expect(session.pendingExternalValue.value).toEqual({ a: 3 });
-    expect(session.hasPendingExternalValue.value).toBe(true);
-    expect(session.externalUpdateNotice.value).toBe('外部更新');
-    session.loadPendingExternal();
-    expect(session.draftValue.value).toEqual({ a: 3 });
-    expect(session.dirty.value).toBe(false);
-    expect(session.externalUpdateNotice.value).toBe('');
+    session.resetDraft();
+    expect(session.draftValue.value).toEqual({ a: 20 });
   });
-
-  it('uses the default notice when no custom text is configured', () => {
-    const session = createSession();
-    session.loadBaseForTarget(target, { a: 1 });
+  it('accepts canonical content when no newer edit exists', async () => {
+    const session = createSession({ save: () => snapshot(20, 'v2') });
     session.setDraft({ a: 2 });
-    session.applyExternalForTarget(target, { a: 3 });
-    expect(session.externalUpdateNotice.value).toBe('外部版本已更新，当前未保存草稿已保留。');
-  });
-
-  it('applies external updates directly when clean', () => {
-    const session = createSession();
-    session.loadBaseForTarget(target, { a: 1 });
-    session.applyExternalForTarget(target, { a: 3 });
+    await session.saveDraft();
+    expect(session.draftValue.value).toEqual({ a: 20 });
     expect(session.dirty.value).toBe(false);
-    expect(session.draftValue.value).toEqual({ a: 3 });
-    expect(session.pendingExternalValue.value).toBeNull();
-    expect(session.externalUpdateNotice.value).toBe('');
+    expect(session.context.value?.handoff).toBe('save');
   });
-
-  it('ignores external updates for a different target', () => {
-    const session = createSession();
-    session.loadBaseForTarget(target, { a: 1 });
-    session.applyExternalForTarget({ id: 'other' }, { a: 3 });
-    expect(session.draftValue.value).toEqual({ a: 1 });
-    expect(session.dirty.value).toBe(false);
-  });
-});
-
-describe('useEditTargetDraftSession target loading', () => {
-  it('bumps revision only when the loaded base changes the draft', () => {
-    const session = createSession({ emptyValue: { a: 0 } });
-    expect(session.revision.value).toBe(0);
-    session.loadBaseForTarget(target, { a: 1 });
-    expect(session.revision.value).toBe(1);
-    session.loadBaseForTarget(target, { a: 1 });
-    expect(session.revision.value).toBe(1);
-    session.loadBaseForTarget(target, { a: 2 });
-    expect(session.revision.value).toBe(2);
-    expect(session.dirty.value).toBe(false);
-    expect(session.draftValue.value).toEqual({ a: 2 });
-  });
-
-  it('keeps revision stable across draft edits', () => {
-    const session = createSession({ emptyValue: { a: 0 } });
-    session.loadBaseForTarget(target, { a: 1 });
-    expect(session.revision.value).toBe(1);
+  it.each(['write', 'sync', 'cancel'] as const)('ends handoff on %s failure and retains the correct baseline', async (stage) => {
+    const session = createSession({
+      save: () => {
+        if (stage === 'write') throw new Error('write');
+        if (stage === 'cancel') return;
+        return snapshot(2, 'v2');
+      },
+      afterSaved: () => {
+        if (stage === 'sync') throw new Error('sync');
+      },
+    });
     session.setDraft({ a: 2 });
-    expect(session.revision.value).toBe(1);
+    const pending = session.saveDraft();
+    const waiting = session.waitForSave();
+    if (stage === 'cancel') expect(await pending).toBeNull();
+    else await expect(pending).rejects.toThrow(stage === 'sync' ? '已写盘' : 'write');
+    expect(await waiting).toBe(false);
+    expect(session.baselineSnapshot.value?.value.a).toBe(stage === 'sync' ? 2 : 1);
+    expect(session.saving.value).toBe(false);
+  });
+  it('commits inputs before capturing and retains later raw input', async () => {
+    const write = deferred<Snapshot>();
+    const session = createSession({ save: () => write.promise });
+    const raw = ref(true);
+    session.inputs.register({
+      key: 'a',
+      label: 'a',
+      dirty: raw,
+      commit: () => {
+        session.setDraft({ a: 2 });
+        raw.value = false;
+        return null;
+      },
+      cancel: () => {},
+      focus: () => {},
+    });
+    const pending = session.saveDraft();
+    await Promise.resolve();
+    await Promise.resolve();
+    raw.value = true;
+    write.resolve(snapshot(2, 'v2'));
+    await pending;
+    expect(session.dirty.value).toBe(true);
+    expect(raw.value).toBe(true);
+  });
+  it('coalesces refresh requests and reads after saved synchronization', async () => {
+    const write = deferred<Snapshot>();
+    const load = vi.fn(() => snapshot(3, 'v3'));
+    const session = createSession({ load, save: () => write.promise });
+    const pending = session.saveDraft();
+    const refresh1 = session.refreshTarget(target);
+    const refresh2 = session.refreshTarget(target);
+    session.setDraft({ a: 9 });
+    write.resolve(snapshot(2, 'v2'));
+    await Promise.all([pending, refresh1, refresh2]);
+    expect(load).toHaveBeenCalledOnce();
+    expect(session.baselineSnapshot.value).toEqual(snapshot(2, 'v2'));
+    expect(session.pendingSnapshot.value).toEqual(snapshot(3, 'v3'));
+    expect(session.draftValue.value).toEqual({ a: 9 });
+  });
+  it('completes captured synchronization after consumer disposal', async () => {
+    const write = deferred<Snapshot>();
+    const afterSaved = vi.fn();
+    const session = createSession({ save: () => write.promise, afterSaved });
+    const pending = session.saveDraft();
+    session.dispose();
+    write.resolve(snapshot(2, 'v2'));
+    await pending;
+    expect(afterSaved).toHaveBeenCalledWith(snapshot(2, 'v2'));
+    expect(session.baselineSnapshot.value).toBeNull();
+  });
+  it('recognizes the local commit echo', async () => {
+    const session = createSession({ save: () => ({ ...snapshot(2, 'v2'), commitId: 10 }) });
+    await session.saveDraft();
+    session.setDraft({ a: 3 });
+    expect(session.applyExternalForTarget({ ...snapshot(2, 'v2'), commitId: 10 })).toBe('obsolete');
+    expect(session.pendingSnapshot.value).toBeNull();
   });
 });

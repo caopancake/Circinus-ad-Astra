@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 
 const mocks = vi.hoisted(() => ({
   completeSavedWrite: vi.fn(() => Promise.resolve()),
-  writeModFiles: vi.fn(),
+  writeModInfo: vi.fn(),
   writeIndexedConfigEntity: vi.fn(),
   writeCreateIndexedConfigEntity: vi.fn(),
   writeDeleteIndexedConfigEntity: vi.fn(),
@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/orchestrators/file-history-write.orchestrator', () => ({ completeSavedWrite: mocks.completeSavedWrite }));
 
 vi.mock('@/services/write.service', () => ({
-  writeModFiles: mocks.writeModFiles,
+  writeModInfo: mocks.writeModInfo,
   writeIndexedConfigEntity: mocks.writeIndexedConfigEntity,
   writeCreateIndexedConfigEntity: mocks.writeCreateIndexedConfigEntity,
   writeDeleteIndexedConfigEntity: mocks.writeDeleteIndexedConfigEntity,
@@ -39,6 +39,7 @@ import {
   deleteVariantAction,
   saveIndexedEntityAction,
   saveModInfoAction,
+  completeConfigSave,
   saveSkinAction,
   saveVariantAction,
 } from '@/orchestrators/config-save.orchestrator';
@@ -83,15 +84,17 @@ beforeEach(() => {
 });
 
 describe('config-save orchestrator', () => {
-  it('writes mod_info.json as an associated file change and records history', async () => {
-    mocks.writeModFiles.mockResolvedValue(writeResult());
+  it('writes canonical mod info and synchronizes its captured receipt', async () => {
+    mocks.writeModInfo.mockResolvedValue(writeResult());
 
-    await saveModInfoAction(SESSION_ID, MOD_ROOT, { id: 'demo' });
+    const result = await saveModInfoAction(SESSION_ID, MOD_ROOT, { id: 'demo' });
+    await completeConfigSave(MOD_ROOT, SESSION_ID, result!, '保存 mod_info.json');
 
-    expect(mocks.writeModFiles).toHaveBeenCalledWith(
+    expect(mocks.writeModInfo).toHaveBeenCalledWith(
       SESSION_ID,
       MOD_ROOT,
-      [{ relPath: 'mod_info.json', afterText: JSON.stringify({ id: 'demo' }, null, 2), afterDataBase64: null }],
+      { id: 'demo' },
+      { preserveOriginalJson: false, confirmedSources: [] },
       [],
     );
     expect(mocks.completeSavedWrite).toHaveBeenCalledWith(
@@ -101,8 +104,9 @@ describe('config-save orchestrator', () => {
   });
 
   it('does not record file history when a preserved JSON save has no changes', async () => {
-    mocks.writeModFiles.mockResolvedValue({ ...writeResult(), changes: [] });
-    await saveModInfoAction(SESSION_ID, MOD_ROOT, { id: 'demo' });
+    mocks.writeModInfo.mockResolvedValue({ ...writeResult(), changes: [] });
+    const result = await saveModInfoAction(SESSION_ID, MOD_ROOT, { id: 'demo' });
+    await completeConfigSave(MOD_ROOT, SESSION_ID, result!, '保存 mod_info.json');
     expect(mocks.completeSavedWrite).not.toHaveBeenCalled();
   });
 
@@ -121,7 +125,8 @@ describe('config-save orchestrator', () => {
       deletePreviousTarget: false,
     });
 
-    expect(entityId).toMatchObject({ entityId: 'npc_dave', baseVersions: [] });
+    expect(entityId?.entity).toMatchObject({ entityId: 'npc_dave', baseVersions: [] });
+    await completeConfigSave(MOD_ROOT, SESSION_ID, entityId!.receipt, '保存 npc_dave.faction');
     expect(mocks.completeSavedWrite).toHaveBeenCalledWith(
       { modRoot: MOD_ROOT, sessionId: SESSION_ID, label: '保存 npc_dave.faction', result: expect.anything() },
       expect.anything(),

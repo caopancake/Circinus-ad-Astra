@@ -1,10 +1,11 @@
+import { completeConfigSave } from '@/orchestrators/config-save.orchestrator';
 import type { ConfigEditTarget } from '@/shared/types';
 import { computed, watch, type Ref } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useConfigEditorDraftSession } from '@/app/composables/config/use-config-editor-draft-session';
 import type { ConfigEntityFamilyDefinition, ConfigFamilyFile } from '@/domain/config/config-entity-families';
 import { familyFileId } from '@/domain/config/config-entity-families';
-import type { RowData } from '@/shared/types';
+import type { RowData, SavedConfig, WriteResult } from '@/shared/types';
 import { createSchemaRuntimeContext } from '@/app/composables/use-schema-runtime-context';
 import { queryBuiltInWeaponSlotOptions } from '@/services/config-resource.service';
 import { hasQueryInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
@@ -13,8 +14,8 @@ export function useConfigFamilyEditorViewModel(params: {
   family: ConfigEntityFamilyDefinition;
   dataRevision: Ref<number>;
   modRoot: Ref<string | null>;
-  onSaved: (id: string | null) => void;
-  saveFile: (sessionId: string, modRoot: string, current: ConfigFamilyFile, data: RowData) => Promise<ConfigFamilyFile | null>;
+  onSaved: (id: string | null) => void | Promise<void>;
+  saveFile: (sessionId: string, modRoot: string, current: ConfigFamilyFile, data: RowData) => Promise<SavedConfig<ConfigFamilyFile> | null>;
   sessionId: Ref<string | null>;
   selectedId: Ref<string>;
   files: Ref<ConfigFamilyFile[]>;
@@ -34,13 +35,17 @@ export function useConfigFamilyEditorViewModel(params: {
 
   const selectedFile = computed(() => params.files.value.find((file) => familyFileId(family, file) === params.selectedId.value) ?? null);
 
-  const draftSession = useConfigEditorDraftSession<RowData, ConfigEditTarget, ConfigFamilyFile | null, ConfigFamilyFile>({
+  const draftSession = useConfigEditorDraftSession<
+    RowData,
+    ConfigEditTarget,
+    { file: ConfigFamilyFile | null; receipt: WriteResult | null }
+  >({
     emptyValue: {},
     modRoot: params.modRoot,
     load: (target) => {
       const id = target.id;
       const file = params.files.value.find((candidate) => familyFileId(family, candidate) === id) ?? null;
-      return { meta: file, value: file ? file.data : {}, baseVersions: file?.baseVersions ?? [] };
+      return { target, meta: { file, receipt: null }, value: file ? file.data : {}, baseVersions: file?.baseVersions ?? [] };
     },
     save: async (target, data, baseVersions) => {
       const current = params.files.value.find((file) => file.relPath === target.relPath) ?? null;
@@ -48,12 +53,25 @@ export function useConfigFamilyEditorViewModel(params: {
       const saveSessionId = target.sessionId;
       if (!current || !saveModRoot || !saveSessionId) return;
       const saved = await params.saveFile(saveSessionId, saveModRoot, { ...current, baseVersions }, data);
-      if (params.modRoot.value !== saveModRoot || params.sessionId.value !== saveSessionId || !saved) return;
-      return { meta: saved, value: saved.data, baseVersions: saved.baseVersions };
+      if (!saved) return;
+      return {
+        target: { ...target, id: familyFileId(family, saved.entity), relPath: saved.entity.relPath },
+        meta: { file: saved.entity, receipt: saved.receipt },
+        value: saved.entity.data,
+        baseVersions: saved.entity.baseVersions,
+        commitId: saved.receipt.commitId,
+      };
     },
     targetKey: (target) => JSON.stringify(target),
-    savedTarget: (target, snapshot) =>
-      snapshot.meta ? { ...target, id: familyFileId(family, snapshot.meta), relPath: snapshot.meta.relPath } : target,
+    afterSaved: async (snapshot) => {
+      await completeConfigSave(
+        snapshot.target.modRoot,
+        snapshot.target.sessionId,
+        snapshot.meta.receipt!,
+        `保存${family.displayName} ${snapshot.target.id}`,
+      );
+      if (draftSession.isTargetCurrent(snapshot.target)) await params.onSaved(snapshot.target.id);
+    },
   });
 
   watch(
@@ -62,7 +80,13 @@ export function useConfigFamilyEditorViewModel(params: {
       const file = selectedFile.value;
       const data = file ? file.data : {};
       if (!draftSession.isTargetCurrent(editTarget(selectedId))) void loadFamilyEditorData(selectedId);
-      else draftSession.applyExternalForTarget(editTarget(selectedId), data, file?.baseVersions);
+      else
+        draftSession.applyExternalForTarget({
+          target: editTarget(selectedId),
+          value: data,
+          meta: { file, receipt: null },
+          baseVersions: file?.baseVersions ?? [],
+        });
     },
     { immediate: true },
   );
@@ -76,9 +100,12 @@ export function useConfigFamilyEditorViewModel(params: {
   }
 
   async function save() {
+    if (draftSession.saving.value) {
+      await draftSession.waitForSave();
+      return;
+    }
     try {
-      const saved = await draftSession.saveDraft();
-      if (saved?.meta) params.onSaved(familyFileId(family, saved.meta));
+      await draftSession.saveDraft();
     } catch (error) {
       feedback.error(error, `保存${family.displayName}失败`);
     }

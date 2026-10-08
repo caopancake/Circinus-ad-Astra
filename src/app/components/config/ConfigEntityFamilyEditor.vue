@@ -23,7 +23,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, toRef } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
-import type { RowData } from '@/shared/types';
+import type { RowData, SavedConfig } from '@/shared/types';
 import SchemaFormRenderer from '@/app/components/schema/SchemaFormRenderer.vue';
 import { getSchema } from '@/domain/schema/schema-registry';
 import { useConfigFamilyEditorViewModel } from '@/app/composables/config/use-config-family-editor-view-model';
@@ -38,7 +38,7 @@ const props = defineProps<{
   modRoot: string | null;
   sessionId: string | null;
   dataRevision: number;
-  saveFile: (sessionId: string, modRoot: string, current: ConfigFamilyFile, data: RowData) => Promise<ConfigFamilyFile | null>;
+  saveFile: (sessionId: string, modRoot: string, current: ConfigFamilyFile, data: RowData) => Promise<SavedConfig<ConfigFamilyFile> | null>;
   deleteEntity: (sessionId: string, modRoot: string, id: string, relPath: string) => Promise<boolean>;
 }>();
 const emit = defineEmits<{ saved: [id: string | null] }>();

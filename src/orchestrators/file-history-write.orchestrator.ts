@@ -1,7 +1,7 @@
 import type { useProjectStore } from '@/stores/project.store';
 import { useFileHistoryStore } from '@/stores/file-history.store';
-import { refreshProjectSessionAfterWrite } from '@/orchestrators/project-session-refresh.orchestrator';
-import { AppError } from '@/shared/lib/errors';
+import { applyCommittedWriteCacheInvalid, refreshProjectSessionAfterWrite } from '@/orchestrators/project-session-refresh.orchestrator';
+import { AppError, withCause } from '@/shared/lib/errors';
 import type { WriteResult } from '@/shared/types';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { formatError } from '@/shared/lib/errors';
@@ -21,6 +21,7 @@ export async function completeSavedWrite(completion: SavedWriteCompletion, proje
   assertSavedWriteSessionCurrent(completion, project);
   const fileHistory = useFileHistoryStore();
   fileHistory.applySnapshot(completion.modRoot, completion.result.history);
+  applyCommittedWriteCacheInvalid(completion.sessionId, completion.result);
   try {
     await refreshProjectSessionAfterWrite(completion.modRoot, completion.result, completion.sessionId);
   } catch (error) {
@@ -32,6 +33,7 @@ export async function completeSavedWrite(completion: SavedWriteCompletion, proje
       line: null,
       fields: { sessionId: completion.sessionId },
     });
+    throw withCause('已写盘，项目同步失败', error, 'sync-saved-write');
   }
 }
 

@@ -1,3 +1,5 @@
+vi.mock('@/orchestrators/config-save.orchestrator', () => ({ completeConfigSave: vi.fn(async () => {}) }));
+import { savedWriteFixture } from '@/test/write-result';
 import { mount } from '@vue/test-utils';
 import { createPinia, getActivePinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,7 +51,12 @@ function mountEditor() {
   const factions = ref<Record<string, RowData>>({
     existing: { id: 'existing', displayName: 'Existing' },
   });
-  const saveFaction = vi.fn(async (_sessionId: string, _modRoot: string, previousId: string) => ({ id: previousId, baseVersions: [] }));
+  const saveFaction = vi.fn(async (_sessionId: string, _modRoot: string, previousId: string, data: RowData) => ({
+    id: previousId,
+    data,
+    receipt: savedWriteFixture(),
+    baseVersions: [],
+  }));
   const queryPreviewImages = vi.fn(async () => ({ logoSrc: 'data:logo', crestSrc: 'data:crest' }));
   const onSaved = vi.fn();
   let vm!: ReturnType<typeof useConfigFactionEditorViewModel>;
@@ -129,7 +136,7 @@ describe('useConfigFactionEditorViewModel', () => {
     const { vm, queryPreviewImages, factionId } = mountEditor();
     await vi.waitFor(() => expect(vm.logoSrc.value).toBe('data:logo'));
     expect(vm.crestSrc.value).toBe('data:crest');
-    expect(queryPreviewImages).toHaveBeenCalledWith('sess-1', 'existing');
+    expect(queryPreviewImages).toHaveBeenCalledWith('sess-1', 'existing', expect.anything());
 
     queryPreviewImages.mockResolvedValue({ logoSrc: 'data:new', crestSrc: 'data:new' });
     factionId.value = 'other';

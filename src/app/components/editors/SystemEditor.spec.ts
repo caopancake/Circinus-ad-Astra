@@ -42,7 +42,7 @@ function mountEditor(system: RowData) {
     props: {
       systemId: 'sys1',
       system,
-      draftRevision: 0,
+      editContext: null,
       dirty: false,
       canSave: false,
       saving: false,

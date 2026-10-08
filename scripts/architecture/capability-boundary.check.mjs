@@ -186,6 +186,7 @@ test('flat edit-session primitives retain their declared adapter ownership', () 
   const files = architectureFixtures({
     'src/domain/edit-session.ts': 'export function createEditSessionValue() {}',
     'src/app/composables/use-draft-session.ts': "import { createEditSessionValue } from '@/domain/edit-session';",
+    'src/app/composables/use-snapshot-history.ts': "import { createEditSessionValue } from '@/domain/edit-session';",
     'src/app/composables/use-sample.ts': "import { createEditSessionValue } from '@/domain/edit-session';",
   });
   assert.equal(draftSessionBoundaryRule.check(files).length, 1);

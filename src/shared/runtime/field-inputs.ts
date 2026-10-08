@@ -26,6 +26,7 @@ const fieldInputsKey: InjectionKey<FieldInputs> = Symbol('field-inputs');
 
 export function createFieldInputs(targetKey: Readonly<Ref<string | null>> = ref(null)) {
   const fields = shallowReactive(new Set<FieldInput>());
+  const finalizers = new Map<() => void, string | undefined>();
   const dirty = computed(() => [...fields].some((field) => field.dirty.value));
   let generation = 0;
 
@@ -34,13 +35,18 @@ export function createFieldInputs(targetKey: Readonly<Ref<string | null>> = ref(
     return () => fields.delete(field);
   }
 
-  function commit(): Promise<boolean> | undefined {
-    const pending = [...fields].filter((field) => field.dirty.value);
-    if (pending.length === 0) return;
-    return commitPending(pending);
+  function commit(prefix?: string): Promise<boolean> | undefined {
+    const matches = (key: string) => prefix === undefined || key === prefix || key.startsWith(prefix + '/');
+    const pending = [...fields].filter((field) => field.dirty.value && matches(field.key));
+    const finish = [...finalizers]
+      .filter(([, key]) => prefix === undefined || (key !== undefined && matches(key)))
+      .sort(([, left], [, right]) => Number(left === undefined) - Number(right === undefined))
+      .map(([finalize]) => finalize);
+    if (pending.length === 0 && finish.length === 0) return;
+    return commitPending(pending, finish);
   }
 
-  async function commitPending(pending: FieldInput[]) {
+  async function commitPending(pending: FieldInput[], finish: Array<() => void>) {
     const key = targetKey.value;
     const started = generation;
     for (const field of pending) {
@@ -54,7 +60,9 @@ export function createFieldInputs(targetKey: Readonly<Ref<string | null>> = ref(
       }
       await nextTick();
     }
-    return generation === started && targetKey.value === key;
+    if (generation !== started || targetKey.value !== key) return false;
+    for (const finalize of finish) finalize();
+    return true;
   }
 
   function cancel(prefix?: string) {
@@ -66,8 +74,20 @@ export function createFieldInputs(targetKey: Readonly<Ref<string | null>> = ref(
   function release() {
     cancel();
     fields.clear();
+    finalizers.clear();
   }
-  return { targetKey, dirty, register, commit, cancel, release };
+  function registerFinalizer(finalize: () => void, key?: string) {
+    finalizers.set(finalize, key);
+    return () => finalizers.delete(finalize);
+  }
+  function dirtyDescendants(key: string) {
+    return [...fields].some((field) => field.key.startsWith(key + '/') && field.dirty.value);
+  }
+  function captureContext() {
+    const captured = generation;
+    return () => captured === generation;
+  }
+  return { targetKey, dirty, dirtyDescendants, register, registerFinalizer, captureContext, commit, cancel, release };
 }
 
 export function provideFieldInputs(state = createFieldInputs()) {

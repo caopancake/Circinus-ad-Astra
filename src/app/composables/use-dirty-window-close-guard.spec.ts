@@ -1,4 +1,5 @@
-import { mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
+import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { h, ref, type Ref } from 'vue';
 import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
@@ -43,6 +44,7 @@ vi.mock('@/app/composables/use-app-feedback', () => ({
 }));
 
 import { useDirtyWindowCloseGuard } from './use-dirty-window-close-guard';
+import { useSaveCommandStore } from '@/stores/save-command.store';
 
 function mountGuard(dirty: Ref<boolean>) {
   let guard!: ReturnType<typeof useDirtyWindowCloseGuard>;
@@ -69,7 +71,9 @@ function closeRequest(): { prevented: boolean } {
 
 describe('useDirtyWindowCloseGuard', () => {
   beforeEach(() => {
+    setActivePinia(createPinia());
     vi.clearAllMocks();
+    mocks.feedback.choose.mockResolvedValue(null);
   });
 
   it('installs the close request listener', async () => {
@@ -146,14 +150,67 @@ describe('useDirtyWindowCloseGuard', () => {
     expect(mocks.feedback.choose).not.toHaveBeenCalled();
   });
 
+  it.each([true, false])('immediately intercepts close and coalesces requests while save completes with %s', async (saved) => {
+    const dirty = ref(true);
+    const saving = ref(true);
+    let release!: (saved: boolean) => void;
+    const promise = new Promise<boolean>((resolve) => {
+      release = resolve;
+    });
+    useSaveCommandStore().registerSaveSession({ targetKey: ref('one'), modRoot: ref('M:/mod'), saving, waitForSave: () => promise });
+    const guard = mountGuard(dirty);
+    await guard.install();
+    expect(closeRequest().prevented).toBe(true);
+    expect(closeRequest().prevented).toBe(true);
+    expect(mocks.destroyCurrentWindow).not.toHaveBeenCalled();
+    expect(mocks.feedback.choose).not.toHaveBeenCalled();
+    if (saved) dirty.value = false;
+    saving.value = false;
+    release(saved);
+    await flushPromises();
+    if (saved) await vi.waitFor(() => expect(mocks.destroyCurrentWindow).toHaveBeenCalledOnce());
+    else {
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(mocks.destroyCurrentWindow).not.toHaveBeenCalled();
+      expect(mocks.feedback.choose).not.toHaveBeenCalled();
+      closeRequest();
+      await vi.waitFor(() => expect(mocks.feedback.choose).toHaveBeenCalledOnce());
+    }
+    guard.dispose();
+  });
+
+  it('confirms fresh editing made while the close intent waits for a successful save', async () => {
+    const dirty = ref(false),
+      saving = ref(true);
+    let release!: (saved: boolean) => void;
+    const promise = new Promise<boolean>((resolve) => {
+      release = resolve;
+    });
+    useSaveCommandStore().registerSaveSession({ targetKey: ref('one'), modRoot: ref('M:/mod'), saving, waitForSave: () => promise });
+    const guard = mountGuard(dirty);
+    await guard.install();
+    expect(closeRequest().prevented).toBe(true);
+    dirty.value = true;
+    saving.value = false;
+    release(true);
+    await vi.waitFor(() => expect(mocks.feedback.choose).toHaveBeenCalledOnce());
+    expect(mocks.destroyCurrentWindow).not.toHaveBeenCalled();
+    guard.dispose();
+  });
+
   it('guards an unfinished JSON input while the formal draft still equals its baseline', async () => {
     mocks.feedback.choose.mockResolvedValue(null);
     let guard!: ReturnType<typeof useDirtyWindowCloseGuard>;
     const wrapper = mount(
       {
         setup() {
-          const session = useEditTargetDraftSession({ emptyValue: {}, load: () => ({ value: {} }), targetKey: (key: string) => key });
-          session.loadBaseForTarget('one', {});
+          const session = useEditTargetDraftSession({
+            emptyValue: {},
+            load: () => ({ target: 'one', baseVersions: [], meta: null, value: {} }),
+            targetKey: (key: string) => key,
+          });
+          session.loadBaseForTarget({ target: 'one', value: {}, baseVersions: [], meta: null });
           guard = useDirtyWindowCloseGuard({ content: '未提交输入', title: '关闭？', dirty: session.dirty });
           return () =>
             h(JsonValueInput<'object'>, { value: session.draftValue.value, shape: 'object', label: '规格', onUpdate: session.setDraft });

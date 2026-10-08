@@ -97,6 +97,7 @@ export const useTablesStore = defineStore('tables', () => {
   const workspace = useWorkspaceStore();
   const stateMap = reactive<Map<string, ModTableState>>(new Map());
   const inputMap = shallowReactive(new Map<string, Map<TableKey, FieldInputs>>());
+  const readGenerations = new WeakMap<ModTableState, Map<TableKey, number>>();
   const saving = ref(false);
   // Active mod identity is owned by the workspace store; tables projects it
   // onto its per-Mod table state instead of keeping its own copy in sync.
@@ -286,6 +287,17 @@ export const useTablesStore = defineStore('tables', () => {
     return inputMap.get(modRoot)!.get(table)!;
   }
 
+  function tableReadGeneration(modRoot: string, table: TableKey) {
+    return readGenerations.get(stateMap.get(modRoot)!)?.get(table) ?? 0;
+  }
+
+  function revokeTableReads(modRoot: string, table: TableKey) {
+    const state = stateMap.get(modRoot)!;
+    const generations = readGenerations.get(state) ?? new Map<TableKey, number>();
+    generations.set(table, (generations.get(table) ?? 0) + 1);
+    readGenerations.set(state, generations);
+  }
+
   function setActiveCell(target: CsvCellTarget | null, modRoot: string) {
     const state = stateMap.get(modRoot);
     if (state) state.editing = target;
@@ -297,10 +309,12 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   function undoCurrentTableEdit(): string | null {
+    if (activeModRoot.value) revokeTableReads(activeModRoot.value, currentTab.value);
     return activeModRoot.value ? csvEditHistory.undoCsvEdit(activeModRoot.value, currentTab.value, getActiveState()) : null;
   }
 
   function redoCurrentTableEdit(): string | null {
+    if (activeModRoot.value) revokeTableReads(activeModRoot.value, currentTab.value);
     return activeModRoot.value ? csvEditHistory.redoCsvEdit(activeModRoot.value, currentTab.value, getActiveState()) : null;
   }
 
@@ -331,12 +345,14 @@ export const useTablesStore = defineStore('tables', () => {
   function replaceTableForMod(modRoot: string, tab: TableKey, rows: RowData[]) {
     const state = stateMap.get(modRoot);
     if (!state) return;
+    revokeTableReads(modRoot, tab);
     replaceCsvTableDraft(state, tab, rows);
   }
 
   function discardTableDraftForReload(tab: TableKey) {
     const state = getActiveState();
     if (!state) return;
+    revokeTableReads(activeModRoot.value!, tab);
     getTableInputs(activeModRoot.value!, tab).cancel();
     discardCsvTableWindowForReloadDraft(state, tab);
   }
@@ -355,6 +371,7 @@ export const useTablesStore = defineStore('tables', () => {
 
   function pushCsvDraftResult(table: TableKey, result: CsvDraftResult, modRoot = activeModRoot.value) {
     if (!modRoot || !result.historyOperation || !result.historyLabel) return;
+    revokeTableReads(modRoot, table);
     csvEditHistory.pushCsvDraftOperation(modRoot, table, result.historyOperation, result.historyLabel);
   }
 
@@ -390,6 +407,8 @@ export const useTablesStore = defineStore('tables', () => {
     addNewRow,
     deleteSelected,
     getTableInputs,
+    tableReadGeneration,
+    revokeTableReads,
     setActiveCell,
     getActiveModTableState,
     getModTableState,

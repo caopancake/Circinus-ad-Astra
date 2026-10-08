@@ -31,12 +31,12 @@
                 />
                 <label>bulletSprite</label
                 ><n-input :value="localProjectile.bulletSprite" @update:value="setField('bulletSprite', $event)" /> <label>length</label
-                ><n-input-number :value="localProjectile.length" @update:value="setField('length', $event)" /> <label>width</label
-                ><n-input-number :value="localProjectile.width" @update:value="setField('width', $event)" />
+                ><NumberValueInput :value="localProjectile.length" @update:value="setField('length', $event)" /> <label>width</label
+                ><NumberValueInput :value="localProjectile.width" @update:value="setField('width', $event)" />
                 <label>textureScrollSpeed</label
-                ><n-input-number :value="localProjectile.textureScrollSpeed" @update:value="setField('textureScrollSpeed', $event)" />
+                ><NumberValueInput :value="localProjectile.textureScrollSpeed" @update:value="setField('textureScrollSpeed', $event)" />
                 <label>pixelsPerTexel</label
-                ><n-input-number :value="localProjectile.pixelsPerTexel" @update:value="setField('pixelsPerTexel', $event)" />
+                ><NumberValueInput :value="localProjectile.pixelsPerTexel" @update:value="setField('pixelsPerTexel', $event)" />
               </div>
               <ColorPicker label="fringeColor" v-model="fringeColor" />
               <ColorPicker label="coreColor" v-model="coreColor" />
@@ -64,9 +64,9 @@
                 />
                 <label>collisionClassByFighter</label
                 ><n-input :value="localProjectile.collisionClassByFighter" @update:value="setField('collisionClassByFighter', $event)" />
-                <label>fadeTime</label><n-input-number :value="localProjectile.fadeTime" @update:value="setField('fadeTime', $event)" />
+                <label>fadeTime</label><NumberValueInput :value="localProjectile.fadeTime" @update:value="setField('fadeTime', $event)" />
                 <label>hitGlowRadius</label
-                ><n-input-number :value="localProjectile.hitGlowRadius" @update:value="setField('hitGlowRadius', $event)" />
+                ><NumberValueInput :value="localProjectile.hitGlowRadius" @update:value="setField('hitGlowRadius', $event)" />
               </div>
             </n-collapse-item>
           </template>
@@ -80,11 +80,11 @@
                   @update:value="setField('missileType', $event)"
                 />
                 <label>sprite</label><n-input :value="localProjectile.sprite" @update:value="setField('sprite', $event)" />
-                <label>size W</label><n-input-number :value="size[0]" @update:value="setArray('size', 0, $event)" /> <label>size H</label
-                ><n-input-number :value="size[1]" @update:value="setArray('size', 1, $event)" /> <label>center X</label
-                ><n-input-number :value="center[0]" @update:value="setArray('center', 0, $event)" /> <label>center Y</label
-                ><n-input-number :value="center[1]" @update:value="setArray('center', 1, $event)" /> <label>collisionRadius</label
-                ><n-input-number :value="localProjectile.collisionRadius" @update:value="setField('collisionRadius', $event)" />
+                <label>size W</label><NumberValueInput :value="size[0]" @update:value="setArray('size', 0, $event)" /> <label>size H</label
+                ><NumberValueInput :value="size[1]" @update:value="setArray('size', 1, $event)" /> <label>center X</label
+                ><NumberValueInput :value="center[0]" @update:value="setArray('center', 0, $event)" /> <label>center Y</label
+                ><NumberValueInput :value="center[1]" @update:value="setArray('center', 1, $event)" /> <label>collisionRadius</label
+                ><NumberValueInput :value="localProjectile.collisionRadius" @update:value="setField('collisionRadius', $event)" />
               </div>
               <ColorPicker label="explosionColor" v-model="explosionColor" />
               <n-button size="small" tertiary @click="pickProjectileSprite('sprite')">浏览贴图（引用 Mod 内文件）</n-button>
@@ -96,8 +96,8 @@
               <div class="bounds-list">
                 <div v-for="(slot, i) in engineSlots" :key="entryKey('engine-slot', slot, i)">
                   <span>{{ i }}</span>
-                  <n-input-number :value="slotLoc(slot)[0]" @update:value="setSlotLoc(i, 0, $event)" />
-                  <n-input-number :value="slotLoc(slot)[1]" @update:value="setSlotLoc(i, 1, $event)" />
+                  <NumberValueInput :value="slotLoc(slot)[0]" @update:value="setSlotLoc(i, 0, $event)" />
+                  <NumberValueInput :value="slotLoc(slot)[1]" @update:value="setSlotLoc(i, 1, $event)" />
                   <n-button size="tiny" type="error" ghost @click="removeEngineSlot(i)">删除</n-button>
                 </div>
               </div>
@@ -106,12 +106,12 @@
             <n-collapse-item title="爆炸与时间" name="explosion">
               <div class="form-grid">
                 <label>explosionRadius</label
-                ><n-input-number :value="localProjectile.explosionRadius" @update:value="setField('explosionRadius', $event)" />
+                ><NumberValueInput :value="localProjectile.explosionRadius" @update:value="setField('explosionRadius', $event)" />
                 <label>flameoutTime</label
-                ><n-input-number :value="localProjectile.flameoutTime" @update:value="setField('flameoutTime', $event)" />
+                ><NumberValueInput :value="localProjectile.flameoutTime" @update:value="setField('flameoutTime', $event)" />
                 <label>armingTime</label
-                ><n-input-number :value="localProjectile.armingTime" @update:value="setField('armingTime', $event)" />
-                <label>fadeTime</label><n-input-number :value="localProjectile.fadeTime" @update:value="setField('fadeTime', $event)" />
+                ><NumberValueInput :value="localProjectile.armingTime" @update:value="setField('armingTime', $event)" />
+                <label>fadeTime</label><NumberValueInput :value="localProjectile.fadeTime" @update:value="setField('fadeTime', $event)" />
               </div>
               <JsonValueInput :value="explosionSpec" label="explosionSpec" shape="object" @update="explosionSpec = $event" />
             </n-collapse-item>
@@ -143,8 +143,10 @@ import ColorPicker from '@/shared/ui/ColorPicker.vue';
 import EditorFooter from '@/app/components/editors/common/EditorFooter.vue';
 import EditorHeader from '@/app/components/editors/common/EditorHeader.vue';
 import JsonValueInput from '@/shared/ui/JsonValueInput.vue';
+import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
-import type { RowData } from '@/shared/types';
+import { useEditActionContext } from '@/app/composables/use-edit-action-context';
+import type { RowData, EditContext } from '@/shared/types';
 import { arr, str } from '@/shared/lib/starsector';
 import { entryKey } from '@/shared/lib/entry-keys';
 import { normalizeProjectileSpec } from '@/domain/editors/lib/normalize';
@@ -159,7 +161,7 @@ const props = defineProps<{
   sessionId: string;
   projectileId: string;
   projectile?: RowData;
-  draftRevision: number;
+  editContext: EditContext | null;
   dirty: boolean;
   canSave: boolean;
   saving: boolean;
@@ -174,7 +176,7 @@ const emit = defineEmits<{
 const localProjectile = ref<RowData>(normalizeProjectileSpec(props.projectile || { id: props.projectileId, specClass: 'projectile' }));
 const { commitBefore } = useFieldInputActions();
 const expandedSections = ref(['basic']);
-const { bindObjectField } = useObjectField(localProjectile, { onCommit: commitDraft });
+const { bindObjectField } = useObjectField(localProjectile, { onCommit: commitEdit });
 const { pickModImageReference } = useResourceReference();
 const specClass = computed(() => str(localProjectile.value.specClass, 'projectile'));
 const size = computed(() => arr(localProjectile.value.size, [0, 0]));
@@ -197,25 +199,25 @@ const explosionColor = computed({
 const engineSpec = bindObjectField('engineSpec');
 const explosionSpec = bindObjectField('explosionSpec');
 
-function commitDraft() {
+function commitEdit() {
   emit('draft-changed', localProjectile.value);
 }
 function setField(key: string, value: RowData[string]) {
   if (key === 'specClass') {
     void commitBefore(() => {
       localProjectile.value[key] = value;
-      commitDraft();
+      commitEdit();
     });
     return;
   }
   localProjectile.value[key] = value;
-  commitDraft();
+  commitEdit();
 }
 function setArray(key: string, idx: number, value: number | null) {
   const v = arr(localProjectile.value[key], [0, 0]);
   v[idx] = value || 0;
   localProjectile.value[key] = v;
-  commitDraft();
+  commitEdit();
 }
 function slotLoc(slot: RowData) {
   return arr(slot.loc, [0, 0]);
@@ -226,28 +228,31 @@ function setSlotLoc(i: number, axis: number, value: number | null) {
   const loc = slotLoc(slot);
   loc[axis] = value || 0;
   slot.loc = loc;
-  commitDraft();
+  commitEdit();
 }
 function addEngineSlot() {
   engineSlots.value.push(createProjectileEngineSlot(engineSlots.value));
-  commitDraft();
+  commitEdit();
 }
 function removeEngineSlot(i: number) {
   engineSlots.value.splice(i, 1);
-  commitDraft();
+  commitEdit();
 }
 function projectileUpdated(value: RowData) {
   localProjectile.value = value;
-  commitDraft();
+  commitEdit();
 }
 async function pickProjectileSprite(field: 'bulletSprite' | 'sprite') {
-  const relative = await pickModImageReference({ sessionId: props.sessionId, modRoot: props.modRoot, title: '选择弹体贴图' });
+  const accepts = captureActionContext();
+  const relative = await pickModImageReference({ sessionId: props.sessionId, modRoot: props.modRoot, title: '选择弹体贴图', accepts });
   if (!relative) return;
   setField(field, relative);
 }
+const { captureActionContext } = useEditActionContext(computed(() => props.editContext));
 watch(
-  () => props.draftRevision,
+  () => props.editContext,
   () => {
+    if (props.editContext?.handoff === 'save') return;
     localProjectile.value = normalizeProjectileSpec(props.projectile || { id: props.projectileId, specClass: 'projectile' });
   },
 );

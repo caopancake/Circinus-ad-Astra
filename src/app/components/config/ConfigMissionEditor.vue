@@ -38,6 +38,7 @@ const props = defineProps<{
   editorReloadToken: number;
   iconRefreshToken: number;
   queryMissionEditorData: (sessionId: string, id: string) => Promise<ConfigMissionEditorData | null>;
+  queryMissionIcon: (sessionId: string, id: string, draft: RowData) => Promise<string>;
   saveMission: (
     sessionId: string,
     modRoot: string,
@@ -76,6 +77,7 @@ const {
   modRoot,
   onSaved: (missionId) => emit('saved', missionId),
   queryMissionEditorData: props.queryMissionEditorData,
+  queryMissionIcon: props.queryMissionIcon,
   saveMission: props.saveMission,
   schema,
   sessionId,

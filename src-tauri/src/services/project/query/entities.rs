@@ -1,7 +1,9 @@
 use super::super::{
     cache::{lock_session, session_handle},
     definitions::entity_definitions::entity_definition,
-    definitions::entity_resources::{ship_resource_refs, weapon_resource_refs},
+    definitions::entity_resources::{
+        faction_resource_refs, mission_resource_refs, ship_resource_refs, weapon_resource_refs,
+    },
 };
 use crate::{
     errors::AppResult,
@@ -57,16 +59,19 @@ pub fn query_entity_base_versions(
 
 pub fn query_editor_draft_resources(
     session_id: &str,
-    kind: crate::models::EditorSpecKind,
+    kind: crate::models::EditorResourceKind,
     id: &str,
     draft: &serde_json::Value,
 ) -> AppResult<std::collections::BTreeMap<String, crate::models::ResourceRef>> {
     let handle = session_handle(session_id)?;
     let _session = lock_session(&handle)?;
     Ok(match kind {
-        crate::models::EditorSpecKind::Ship => ship_resource_refs(id, draft),
-        crate::models::EditorSpecKind::Weapon => weapon_resource_refs(id, draft),
-        _ => std::collections::BTreeMap::new(),
+        crate::models::EditorResourceKind::Ship => ship_resource_refs(id, draft),
+        crate::models::EditorResourceKind::Weapon => weapon_resource_refs(id, draft),
+        crate::models::EditorResourceKind::Faction => faction_resource_refs(id, draft),
+        crate::models::EditorResourceKind::Mission => mission_resource_refs(id, draft),
+        crate::models::EditorResourceKind::Projectile
+        | crate::models::EditorResourceKind::System => std::collections::BTreeMap::new(),
     })
 }
 
@@ -134,7 +139,7 @@ mod tests {
         let draft = serde_json::json!({"id":"weapon", "turretSprite":"graphics/draft.png"});
         let resources = query_editor_draft_resources(
             &manifest.session_id,
-            crate::models::EditorSpecKind::Weapon,
+            crate::models::EditorResourceKind::Weapon,
             "weapon",
             &draft,
         )
@@ -146,12 +151,38 @@ mod tests {
         assert!(
             query_editor_draft_resources(
                 "closed",
-                crate::models::EditorSpecKind::Weapon,
+                crate::models::EditorResourceKind::Weapon,
                 "weapon",
                 &draft
             )
             .is_err()
         );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn config_draft_resources_use_the_current_references_and_owner() {
+        let root = temp_dir("config_draft_resources");
+        let mut trace = crate::services::project::PerformanceTrace::new("project.openSession");
+        let manifest = open_project_session_traced(&root, None, &mut trace).unwrap();
+        let faction = query_editor_draft_resources(
+            &manifest.session_id,
+            crate::models::EditorResourceKind::Faction,
+            "faction",
+            &serde_json::json!({"logo":"graphics/new.png", "crest":"graphics/crest.png"}),
+        )
+        .unwrap();
+        assert_eq!(faction["logo"].rel_path, "graphics/new.png");
+        assert_eq!(faction["crest"].owner_id, "faction");
+        let mission = query_editor_draft_resources(
+            &manifest.session_id,
+            crate::models::EditorResourceKind::Mission,
+            "mission",
+            &serde_json::json!({"descriptor":{"icon":"new.png"}}),
+        )
+        .unwrap();
+        assert_eq!(mission["icon"].rel_path, "data/missions/mission/new.png");
+        close_project_session(manifest.session_id).unwrap();
         std::fs::remove_dir_all(root).unwrap();
     }
 

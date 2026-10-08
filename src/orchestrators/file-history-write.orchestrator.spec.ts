@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/orchestrators/project-session-refresh.orchestrator', () => ({
   refreshProjectSessionAfterWrite: mocks.refreshProjectSessionAfterWrite,
+  applyCommittedWriteCacheInvalid: vi.fn(),
 }));
 
 import { completeSavedWrite } from './file-history-write.orchestrator';

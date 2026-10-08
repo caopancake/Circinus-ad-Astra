@@ -43,8 +43,10 @@
         <div class="color-picker-channels">
           <label v-for="channel in channelKeys" :key="channel">
             <span>{{ channel.toUpperCase() }}</span>
-            <n-input-number
+            <NumberValueInput
               class="color-picker-channel-input"
+              :input-key="colorKey + '/' + channel"
+              :label="(label || '颜色') + ' ' + channel.toUpperCase()"
               :value="channelValue(channel)"
               :min="0"
               :max="255"
@@ -56,6 +58,7 @@
           </label>
         </div>
         <div class="color-picker-actions">
+          <span v-if="panelError" class="color-picker-error">{{ panelError }}</span>
           <n-button size="tiny" quaternary @click="cancelPanel">取消</n-button>
           <n-button size="tiny" type="primary" @click="confirmPanel">确认</n-button>
         </div>
@@ -78,9 +81,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref, useTemplateRef, watch } from 'vue';
+import { computed, getCurrentInstance, onScopeDispose, onUnmounted, reactive, ref, useTemplateRef, watch } from 'vue';
 import type { JsonValue } from '@/shared/types';
-import { registerFieldInput } from '@/shared/runtime/field-inputs';
+import { createFieldInputs, provideFieldInputs, registerFieldInput, useFieldInputs } from '@/shared/runtime/field-inputs';
+import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
+import { formatError } from '@/shared/lib/errors';
 import { focusFieldInput } from '@/shared/runtime/focus-field-input';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
 
@@ -124,6 +129,9 @@ const props = withDefaults(
 const modelValue = defineModel<JsonValue | number[]>('modelValue', { default: () => [] });
 
 const panelOpen = ref(false);
+const colorKey = props.inputKey ?? (props.label || 'color/' + getCurrentInstance()!.uid);
+const controls = useFieldInputs() ?? provideFieldInputs(createFieldInputs());
+const panelError = ref('');
 const svRef = useTemplateRef<HTMLElement>('svRef');
 const textDraft = ref('');
 const textBaseline = ref('');
@@ -140,7 +148,10 @@ const hueRgb = computed(() => hsvToRgb(draft.h, 100, 100));
 const draftColor = computed<RgbaColor>(() => ({ ...hsvToRgb(draft.h, draft.s, draft.v), a: clampChannel(draft.a) }));
 const panelBaseline = ref<RgbaColor>({ ...draftColor.value });
 const textDirty = computed(() => textDraft.value !== textBaseline.value);
-const inputDirty = computed(() => textDirty.value || (panelOpen.value && !stableDeepEqual(draftColor.value, panelBaseline.value)));
+const inputDirty = computed(
+  () =>
+    textDirty.value || controls.dirtyDescendants(colorKey) || (panelOpen.value && !stableDeepEqual(draftColor.value, panelBaseline.value)),
+);
 
 watch(
   currentColor,
@@ -156,6 +167,7 @@ watch(
 );
 
 function openPanel() {
+  panelError.value = '';
   if (commitTextDraft() !== null) return;
   loadDraft(currentColor.value);
   panelBaseline.value = { ...draftColor.value };
@@ -168,11 +180,25 @@ function cancelPanel() {
   stopSvDrag();
 }
 
-function confirmPanel() {
+function applyPanel() {
   if (!stableDeepEqual(draftColor.value, panelBaseline.value)) emitColor(draftColor.value);
   panelOpen.value = false;
   stopSvDrag();
 }
+
+async function confirmPanel() {
+  try {
+    const pending = controls.commit(colorKey);
+    if (pending) await pending;
+  } catch (error) {
+    panelError.value = formatError(error);
+  }
+}
+onScopeDispose(
+  controls.registerFinalizer(() => {
+    if (panelOpen.value) applyPanel();
+  }, colorKey),
+);
 
 function updateChannel(channel: ChannelKey, value: number | null) {
   const next = { ...draftColor.value, [channel]: clampChannel(value ?? 0) };
@@ -252,12 +278,11 @@ function commitTextDraft(): string | null {
 }
 
 registerFieldInput({
-  key: props.inputKey ?? props.label,
+  key: colorKey,
   label: props.label || '颜色',
   dirty: inputDirty,
   commit: () => {
     if (panelOpen.value) {
-      confirmPanel();
       return null;
     }
     return commitTextDraft();

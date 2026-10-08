@@ -2,18 +2,18 @@ import { querySessionHullReferences } from '@/services/query.service';
 import { queryResourceDataUrls } from '@/services/resource-cache.service';
 import { measurePerformanceAsync } from '@/shared/runtime/performance';
 import { isResourceRef } from '@/shared/lib/resource-ref';
-import type { EntityData, ProjectSessionId, ResourceRef, SourceOptionGroup } from '@/shared/types';
+import type { ProjectSessionId, ResourceRef, SourceOptionGroup } from '@/shared/types';
 import type { SelectOption } from '@/domain/schema/schema-options';
 
 export async function hydrateFactionPreviewImages(
   sessionId: ProjectSessionId,
-  entity: EntityData | null,
+  resources: Record<string, ResourceRef>,
 ): Promise<{ logoSrc: string; crestSrc: string }> {
   const entries = [
-    { key: 'logoSrc' as const, resource: entity?.resourceRefs.logo ?? null },
-    { key: 'crestSrc' as const, resource: entity?.resourceRefs.crest ?? null },
+    { key: 'logoSrc' as const, resource: resources.logo ?? null },
+    { key: 'crestSrc' as const, resource: resources.crest ?? null },
   ].filter((entry): entry is { key: 'logoSrc' | 'crestSrc'; resource: ResourceRef } => isResourceRef(entry.resource));
-  if (!entity || entries.length === 0) return { logoSrc: '', crestSrc: '' };
+  if (entries.length === 0) return { logoSrc: '', crestSrc: '' };
   const dataUrls = await queryResourceDataUrls(
     sessionId,
     entries.map((entry) => entry.resource),
@@ -25,8 +25,7 @@ export async function hydrateFactionPreviewImages(
   return result;
 }
 
-export async function hydrateMissionIcon(sessionId: ProjectSessionId, entity: EntityData): Promise<string> {
-  const resource = entity.resourceRefs.icon ?? null;
+export async function hydrateMissionIcon(sessionId: ProjectSessionId, resource: ResourceRef | null): Promise<string> {
   return resource ? ((await queryResourceDataUrls(sessionId, [resource]))[0] ?? '') : '';
 }
 

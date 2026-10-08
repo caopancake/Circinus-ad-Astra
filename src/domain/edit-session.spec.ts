@@ -74,7 +74,7 @@ describe('createEditSessionValue', () => {
     expect(session.baseline).toBe(2);
     expect(session.draft).toBe(3);
     expect(session.dirty).toBe(true);
-    expect(session.pendingExternal).toBe(2);
+    expect(session.pendingExternal).toBeNull();
     session.setDraft(1);
     expect(session.dirty).toBe(true);
     session.resetDraft();

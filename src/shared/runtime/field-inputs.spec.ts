@@ -7,6 +7,15 @@ function field(key: string, commit: FieldInput['commit']): FieldInput {
 }
 
 describe('target field input lifecycle', () => {
+  it('preserves action acceptance across commit and revokes it on explicit cancellation', async () => {
+    const inputs = createFieldInputs();
+    const accepts = inputs.captureContext();
+    inputs.register(field('first', () => null));
+    await inputs.commit();
+    expect(accepts()).toBe(true);
+    inputs.cancel();
+    expect(accepts()).toBe(false);
+  });
   it('commits in registration order and waits for consumer projections', async () => {
     const inputs = createFieldInputs(ref('one'));
     const projection = ref('base');

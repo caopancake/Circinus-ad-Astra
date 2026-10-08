@@ -255,11 +255,7 @@ describe('useConfigFamilyViewModel saving', () => {
       data: { variantId: 'v1', hullId: 'h1' },
       relPath: 'data/variants/v1.variant',
     };
-    mocks.saveVariantAction.mockResolvedValue({
-      baseVersions: [],
-      data: { variantId: 'v9', hullId: 'h1' },
-      relPath: 'data/variants/v9.variant',
-    });
+    mocks.saveVariantAction.mockResolvedValue({ entity: variantRecord('v9', 'h1').variant, receipt: {} });
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v9', 'h1')]);
 
     const saved = await vm.saveFamilyEntity('sess-1', 'M:/mod', current, { variantId: 'v9', hullId: 'h1' });

@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
+import { flushPromises } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -37,6 +38,7 @@ import { ref } from 'vue';
 import { useTablesStore } from '@/stores/tables.store';
 import type { ProjectManifest } from '@/shared/types';
 import { TABLE_KEYS } from '@/shared/types';
+import { useSaveCommandStore } from '@/stores/save-command.store';
 
 describe('useWorkspaceNavigationActions', () => {
   beforeEach(() => {
@@ -48,6 +50,25 @@ describe('useWorkspaceNavigationActions', () => {
     const actions = useWorkspaceNavigationActions();
     actions.navigateToModOverview('C:/mods/alpha');
     expect(mocks.navigation.navigateToModOverview).toHaveBeenCalledWith('C:/mods/alpha');
+  });
+
+  it.each([true, false])('waits for save outcome %s and uses the latest navigation intent', async (saved) => {
+    const saving = ref(true);
+    let release!: (saved: boolean) => void;
+    const promise = new Promise<boolean>((resolve) => {
+      release = resolve;
+    });
+    useSaveCommandStore().registerSaveSession({ targetKey: ref('one'), modRoot: ref('M:/A'), saving, waitForSave: () => promise });
+    const actions = useWorkspaceNavigationActions();
+    actions.navigateToModTable('M:/B', 'ships');
+    actions.navigateToModTable('M:/C', 'weapons');
+    expect(mocks.navigation.navigateToModTable).not.toHaveBeenCalled();
+    saving.value = false;
+    release(saved);
+    await promise;
+    await flushPromises();
+    if (saved) expect(mocks.navigation.navigateToModTable).toHaveBeenCalledExactlyOnceWith('M:/C', 'weapons');
+    else expect(mocks.navigation.navigateToModTable).not.toHaveBeenCalled();
   });
 
   it('navigates to tables and mod tabs', () => {

@@ -15,7 +15,7 @@
       :hull-id="target.id"
       :ship="shipEditorData.ship"
       :sprite-data="shipSpriteForEditor"
-      :draft-revision="draftRevision"
+      :edit-context="editContext"
       :dirty="draftDirty"
       :can-save="canSaveSpec"
       :saving="draftSaving"
@@ -33,7 +33,7 @@
       :weapon="weaponForEditor"
       :sprite-data="weaponEditorData.weaponSpriteData"
       :projectile-options="weaponEditorData.projectileOptions"
-      :draft-revision="draftRevision"
+      :edit-context="editContext"
       :dirty="draftDirty"
       :can-save="canSaveSpec"
       :saving="draftSaving"
@@ -51,7 +51,7 @@
       :session-id="target.sessionId"
       :projectile-id="target.id"
       :projectile="projectileEditorData.projectile"
-      :draft-revision="draftRevision"
+      :edit-context="editContext"
       :dirty="draftDirty"
       :can-save="canSaveSpec"
       :saving="draftSaving"
@@ -65,7 +65,7 @@
       v-else-if="systemEditorData && target"
       :system-id="target.id"
       :system="systemEditorData.system"
-      :draft-revision="draftRevision"
+      :edit-context="editContext"
       :dirty="draftDirty"
       :can-save="canSaveSpec"
       :saving="draftSaving"
@@ -134,7 +134,7 @@ const {
   draftValue,
   shipSpriteForEditor,
   draftDirty,
-  draftRevision,
+  editContext,
   draftSaving,
   canSaveSpec,
   externalUpdateNotice,

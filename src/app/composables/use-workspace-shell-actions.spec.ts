@@ -25,6 +25,7 @@ vi.mock('@/services/session.service', () => ({
 
 vi.mock('@/orchestrators/table-save.orchestrator', () => ({
   saveActiveTableChanges: mocks.saveActiveTableChanges,
+  pendingTableSave: () => null,
 }));
 
 vi.mock('@/orchestrators/directory-opening.orchestrator', () => ({
@@ -56,6 +57,7 @@ import { useWorkspaceShellActions } from './use-workspace-shell-actions';
 import { initializeSettingsStore } from '@/stores/settings.store';
 import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
+import { useSaveCommandStore } from '@/stores/save-command.store';
 import { ref } from 'vue';
 
 function feedbackStub(): AppFeedback {
@@ -131,12 +133,11 @@ describe('useWorkspaceShellActions', () => {
     const draftSessions = useDraftSessionsStore();
     draftSessions.registerDraftSession(ref('M:/mod'), ref(true));
     const feedback = feedbackStub();
+    (feedback.choose as ReturnType<typeof vi.fn>).mockResolvedValue('remove');
     const actions = useWorkspaceShellActions(feedback);
 
-    actions.confirmRemoveMod('M:/mod');
-    expect(mocks.removeLoadedModRuntime).not.toHaveBeenCalled();
-    expect(feedback.confirmWarning).toHaveBeenCalledTimes(1);
-    await (feedback.confirmWarning as ReturnType<typeof vi.fn>).mock.calls[0]![0].onConfirm();
+    await actions.confirmRemoveMod('M:/mod');
+    expect(feedback.choose).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(mocks.removeLoadedModRuntime).toHaveBeenCalledWith('M:/mod'));
     expect(feedback.success).toHaveBeenCalledWith('Mod 已从工作区移除');
   });
@@ -154,14 +155,44 @@ describe('useWorkspaceShellActions', () => {
     const draftSessions = useDraftSessionsStore();
     draftSessions.registerDirtySource((modRoot) => modRoot === 'M:/mod');
     const feedback = feedbackStub();
+    (feedback.choose as ReturnType<typeof vi.fn>).mockResolvedValue('close');
     const actions = useWorkspaceShellActions(feedback);
 
-    actions.confirmCloseWorkspace();
-    const content = (feedback.confirmWarning as ReturnType<typeof vi.fn>).mock.calls[0]![0].content;
+    await actions.confirmCloseWorkspace();
+    const content = (feedback.choose as ReturnType<typeof vi.fn>).mock.calls[0]![0].content;
     expect(content).toContain('未保存修改');
-    await (feedback.confirmWarning as ReturnType<typeof vi.fn>).mock.calls[0]![0].onConfirm();
     await vi.waitFor(() => expect(mocks.closeWorkspaceRuntime).toHaveBeenCalledTimes(1));
     expect(feedback.success).toHaveBeenCalledWith('工作区已关闭');
+  });
+
+  it.each([true, false])('coalesces workspace closing while save completes with %s', async (saved) => {
+    mocks.captureWorkspaceCloseTarget.mockReturnValue({ modRoots: ['M:/mod'] });
+    const saving = ref(true),
+      dirty = ref(false);
+    let release!: (saved: boolean) => void;
+    const promise = new Promise<boolean>((resolve) => {
+      release = resolve;
+    });
+    useSaveCommandStore().registerSaveSession({ targetKey: ref('one'), modRoot: ref('M:/mod'), saving, waitForSave: () => promise });
+    useDraftSessionsStore().registerDirtySource(() => dirty.value);
+    const feedback = feedbackStub();
+    (feedback.choose as ReturnType<typeof vi.fn>).mockResolvedValue('close');
+    const actions = useWorkspaceShellActions(feedback);
+    const closing = actions.confirmCloseWorkspace();
+    expect(actions.confirmCloseWorkspace()).toBe(closing);
+    expect(feedback.choose).not.toHaveBeenCalled();
+    dirty.value = true;
+    saving.value = false;
+    release(saved);
+    await closing;
+    if (saved) {
+      expect(feedback.choose).toHaveBeenCalledOnce();
+      expect((feedback.choose as ReturnType<typeof vi.fn>).mock.calls[0]![0].content).toContain('未保存修改');
+      expect(mocks.closeWorkspaceRuntime).toHaveBeenCalledOnce();
+    } else {
+      expect(feedback.choose).not.toHaveBeenCalled();
+      expect(mocks.closeWorkspaceRuntime).not.toHaveBeenCalled();
+    }
   });
 
   it('skips saving when there is no captured table target', async () => {

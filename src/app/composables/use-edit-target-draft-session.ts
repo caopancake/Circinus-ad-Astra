@@ -1,224 +1,328 @@
-import { computed, ref, type Ref } from 'vue';
+import { computed, ref, shallowRef, type Ref } from 'vue';
 import { createFieldInputs, provideFieldInputs, type FieldInputs } from '@/shared/runtime/field-inputs';
-import { useDraftSession, type DraftSession, type DraftSessionOptions } from '@/app/composables/use-draft-session';
+import { useDraftSession, type DraftSessionOptions } from '@/app/composables/use-draft-session';
 import { deepClone } from '@/shared/lib/starsector';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
+import { withCause } from '@/shared/lib/errors';
+import type { EditContext, FileVersion } from '@/shared/types';
 
 type MaybePromise<T> = T | Promise<T>;
+export type SnapshotAcceptance = 'baseline' | 'pending' | 'obsolete';
 
-export interface EditTargetSnapshot<TValue, TMeta = unknown> {
-  baseVersions?: import('@/shared/types').FileVersion[];
-  meta?: TMeta;
+export interface EditTargetSnapshot<TValue, TTarget = unknown, TMeta = unknown> {
+  target: TTarget;
   value: TValue;
+  baseVersions: FileVersion[];
+  meta: TMeta;
+  commitId?: number;
 }
 
-export interface EditTargetDraftSessionOptions<
-  TValue,
-  TTarget,
-  TLoadMeta = unknown,
-  TSaveMeta = unknown,
-> extends DraftSessionOptions<TValue> {
+export interface EditTargetDraftSessionOptions<TValue, TTarget, TMeta = unknown> extends DraftSessionOptions<TValue> {
   emptyValue: TValue;
-  load: (target: TTarget) => MaybePromise<EditTargetSnapshot<TValue, TLoadMeta>>;
-  save?: (
-    target: TTarget,
-    draft: TValue,
-    baseVersions: import('@/shared/types').FileVersion[],
-  ) => MaybePromise<EditTargetSnapshot<TValue, TSaveMeta> | void>;
+  load: (target: TTarget) => MaybePromise<EditTargetSnapshot<TValue, TTarget, TMeta>>;
+  save?: (target: TTarget, draft: TValue, baseVersions: FileVersion[]) => MaybePromise<EditTargetSnapshot<TValue, TTarget, TMeta> | void>;
   targetKey: (target: TTarget) => string;
-  onLoaded?: (target: TTarget, value: TValue, meta: TLoadMeta | undefined) => void;
-  onSaved?: (target: TTarget, value: TValue, meta: TSaveMeta | undefined) => void;
-  savedTarget?: (target: TTarget, snapshot: EditTargetSnapshot<TValue, TSaveMeta>) => TTarget;
+  afterSaved?: (snapshot: EditTargetSnapshot<TValue, TTarget, TMeta>) => MaybePromise<void>;
 }
 
-export interface EditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, TSaveMeta = unknown> {
+export interface EditTargetDraftSession<TValue, TTarget, TMeta = unknown> {
   currentTarget: Ref<TTarget | null>;
   currentTargetKey: Ref<string | null>;
-  dirty: DraftSession<TValue>['dirty'];
-  draftValue: DraftSession<TValue>['draftValue'];
-  externalUpdateNotice: DraftSession<TValue>['externalUpdateNotice'];
-  hasPendingExternalValue: DraftSession<TValue>['hasPendingExternalValue'];
+  baselineSnapshot: Readonly<Ref<EditTargetSnapshot<TValue, TTarget, TMeta> | null>>;
+  pendingSnapshot: Readonly<Ref<EditTargetSnapshot<TValue, TTarget, TMeta> | null>>;
+  savedSnapshot: Readonly<Ref<EditTargetSnapshot<TValue, TTarget, TMeta> | null>>;
+  context: Readonly<Ref<EditContext | null>>;
+  dirty: Readonly<Ref<boolean>>;
+  draftValue: Ref<TValue>;
+  externalUpdateNotice: Readonly<Ref<string>>;
+  hasPendingExternalValue: Readonly<Ref<boolean>>;
+  pendingExternalValue: Readonly<Ref<TValue | null>>;
   loading: Ref<boolean>;
-  pendingExternalValue: DraftSession<TValue>['pendingExternalValue'];
-  revision: DraftSession<TValue>['revision'];
+  ready: Readonly<Ref<boolean>>;
   saving: Ref<boolean>;
   inputs: FieldInputs;
-  applyExternalForTarget: (target: TTarget, value: TValue, versions?: import('@/shared/types').FileVersion[]) => void;
+  applyExternalForTarget: (snapshot: EditTargetSnapshot<TValue, TTarget, TMeta>) => SnapshotAcceptance;
+  loadBaseForTarget: (snapshot: EditTargetSnapshot<TValue, TTarget, TMeta>) => void;
   clearTarget: () => void;
   dispose: () => void;
-  loadBaseForTarget: (target: TTarget, value: TValue, versions?: import('@/shared/types').FileVersion[]) => void;
   loadPendingExternal: () => void;
-  loadTarget: (target: TTarget) => Promise<EditTargetSnapshot<TValue, TLoadMeta> | null>;
-  refreshTarget: (target: TTarget) => Promise<EditTargetSnapshot<TValue, TLoadMeta> | null>;
+  loadTarget: (target: TTarget) => Promise<EditTargetSnapshot<TValue, TTarget, TMeta> | null>;
+  refreshTarget: (target: TTarget) => Promise<EditTargetSnapshot<TValue, TTarget, TMeta> | null>;
   resetDraft: () => void;
-  saveDraft: () => Promise<EditTargetSnapshot<TValue, TSaveMeta> | null>;
+  saveDraft: () => Promise<EditTargetSnapshot<TValue, TTarget, TMeta> | null>;
+  waitForSave: () => Promise<boolean>;
   setDraft: (value: TValue) => void;
   isTargetCurrent: (target: TTarget) => boolean;
 }
 
-export function useEditTargetDraftSession<TValue, TTarget, TLoadMeta = unknown, TSaveMeta = unknown>(
-  options: EditTargetDraftSessionOptions<TValue, TTarget, TLoadMeta, TSaveMeta>,
-): EditTargetDraftSession<TValue, TTarget, TLoadMeta, TSaveMeta> {
-  const draftSession = useDraftSession(options.emptyValue, options);
+export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
+  options: EditTargetDraftSessionOptions<TValue, TTarget, TMeta>,
+): EditTargetDraftSession<TValue, TTarget, TMeta> {
+  type Snapshot = EditTargetSnapshot<TValue, TTarget, TMeta>;
   const clone = options.clone ?? deepClone;
   const equals = options.equals ?? stableDeepEqual;
-  const currentTarget = ref<TTarget | null>(null) as Ref<TTarget | null>;
+  const copy = (snapshot: Snapshot): Snapshot => ({ ...deepClone(snapshot), value: clone(snapshot.value) });
+  const session = useDraftSession<Snapshot | null>(null, {
+    clone: (snapshot) => (snapshot === null ? null : copy(snapshot)),
+    equals: (left, right) => (left === null || right === null ? left === right : equals(left.value, right.value)),
+  });
+  const currentTarget = shallowRef<TTarget | null>(null) as Ref<TTarget | null>;
   const currentTargetKey = ref<string | null>(null);
-  const fieldInputs = provideFieldInputs(createFieldInputs(currentTargetKey));
+  const inputs = provideFieldInputs(createFieldInputs(currentTargetKey));
+  const context = shallowRef<EditContext | null>(null);
+  const savedSnapshot = shallowRef<Snapshot | null>(null);
   const loading = ref(false);
   const saving = ref(false);
+  const baselineSnapshot = computed(() => session.baseValue.value);
+  const pendingSnapshot = computed(() => session.pendingExternalValue.value);
+  const ready = computed(() => baselineSnapshot.value !== null && sameTarget(baselineSnapshot.value.target));
+  const dirty = computed(() => session.dirty.value || inputs.dirty.value);
   let disposed = false;
-  let loadRequestId = 0;
-  let saveRequestId = 0;
-  let baseVersions: import('@/shared/types').FileVersion[] = [];
-  let pendingVersions: import('@/shared/types').FileVersion[] | null = null;
+  let lifetime = 0;
+  let epoch = 0;
+  let readSequence = 0;
+  let baselineGeneration = 0;
+  let lastCommitId = -1;
+  let pendingSave: Promise<Snapshot | null> | null = null;
+  let refreshQueued = false;
 
-  async function loadTarget(target: TTarget): Promise<EditTargetSnapshot<TValue, TLoadMeta> | null> {
-    return loadTargetSnapshot(target, 'base');
+  function revokeReads() {
+    epoch++;
+    readSequence++;
+    loading.value = false;
   }
 
-  async function refreshTarget(target: TTarget): Promise<EditTargetSnapshot<TValue, TLoadMeta> | null> {
-    return loadTargetSnapshot(target, 'external');
+  function publishContext(handoff: EditContext['handoff']) {
+    context.value = { targetKey: currentTargetKey.value!, baselineGeneration: ++baselineGeneration, handoff };
+  }
+  function sameTarget(target: TTarget) {
+    return currentTargetKey.value === options.targetKey(target);
+  }
+  function setDraft(value: TValue) {
+    const baseline = baselineSnapshot.value;
+    if (!baseline) return;
+    revokeReads();
+    session.setDraft({ ...baseline, value: clone(value) });
+  }
+  const draftValue = computed({
+    get: () => session.draftValue.value?.value ?? options.emptyValue,
+    set: setDraft,
+  });
+
+  function loadBaseForTarget(snapshot: Snapshot) {
+    if (!sameTarget(snapshot.target)) lastCommitId = -1;
+    lastCommitId = Math.max(lastCommitId, snapshot.commitId ?? -1);
+    revokeReads();
+    currentTarget.value = snapshot.target;
+    currentTargetKey.value = options.targetKey(snapshot.target);
+    session.loadBase(copy(snapshot));
+    inputs.cancel();
+    publishContext('load');
   }
 
-  async function loadTargetSnapshot(target: TTarget, mode: 'base' | 'external'): Promise<EditTargetSnapshot<TValue, TLoadMeta> | null> {
-    const requestId = ++loadRequestId;
+  function applyExternalForTarget(snapshot: Snapshot, fromSaveRefresh = false): SnapshotAcceptance {
+    if (disposed || !sameTarget(snapshot.target)) return 'obsolete';
+    if (saving.value && !fromSaveRefresh) {
+      refreshQueued = true;
+      return 'obsolete';
+    }
+    const previousCommit = Math.max(
+      lastCommitId,
+      baselineSnapshot.value?.commitId ?? -1,
+      pendingSnapshot.value?.commitId ?? -1,
+      savedSnapshot.value && options.targetKey(savedSnapshot.value.target) === currentTargetKey.value
+        ? (savedSnapshot.value.commitId ?? -1)
+        : -1,
+    );
+    if (snapshot.commitId !== undefined && snapshot.commitId <= previousCommit) return 'obsolete';
+    lastCommitId = Math.max(lastCommitId, snapshot.commitId ?? -1);
+    const baseline = baselineSnapshot.value;
+    const sameBaseline =
+      baseline !== null && equals(baseline.value, snapshot.value) && stableDeepEqual(baseline.baseVersions, snapshot.baseVersions);
+    revokeReads();
+    if (sameBaseline) {
+      session.commitSavedBaseline(copy(snapshot), true);
+      return 'baseline';
+    }
+    if (dirty.value) {
+      session.applyExternal(copy(snapshot), true);
+      return 'pending';
+    }
+    session.loadBase(copy(snapshot));
+    inputs.cancel();
+    publishContext('external');
+    return 'baseline';
+  }
+
+  async function readTarget(target: TTarget, mode: 'load' | 'external', fromSaveRefresh = false): Promise<Snapshot | null> {
     const key = options.targetKey(target);
-    if (currentTargetKey.value !== key) fieldInputs.cancel();
-    currentTarget.value = target;
-    currentTargetKey.value = key;
+    if (mode === 'load' && key !== currentTargetKey.value) {
+      lastCommitId = -1;
+      revokeReads();
+      session.clear(null);
+      inputs.cancel();
+      currentTarget.value = target;
+      currentTargetKey.value = key;
+    }
+    const ticket = { lifetime, epoch, sequence: ++readSequence, key };
     loading.value = true;
     try {
       const snapshot = await options.load(target);
-      if (!isCurrentLoad(requestId, key)) return null;
-      if (mode === 'base') {
-        baseVersions = snapshot.baseVersions ?? [];
-        pendingVersions = null;
-        draftSession.loadBase(snapshot.value);
-        fieldInputs.cancel();
-      } else {
-        if (draftSession.dirty.value || fieldInputs.dirty.value) pendingVersions = snapshot.baseVersions ?? [];
-        else baseVersions = snapshot.baseVersions ?? [];
-        draftSession.applyExternal(snapshot.value, fieldInputs.dirty.value);
-      }
-      options.onLoaded?.(target, draftSession.draftValue.value, snapshot.meta);
-      return snapshot;
+      if (
+        disposed ||
+        ticket.lifetime !== lifetime ||
+        ticket.epoch !== epoch ||
+        ticket.sequence !== readSequence ||
+        key !== currentTargetKey.value
+      )
+        return null;
+      if (mode === 'load') loadBaseForTarget(snapshot);
+      else if (applyExternalForTarget(snapshot, fromSaveRefresh) !== 'baseline') return null;
+      return copy(snapshot);
+    } catch (error) {
+      if (
+        disposed ||
+        ticket.lifetime !== lifetime ||
+        ticket.epoch !== epoch ||
+        ticket.sequence !== readSequence ||
+        key !== currentTargetKey.value
+      )
+        return null;
+      throw error;
     } finally {
-      if (isCurrentLoad(requestId, key)) loading.value = false;
+      if (ticket.lifetime === lifetime && ticket.sequence === readSequence) loading.value = false;
     }
   }
+  function loadTarget(target: TTarget) {
+    return readTarget(target, 'load');
+  }
+  function refreshTarget(target: TTarget): Promise<Snapshot | null> {
+    if (saving.value) {
+      refreshQueued = true;
+      return pendingSave!.then(
+        () => baselineSnapshot.value,
+        () => null,
+      );
+    }
+    return readTarget(target, 'external');
+  }
 
-  async function saveDraft(): Promise<EditTargetSnapshot<TValue, TSaveMeta> | null> {
-    if (!options.save || !currentTarget.value || !currentTargetKey.value) return null;
-    if (!sameTarget(currentTarget.value)) return null;
-    const requestId = ++saveRequestId;
-    const target = currentTarget.value;
-    const key = currentTargetKey.value;
+  function saveDraft(): Promise<Snapshot | null> {
+    if (pendingSave) return pendingSave;
+    if (!options.save || !ready.value || disposed) return Promise.resolve(null);
     saving.value = true;
+    const target = deepClone(currentTarget.value!);
+    const key = currentTargetKey.value;
+    const life = lifetime;
+    const task = submit(target, key, life).finally(() => {
+      saving.value = false;
+      pendingSave = null;
+      refreshQueued = false;
+    });
+    pendingSave = task;
+    return task;
+  }
+
+  async function submit(target: TTarget, key: string | null, life: number): Promise<Snapshot | null> {
+    const committed = inputs.commit();
+    if (committed && !(await committed)) return null;
+    if (disposed || life !== lifetime || key !== currentTargetKey.value) return null;
+    const submitted = clone(draftValue.value);
+    const versions = deepClone(baselineSnapshot.value!.baseVersions);
+    revokeReads();
+    const result = await options.save!(target, submitted, versions);
+    if (!result) return null;
+    savedSnapshot.value = copy(result);
+    revokeReads();
+    if (!disposed && life === lifetime && key === currentTargetKey.value) {
+      lastCommitId = Math.max(lastCommitId, result.commitId ?? -1);
+      const preserve = !equals(draftValue.value, submitted) || inputs.dirty.value;
+      if (preserve) session.commitSavedBaseline(copy(result));
+      else session.commitSaved(copy(result));
+      currentTarget.value = result.target;
+      currentTargetKey.value = options.targetKey(result.target);
+      publishContext('save');
+    }
     try {
-      const fieldCommit = fieldInputs.commit();
-      if (fieldCommit && !(await fieldCommit)) return null;
-      if (!isCurrentSave(requestId, key)) return null;
-      const submittedDraft = clone(draftSession.draftValue.value);
-      const result = await options.save(target, submittedDraft, deepClone(baseVersions));
-      if (!isCurrentSave(requestId, key)) return null;
-      if (!result) return null;
-      if (result.baseVersions) baseVersions = result.baseVersions;
-      pendingVersions = null;
-      if (equals(draftSession.draftValue.value, submittedDraft)) draftSession.commitSaved(result.value);
-      else draftSession.commitSavedBaseline(result.value);
-      if (options.savedTarget) {
-        currentTarget.value = options.savedTarget(target, result);
-        currentTargetKey.value = options.targetKey(currentTarget.value);
+      await options.afterSaved?.(copy(result));
+      if (refreshQueued && !disposed && life === lifetime) {
+        refreshQueued = false;
+        await readTarget(currentTarget.value!, 'external', true);
       }
-      options.onSaved?.(target, clone(result.value), result.meta);
-      return result;
-    } finally {
-      if (!disposed && requestId === saveRequestId) saving.value = false;
+    } catch (error) {
+      throw withCause('已写盘，后续同步失败', error, 'sync-saved-target');
     }
+    return copy(result);
   }
 
-  function applyExternalForTarget(target: TTarget, value: TValue, versions?: import('@/shared/types').FileVersion[]): void {
-    if (!sameTarget(target)) return;
-    if (versions) {
-      if (draftSession.dirty.value || fieldInputs.dirty.value) pendingVersions = versions;
-      else baseVersions = versions;
-    }
-    draftSession.applyExternal(value, fieldInputs.dirty.value);
+  function loadPendingExternal() {
+    const snapshot = pendingSnapshot.value;
+    if (!snapshot) return;
+    revokeReads();
+    session.loadPendingExternal();
+    currentTarget.value = snapshot.target;
+    currentTargetKey.value = options.targetKey(snapshot.target);
+    inputs.cancel();
+    publishContext('external');
   }
-
-  function loadBaseForTarget(target: TTarget, value: TValue, versions?: import('@/shared/types').FileVersion[]): void {
-    if (versions) baseVersions = versions;
-    if (!sameTarget(target)) {
-      currentTarget.value = target;
-      currentTargetKey.value = options.targetKey(target);
-    }
-    draftSession.loadBase(value);
-    fieldInputs.cancel();
+  function resetDraft() {
+    revokeReads();
+    session.resetDraft();
+    inputs.cancel();
+    publishContext('reset');
   }
-
-  function clearTarget(): void {
-    fieldInputs.cancel();
-    loadRequestId++;
-    saveRequestId++;
+  function clearTarget() {
+    lastCommitId = -1;
+    lifetime++;
+    revokeReads();
+    readSequence++;
     currentTarget.value = null;
     currentTargetKey.value = null;
+    context.value = null;
     loading.value = false;
-    saving.value = false;
-    draftSession.clear(options.emptyValue);
+    session.clear(null);
+    inputs.cancel();
   }
-
-  function dispose(): void {
+  function dispose() {
     disposed = true;
-    fieldInputs.release();
-    currentTarget.value = null;
-    currentTargetKey.value = null;
-    loadRequestId++;
-    saveRequestId++;
+    clearTarget();
+    inputs.release();
   }
-
-  function sameTarget(target: TTarget): boolean {
-    return currentTargetKey.value === options.targetKey(target);
-  }
-
-  function isCurrentLoad(requestId: number, key: string): boolean {
-    return !disposed && requestId === loadRequestId && currentTargetKey.value === key;
-  }
-
-  function isCurrentSave(requestId: number, key: string): boolean {
-    return !disposed && requestId === saveRequestId && currentTargetKey.value === key;
-  }
-
   return {
     currentTarget,
     currentTargetKey,
-    dirty: computed(() => draftSession.dirty.value || fieldInputs.dirty.value),
-    draftValue: draftSession.draftValue,
-    externalUpdateNotice: draftSession.externalUpdateNotice,
-    hasPendingExternalValue: draftSession.hasPendingExternalValue,
+    baselineSnapshot,
+    pendingSnapshot,
+    savedSnapshot,
+    context,
+    dirty,
+    draftValue,
     loading,
-    pendingExternalValue: draftSession.pendingExternalValue,
-    revision: draftSession.revision,
+    ready,
     saving,
-    inputs: fieldInputs,
+    inputs,
+    hasPendingExternalValue: computed(() => pendingSnapshot.value !== null),
+    pendingExternalValue: computed(() => pendingSnapshot.value?.value ?? null),
+    externalUpdateNotice: computed(() =>
+      pendingSnapshot.value ? (options.externalNotice ?? '外部版本已更新，当前未保存草稿已保留。') : '',
+    ),
     applyExternalForTarget,
+    loadBaseForTarget,
     clearTarget,
     dispose,
-    loadBaseForTarget,
-    loadPendingExternal: () => {
-      draftSession.loadPendingExternal();
-      if (pendingVersions) baseVersions = pendingVersions;
-      pendingVersions = null;
-      fieldInputs.cancel();
-    },
+    loadPendingExternal,
     loadTarget,
     refreshTarget,
-    resetDraft: () => {
-      draftSession.resetDraft();
-      fieldInputs.cancel();
-    },
+    resetDraft,
     saveDraft,
-    setDraft: draftSession.setDraft,
+    setDraft,
     isTargetCurrent: sameTarget,
+    waitForSave: () =>
+      pendingSave
+        ? pendingSave.then(
+            (snapshot) => snapshot !== null,
+            () => false,
+          )
+        : Promise.resolve(true),
   };
 }

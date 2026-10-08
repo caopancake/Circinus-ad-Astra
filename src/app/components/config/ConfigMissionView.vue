@@ -24,6 +24,7 @@
       :editor-reload-token="missionEditorReloadToken"
       :icon-refresh-token="missionIconRefreshToken"
       :query-mission-editor-data="queryMissionEditorData"
+      :query-mission-icon="queryMissionIcon"
       :save-mission="saveMission"
       :delete-mission="deleteMission"
       @saved="handleSaved"
@@ -55,6 +56,7 @@ const {
   deleteMission,
   refreshMissionList,
   queryMissionEditorData,
+  queryMissionIcon,
   missionExists,
   isValidMissionId,
   saveMission,

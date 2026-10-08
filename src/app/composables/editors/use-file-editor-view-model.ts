@@ -10,8 +10,11 @@ import {
 import { isAbsoluteFsPath, joinRootRelativePath, normalizeFsPath, pathBelongsToRoot } from '@/shared/lib/paths';
 import type { UnlistenFn } from '@/windows/tauri.events';
 import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
-import { useTextHistory } from '@/app/composables/use-text-history';
+import { useSnapshotHistory } from '@/app/composables/use-snapshot-history';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
+import { useSaveCommandStore } from '@/stores/save-command.store';
+import { applyCommittedWriteCacheInvalid } from '@/orchestrators/project-session-refresh.orchestrator';
+import type { WriteResult } from '@/shared/types';
 
 export interface FileEditorViewModelParams {
   mode: 'session' | 'recovery';
@@ -41,37 +44,47 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
   const contextMessage = ref(params.contextMessage);
   const targetLine = ref(normalizeLine(params.line));
   const targetColumn = ref(normalizeLine(params.column));
-  const draftSession = useEditTargetDraftSession<string, FileEditorTarget>({
+  const draftSession = useEditTargetDraftSession<string, FileEditorTarget, WriteResult | null>({
     emptyValue: '',
     load: async (target) => {
       const loaded = await loadEditableFileData(target.sessionId, target.modRoot, target.filePath);
-      return { value: loaded.text, baseVersions: loaded.baseVersions };
+      return { target, value: loaded.text, baseVersions: loaded.baseVersions, meta: null };
     },
     save: async (target, draft, baseVersions) => {
-      externalReadId++;
       const result = await writeEditableFileText(target.sessionId, target.modRoot, target.filePath, draft, baseVersions);
-      externalReadId++;
-      // Recovery mode (no sessionId) must stay a side-effect-free file write:
-      // no file history entry and no project session refresh.
+      return { target, value: draft, baseVersions: result.baseVersions, meta: result, commitId: result.commitId };
+    },
+    afterSaved: async (snapshot) => {
+      const target = snapshot.target;
       if (target.sessionId) {
+        applyCommittedWriteCacheInvalid(target.sessionId, snapshot.meta!);
         await emitFileEditorSaved({
           modRoot: target.modRoot,
           path: target.filePath,
           sessionId: target.sessionId,
-          writeResult: result,
+          writeResult: snapshot.meta!,
         });
       }
-      return { value: draft, baseVersions: result.baseVersions };
     },
     targetKey: (target) => fileEditorTargetKey(target),
   });
-  const textHistory = useTextHistory();
+  const textHistory = useSnapshotHistory<string>(
+    draftSession.context,
+    100,
+    (text) => text,
+    (left, right) => left === right,
+  );
+  const unregisterSave = useSaveCommandStore().registerSaveSession({
+    targetKey: draftSession.currentTargetKey,
+    modRoot: computed(() => params.modRoot),
+    saving: draftSession.saving,
+    waitForSave: draftSession.waitForSave,
+  });
   const { confirmDiscard } = useFieldInputActions(draftSession.inputs);
   let unlistenFocusLine: UnlistenFn | null = null;
   let unlistenTextApplied: UnlistenFn | null = null;
   let unlistenProjectInvalidated: UnlistenFn | null = null;
   let disposed = false;
-  let externalReadId = 0;
 
   const text = draftSession.draftValue;
   const dirty = draftSession.dirty;
@@ -106,7 +119,6 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
       if (event.sessionId !== params.sessionId) return;
       if (normalizeFsPath(event.modRoot) !== normalizeFsPath(params.modRoot)) return;
       if (normalizeFsPath(event.path) !== normalizeFsPath(params.filePath)) return;
-      externalReadId++;
       applyExternalText(event.text, event.baseVersions);
     });
     if (disposed) {
@@ -127,11 +139,8 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
         return pathBelongsToRoot(syncFilePath, changedPath);
       });
       if (!affected) return;
-      const requestId = ++externalReadId;
       try {
-        const loaded = await loadEditableFileData(syncSessionId, syncModRoot, syncFilePath);
-        if (disposed || requestId !== externalReadId) return;
-        applyExternalText(loaded.text, loaded.baseVersions);
+        await draftSession.refreshTarget({ sessionId: syncSessionId, modRoot: syncModRoot, filePath: syncFilePath, mode: params.mode });
       } catch (error) {
         feedback.error(error, '外部文件更新同步失败');
       }
@@ -144,6 +153,7 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
 
   function dispose() {
     disposed = true;
+    unregisterSave();
     draftSession.dispose();
     unlistenFocusLine?.();
     unlistenFocusLine = null;
@@ -158,7 +168,7 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
     if (!target) return;
     try {
       const loaded = await draftSession.loadTarget(target);
-      if (loaded) textHistory.clear();
+      if (loaded) return;
     } catch (error) {
       feedback.error(error, '打开文件失败');
     }
@@ -166,7 +176,10 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
 
   async function saveFile() {
     if (!fileEditorTarget()) return;
-    if (draftSession.saving.value || draftSession.loading.value) return;
+    if (draftSession.saving.value) {
+      await draftSession.waitForSave();
+      return;
+    }
     try {
       const saved = await draftSession.saveDraft();
       if (!saved || disposed) return;
@@ -177,43 +190,52 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
   }
 
   function cancelChanges() {
-    draftSession.resetDraft();
-    textHistory.clear();
+    if (draftSession.saving.value)
+      void draftSession.waitForSave().then((saved) => {
+        if (saved && !disposed) draftSession.resetDraft();
+      });
+    else draftSession.resetDraft();
   }
 
   function loadPendingExternalText() {
-    confirmDiscard(
-      () => {
-        draftSession.loadPendingExternal();
-        textHistory.clear();
-      },
-      draftSession.dirty.value,
-      () => draftSession.currentTargetKey.value,
-    );
+    const key = draftSession.currentTargetKey.value;
+    const adopt = () => {
+      if (disposed || key !== draftSession.currentTargetKey.value) return;
+      confirmDiscard(
+        () => {
+          draftSession.loadPendingExternal();
+        },
+        draftSession.dirty.value,
+        () => draftSession.currentTargetKey.value,
+      );
+    };
+    if (draftSession.saving.value)
+      void draftSession.waitForSave().then((saved) => {
+        if (saved) adopt();
+      });
+    else adopt();
   }
 
   function updateText(nextText: string) {
     if (nextText === text.value) return;
-    textHistory.pushChange(text.value);
+    textHistory.push(text.value, nextText);
     draftSession.setDraft(nextText);
   }
 
   function undoEdit() {
     if (!canUndo.value) return;
-    draftSession.setDraft(textHistory.undo(text.value));
+    draftSession.setDraft(textHistory.undo()!);
   }
 
   function redoEdit() {
     if (!canRedo.value) return;
-    draftSession.setDraft(textHistory.redo(text.value));
+    draftSession.setDraft(textHistory.redo()!);
   }
 
   function applyExternalText(nextText: string, baseVersions?: import('@/shared/types').FileVersion[]) {
     const target = fileEditorTarget();
     if (!target) return;
-    const wasDirty = dirty.value;
-    draftSession.applyExternalForTarget(target, nextText, baseVersions);
-    if (!wasDirty) textHistory.clear();
+    draftSession.applyExternalForTarget({ target, value: nextText, baseVersions: baseVersions ?? [], meta: null });
   }
 
   return {
@@ -224,8 +246,9 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
     targetLine,
     targetColumn,
     text,
-    loading: draftSession.loading,
+    loading: computed(() => draftSession.loading.value && draftSession.baselineSnapshot.value === null),
     saving: draftSession.saving,
+    waitForSave: draftSession.waitForSave,
     dirty,
     hasPendingExternalText,
     externalTextNotice,

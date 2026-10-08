@@ -8,19 +8,23 @@ import {
   queryDraftEditorImages,
   type EditorEntityBundle,
 } from '@/services/editor.service';
-import type { EditorSpecKind, EditorWindowKind, EntityKind, RowData } from '@/shared/types';
+import type { EditorSpecKind, EditorWindowKind, EntityKind, RowData, WriteResult } from '@/shared/types';
+import { useSaveCommandStore } from '@/stores/save-command.store';
 import { deepClone } from '@/shared/lib/starsector';
 import { formatError } from '@/shared/lib/errors';
 import { normalizeFsPath } from '@/shared/lib/paths';
 import { emitEditorSpecSaved, listenEditorPreviewDraftUpdated, listenEditorSpecSaved } from '@/orchestrators/editor-window.orchestrator';
-import { applyProjectSessionCacheInvalid, listenProjectSessionInvalidated } from '@/orchestrators/project-session-refresh.orchestrator';
+import {
+  applyCommittedWriteCacheInvalid,
+  applyProjectSessionCacheInvalid,
+  listenProjectSessionInvalidated,
+} from '@/orchestrators/project-session-refresh.orchestrator';
 import { saveEditorSpecByKind } from '@/services/editor.service';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { hasEntityInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/services/resource-cache.service';
 import { defaultEditorSpec, editorMissingTargetText } from '@/domain/editors/editor-definitions';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
-import { stableDeepEqual } from '@/shared/lib/stable-compare';
 import { WEAPON_SPRITE_FIELDS } from '@/domain/editors/lib/weapon-sprite-fields';
 import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
@@ -50,12 +54,13 @@ export function useEditorWindowViewModel(params: {
   let previewDraftSnapshot = params.draftSnapshot ?? null;
   const editorData = ref<EditorEntityBundle | null>(null);
   const feedback = useAppFeedback();
-  const draftSession = useEditTargetDraftSession<RowData, EditorWindowTarget, EditorEntityBundle>({
+  const draftSession = useEditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }>({
     emptyValue: {},
     load: async (target) => {
       const data = await queryEditorEntityBundle(target.sessionId, target.kind, target.id, previewDraftSnapshot ?? undefined);
       return {
-        meta: data,
+        target,
+        meta: { bundle: data, receipt: null },
         baseVersions: data.baseVersions,
         value: isEditableWindowKind(target.kind) ? primarySpecForBundle(data, target.kind, target.id) : {},
       };
@@ -63,21 +68,42 @@ export function useEditorWindowViewModel(params: {
     save: async (target, draft, baseVersions) => {
       if (!isEditableWindowKind(target.kind)) return;
       const kind = target.kind as EditorSpecKind;
+      const submittedBundle = deepClone(editorData.value!);
       const result = await runConfirmedJsonWrite(feedback, (options) =>
         saveEditorSpecByKind(target.sessionId, target.modRoot, kind, target.id, draft, options, baseVersions),
       );
       if (!result) return;
-      await emitEditorSpecSaved({
-        kind,
-        sessionId: target.sessionId,
-        modRoot: target.modRoot,
-        id: target.id,
-        spec: deepClone(draft),
-        writeResult: result,
-      });
-      return { value: draft, baseVersions: result.baseVersions };
+      const value = result.refreshedEntity!;
+      return {
+        target,
+        value,
+        baseVersions: result.baseVersions,
+        commitId: result.commitId,
+        meta: {
+          bundle: { ...applySavedSpecToBundle(submittedBundle, kind, target.id, value), isNew: false, baseVersions: result.baseVersions },
+          receipt: result,
+        },
+      };
     },
     targetKey: editorWindowTargetKey,
+    afterSaved: async (snapshot) => {
+      const result = snapshot.meta.receipt!;
+      applyCommittedWriteCacheInvalid(snapshot.target.sessionId, result);
+      await emitEditorSpecSaved({
+        kind: snapshot.target.kind as EditorSpecKind,
+        sessionId: snapshot.target.sessionId,
+        modRoot: snapshot.target.modRoot,
+        id: snapshot.target.id,
+        spec: snapshot.value,
+        writeResult: result,
+      });
+    },
+  });
+  const unregisterSave = useSaveCommandStore().registerSaveSession({
+    targetKey: draftSession.currentTargetKey,
+    modRoot: computed(() => params.modRoot),
+    saving: draftSession.saving,
+    waitForSave: draftSession.waitForSave,
   });
   const loading = ref(true);
   const { confirmDiscard } = useFieldInputActions(draftSession.inputs);
@@ -89,8 +115,12 @@ export function useEditorWindowViewModel(params: {
   let stopResourceInvalidation: (() => void) | null = null;
   let editorDataRequestId = 0;
   let derivedDataRequestId = 0;
+  let projectileReadId = 0;
+  let projectileOptionsReadId = 0;
+  let previewResourceReadId = 0;
   let imageRequestId = 0;
   let disposed = false;
+  const relatedCommitIds = new Map<string, number>();
   const resourceRevision = ref(0);
 
   const draftImageKey = computed(() =>
@@ -99,6 +129,23 @@ export function useEditorWindowViewModel(params: {
     ),
   );
   watch([draftImageKey, resourceRevision], refreshDraftResources);
+  watch(
+    draftSession.baselineSnapshot,
+    (snapshot) => {
+      if (snapshot && !disposed) applyLoadedEditorData(snapshot.meta.bundle, snapshot.meta.receipt !== null);
+    },
+    { flush: 'sync' },
+  );
+
+  function refreshDraftProjectiles() {
+    const bundle = editorData.value;
+    if (disposed || bundle?.kind !== 'weapon') return;
+    const id = typeof bundle.weapon.projectileSpecId === 'string' ? bundle.weapon.projectileSpecId : '';
+    const ids = Object.keys(bundle.projectileSpecs);
+    if (id ? ids.length === 1 && ids[0] === id : ids.length === 0) return;
+    editorData.value = { ...bundle, projectileSpecs: {} };
+    void refreshEditorDerivedData({ projectileSpecs: true, projectileOptions: false, resources: false });
+  }
 
   async function refreshDraftResources() {
     const key = draftImageKey.value;
@@ -145,10 +192,12 @@ export function useEditorWindowViewModel(params: {
   });
   const shipSpriteForEditor = computed(() => shipEditorData.value?.shipSpriteData ?? '');
   const draftDirty = draftSession.dirty;
-  const draftRevision = draftSession.revision;
+  const editContext = draftSession.context;
   const draftSaving = draftSession.saving;
   const externalUpdateNotice = draftSession.externalUpdateNotice;
-  const canSaveSpec = computed(() => isEditableWindowKind(params.kind) && (draftDirty.value || Boolean(editorData.value?.isNew)));
+  const canSaveSpec = computed(
+    () => draftSession.ready.value && isEditableWindowKind(params.kind) && (draftDirty.value || Boolean(editorData.value?.isNew)),
+  );
 
   const missingEditorText = computed(() => {
     const target = editorWindowTarget();
@@ -175,13 +224,13 @@ export function useEditorWindowViewModel(params: {
             ? await draftSession.loadTarget(target)
             : await draftSession.refreshTarget(target)
           : {
-              meta: await queryEditorEntityBundle(target.sessionId, params.kind, target.id, previewDraftSnapshot ?? undefined),
+              meta: { bundle: await queryEditorEntityBundle(target.sessionId, params.kind, target.id, previewDraftSnapshot ?? undefined) },
               value: {},
             };
       if (disposed || requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
       if (!snapshot?.meta) return;
-      const data = snapshot.meta;
-      applyLoadedEditorData(data);
+      const data = snapshot.meta.bundle;
+      if (!isEditableWindowKind(params.kind)) applyLoadedEditorData(data);
       if (data.isNew && params.kind !== 'weapon-preview' && options.promptForMissing) {
         const choice = await handleMissingSpec(params.kind, target);
         if (disposed || requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
@@ -193,7 +242,8 @@ export function useEditorWindowViewModel(params: {
       }
     } catch (error) {
       if (disposed || requestId !== editorDataRequestId) return;
-      errorText.value = formatError(error);
+      if (options.showLoading) errorText.value = formatError(error);
+      else feedback.error(error, '刷新编辑器失败');
     } finally {
       if (requestId === editorDataRequestId) loading.value = false;
     }
@@ -234,12 +284,15 @@ export function useEditorWindowViewModel(params: {
 
   async function saveEditorData(kind: EditorSpecKind, data?: RowData): Promise<void> {
     const target = editorWindowTarget();
-    if (!target || draftSession.saving.value) return;
+    if (!target) return;
+    if (draftSession.saving.value) {
+      await draftSession.waitForSave();
+      return;
+    }
     if (data) updateEditorDraft(kind, data);
     try {
       const saved = await draftSession.saveDraft();
       if (saved) {
-        syncCurrentDraftToBundle(kind, target.id);
         feedback.success(`${target.id} 已保存`);
       }
     } catch (error) {
@@ -250,29 +303,48 @@ export function useEditorWindowViewModel(params: {
   function updateEditorDraft(kind: EditorSpecKind, data: RowData): void {
     const target = editorWindowTarget();
     if (!target || !editorData.value || !isPrimaryEditableKind(params.kind, kind)) return;
+    const previousReference = bundleReferenceKey(editorData.value);
     const spec = deepClone(data);
     draftSession.setDraft(spec);
     editorData.value = applySavedSpecToBundle(editorData.value, kind, target.id, spec);
+    if (previousReference !== bundleReferenceKey(editorData.value)) refreshDraftProjectiles();
   }
 
   function loadPendingExternalSpec(): void {
     const target = editorWindowTarget();
     if (!target || !editorData.value || !draftSession.pendingExternalValue.value || !isEditableWindowKind(params.kind)) return;
+    if (draftSession.saving.value) {
+      void draftSession.waitForSave().then((saved) => {
+        if (saved && !disposed) loadPendingExternalSpec();
+      });
+      return;
+    }
     confirmDiscard(adoptPendingExternalSpec, draftSession.dirty.value, () => draftSession.currentTargetKey.value);
   }
 
   function adoptPendingExternalSpec(): void {
-    const target = editorWindowTarget()!;
     draftSession.loadPendingExternal();
-    const spec = deepClone(draftSession.draftValue.value);
-    editorData.value = applySavedSpecToBundle(editorData.value!, params.kind as EditableEditorKind, target.id, spec);
-    resourceRevision.value++;
   }
 
   async function initializeEditorWindow() {
     unlistenPreviewDraftUpdated = await listenEditorPreviewDraftUpdated(handlePreviewDraftUpdated);
+    if (disposed) {
+      unlistenPreviewDraftUpdated();
+      unlistenPreviewDraftUpdated = null;
+      return;
+    }
     unlistenEditorSpecSaved = await listenEditorSpecSaved(handleEditorSpecSaved);
+    if (disposed) {
+      unlistenEditorSpecSaved();
+      unlistenEditorSpecSaved = null;
+      return;
+    }
     stopSessionInvalidated = await listenProjectSessionInvalidated(onProjectSessionInvalidated);
+    if (disposed) {
+      stopSessionInvalidated();
+      stopSessionInvalidated = null;
+      return;
+    }
     stopQueryInvalidation = subscribeQueryInvalidations(handleQueryCacheInvalidated);
     stopResourceInvalidation = subscribeResourceInvalidations(handleResourceCacheInvalidated);
     void queryEditorData({ promptForMissing: true, showLoading: true });
@@ -280,6 +352,7 @@ export function useEditorWindowViewModel(params: {
 
   function disposeEditorWindow() {
     disposed = true;
+    unregisterSave();
     imageRequestId++;
     editorDataRequestId++;
     derivedDataRequestId++;
@@ -319,14 +392,18 @@ export function useEditorWindowViewModel(params: {
       return;
     }
     if (isPrimaryEditableKind(params.kind, event.kind) && event.id === target.id) {
-      receiveExternalPrimarySpec(event.kind, event.id, event.spec, event.writeResult.baseVersions);
+      receiveExternalPrimarySpec(event.kind, event.id, event.spec, event.writeResult);
       return;
     }
+    const key = JSON.stringify([event.kind, event.id]);
+    if (event.writeResult.commitId <= (relatedCommitIds.get(key) ?? -1)) return;
+    relatedCommitIds.set(key, event.writeResult.commitId);
     applySavedSpec(event.kind, event.id, event.spec);
   }
 
   function applySavedSpec(kind: EditorSpecKind, id: string, data: RowData) {
     if (!editorData.value) return;
+    projectileReadId++;
     const spec = deepClone(data);
     editorData.value = applySavedSpecToBundle(editorData.value, kind, id, spec);
   }
@@ -380,21 +457,47 @@ export function useEditorWindowViewModel(params: {
     const target = editorWindowTarget();
     const bundle = editorData.value;
     if (!target || !bundle) return;
-    const requestId = ++derivedDataRequestId;
+    const epoch = derivedDataRequestId;
+    const reference = bundleReferenceKey(bundle);
+    const specTicket = options.projectileSpecs ? ++projectileReadId : null;
+    const optionsTicket = options.projectileOptions ? ++projectileOptionsReadId : null;
+    const resourceTicket = options.resources ? ++previewResourceReadId : null;
+    function acceptsSpec() {
+      return specTicket !== null && specTicket === projectileReadId && reference === bundleReferenceKey(editorData.value);
+    }
+    function acceptsOptions() {
+      return optionsTicket !== null && optionsTicket === projectileOptionsReadId;
+    }
+    function acceptsResources() {
+      return resourceTicket !== null && resourceTicket === previewResourceReadId && reference === bundleReferenceKey(editorData.value);
+    }
     try {
       const projectileRefreshed =
         options.projectileSpecs || options.projectileOptions ? await refreshBundleProjectiles(target.sessionId, bundle, options) : bundle;
       const refreshed = options.resources ? await refreshBundleResources(target.sessionId, projectileRefreshed) : projectileRefreshed;
+      if (disposed || epoch !== derivedDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
+      const current = editorData.value;
+      if (
+        (current?.kind === 'weapon' || current?.kind === 'weapon-preview') &&
+        (refreshed.kind === 'weapon' || refreshed.kind === 'weapon-preview')
+      ) {
+        editorData.value = {
+          ...current,
+          ...(acceptsSpec() ? { projectileSpecs: refreshed.projectileSpecs } : {}),
+          ...(current.kind === 'weapon' && refreshed.kind === 'weapon' && acceptsOptions()
+            ? { projectileOptions: refreshed.projectileOptions }
+            : {}),
+          ...(acceptsResources() ? { resourceRefs: refreshed.resourceRefs, weaponSpriteData: refreshed.weaponSpriteData } : {}),
+        };
+      }
+    } catch (error) {
       if (
         disposed ||
-        requestId !== derivedDataRequestId ||
-        editorData.value !== bundle ||
-        !sameEditorWindowTarget(target, editorWindowTarget())
+        epoch !== derivedDataRequestId ||
+        !sameEditorWindowTarget(target, editorWindowTarget()) ||
+        (!acceptsSpec() && !acceptsOptions() && !acceptsResources())
       )
         return;
-      editorData.value = refreshed;
-    } catch (error) {
-      if (disposed || requestId !== derivedDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
       feedback.error(error, '刷新编辑器派生数据失败');
     }
   }
@@ -417,7 +520,9 @@ export function useEditorWindowViewModel(params: {
     shipSpriteForEditor,
     draftValue: draftSession.draftValue,
     draftDirty,
-    draftRevision,
+    editContext,
+    waitForSave: draftSession.waitForSave,
+    saving: draftSession.saving,
     draftSaving,
     canSaveSpec,
     externalUpdateNotice,
@@ -429,56 +534,46 @@ export function useEditorWindowViewModel(params: {
     loadPendingExternalSpec,
   };
 
-  function applyLoadedEditorData(data: EditorEntityBundle): void {
+  function applyLoadedEditorData(data: EditorEntityBundle, preserveCatalog = false): void {
     const target = editorWindowTarget();
     if (!target || !isEditableWindowKind(params.kind)) {
       editorData.value = data;
       draftSession.clearTarget();
       return;
     }
-    editorData.value = clearBundleImages(applySavedSpecToBundle(data, params.kind, target.id, draftSession.draftValue.value));
+    const projected = clearBundleImages(applySavedSpecToBundle(data, params.kind, target.id, draftSession.draftValue.value));
+    editorData.value =
+      preserveCatalog && projected.kind === 'weapon' && editorData.value?.kind === 'weapon'
+        ? { ...projected, projectileOptions: editorData.value.projectileOptions }
+        : projected;
     resourceRevision.value++;
+    refreshDraftProjectiles();
+    refreshDraftProjectiles();
   }
 
-  function commitSavedSpecToBundle(kind: EditorSpecKind, id: string, data: RowData): void {
+  function receiveExternalPrimarySpec(kind: EditorSpecKind, id: string, data: RowData, result: WriteResult): void {
     if (!editorData.value) return;
     const spec = deepClone(data);
-    const applied = applySavedSpecToBundle(editorData.value, kind, id, spec);
-    editorData.value = applied.isNew ? ({ ...applied, isNew: false } as EditorEntityBundle) : applied;
-  }
-
-  function syncCurrentDraftToBundle(kind: EditorSpecKind, id: string): void {
-    commitSavedSpecToBundle(kind, id, draftSession.draftValue.value);
-  }
-
-  function receiveExternalPrimarySpec(
-    kind: EditorSpecKind,
-    id: string,
-    data: RowData,
-    versions: import('@/shared/types').FileVersion[],
-  ): void {
-    if (!editorData.value) return;
-    const spec = deepClone(data);
-    if (stableDeepEqual(draftSession.draftValue.value, spec) && !draftSession.inputs.dirty.value) {
-      const target = editorWindowTarget();
-      if (target) draftSession.loadBaseForTarget(target, spec, versions);
-      commitSavedSpecToBundle(kind, id, spec);
-      resourceRevision.value++;
-      return;
-    }
     const target = editorWindowTarget();
     if (!target) return;
-    const wasDirty = draftSession.dirty.value;
-    draftSession.applyExternalForTarget(target, spec, versions);
-    if (!wasDirty) {
-      editorData.value = applySavedSpecToBundle(editorData.value, kind, id, spec);
-      resourceRevision.value++;
-    }
+    draftSession.applyExternalForTarget({
+      target,
+      value: spec,
+      baseVersions: result.baseVersions,
+      commitId: result.commitId,
+      meta: { bundle: applySavedSpecToBundle(editorData.value, kind, id, spec), receipt: result },
+    });
   }
 }
 
 function sameEditorWindowTarget(left: EditorWindowTarget, right: EditorWindowTarget | null): boolean {
   return Boolean(right && editorWindowTargetKey(left) === editorWindowTargetKey(right));
+}
+
+function bundleReferenceKey(bundle: EditorEntityBundle | null): string | null {
+  return bundle?.kind === 'weapon' || bundle?.kind === 'weapon-preview'
+    ? JSON.stringify([bundle.kind, bundle.weapon.projectileSpecId ?? null])
+    : null;
 }
 
 function editorWindowTargetKey(target: EditorWindowTarget): string {
@@ -490,7 +585,8 @@ function shouldApplySavedSpec(bundle: EditorEntityBundle, target: EditorWindowTa
   if (event.kind === 'weapon') return (bundle.kind === 'weapon' || bundle.kind === 'weapon-preview') && event.id === target.id;
   if (event.kind === 'projectile') {
     if (bundle.kind === 'projectile') return event.id === target.id;
-    if (bundle.kind === 'weapon' || bundle.kind === 'weapon-preview') return event.id in bundle.projectileSpecs;
+    if (bundle.kind === 'weapon' || bundle.kind === 'weapon-preview')
+      return event.id in bundle.projectileSpecs || bundle.weapon.projectileSpecId === event.id;
   }
   if (event.kind === 'system') return bundle.kind === 'system' && event.id === target.id;
   return false;
@@ -548,7 +644,10 @@ function hasPrimaryDetailInvalidation(event: QueryCacheInvalidationEvent, window
 
 function hasProjectileSpecInvalidation(event: QueryCacheInvalidationEvent, bundle: EditorEntityBundle | null): boolean {
   if (bundle?.kind !== 'weapon' && bundle?.kind !== 'weapon-preview') return false;
-  const projectileIds = Object.keys(bundle.projectileSpecs);
+  const projectileIds = [
+    ...Object.keys(bundle.projectileSpecs),
+    ...(typeof bundle.weapon.projectileSpecId === 'string' ? [bundle.weapon.projectileSpecId] : []),
+  ];
   if (projectileIds.length === 0) return false;
   return projectileIds.some((id) => hasEntityInvalidation(event, 'entity-detail', 'projectile', id));
 }

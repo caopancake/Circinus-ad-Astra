@@ -17,6 +17,8 @@
 `src/app/components/schema/SchemaFieldRenderer.vue`：字段渲染 owner。
 `src/app/components/schema/SchemaScalarInput.vue`：类型文本输入 owner，暂存原文并提交正式字段动作。
 `src/shared/ui/JsonValueInput.vue`：JSON 原始输入 owner，按声明形状解析并提交。
+`src/shared/ui/NumberValueInput.vue`：Smart 数值原文与正式值提交 owner。
+`src/shared/lib/input-number.ts`：完整有限浮点与安全整数解析 owner。
 `src/shared/ui/JsonFieldEditor.vue`：额外字段结构化编辑 owner。
 `schemas/*.schema.json`、`schemas/csv/*.schema.json`、`schemas/well-known-labels.json`：schema 资产本体。
 `src-tauri/src/domain/well_known_labels.rs`：well-known 标签资产唯一加载入口，编译期内嵌并校验版本头。
@@ -66,7 +68,8 @@
 - 路径字段必须消费 pathBase；Mod 路径必须相对 Mod 根，Mission icon 必须相对任务目录，候选目录和选择器必须服从同一基准。
 - 数组与 key-value 行必须由编辑会话内的稳定身份维护，增删必须对应更新行身份；深拷贝草稿严禁改变现存行节点、焦点和展开态。
 - 字符串字段只允许提交字符串；Plain 整数必须按完整十进制和安全整数范围解析，浮点必须按完整有限十进制解析，非法文本必须逐字符保留。
-- Plain 数字与布尔文本必须在提交边界转换；非法输入必须保留正式字段类型并阻止提交，可选具名字段清空必须删除键，必填字段清空必须定位为错误。
+- Plain 数字、布尔与 Smart 数字必须登记原文；非法输入必须保留正式字段类型并阻止提交，可选具名字段清空必须删除键，必填字段清空必须定位为错误。
+- 颜色面板数值必须先校验原文，复合字段终结器必须随后提交颜色；显式取消必须恢复正式颜色与控件显示。
 - 数组元素清理必须消费所属删除项动作；字段删除必须按稳定行身份取消所属输入子树。
 - 颜色文本与面板调整必须登记为同一字段输入；保存必须提交有效颜色，取消必须恢复已提交颜色。
 - 模式替换涉及待提交输入时必须确认放弃；取消必须保留当前输入面，确认必须取消输入并采用最新设置模式。

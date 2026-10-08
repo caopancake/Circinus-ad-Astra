@@ -30,20 +30,28 @@ interface TableSaveOptions {
   feedback?: AppFeedback;
 }
 
-const pendingSaves = new WeakMap<ReturnType<typeof useTablesStore>, Promise<TableSaveResult>>();
+const pendingSaves = new WeakMap<
+  ReturnType<typeof useTablesStore>,
+  { target: CapturedTableSaveTarget; promise: Promise<TableSaveResult> }
+>();
+
+export function pendingTableSave() {
+  return pendingSaves.get(useTablesStore()) ?? null;
+}
 
 export function saveActiveTableChanges(options: TableSaveOptions): Promise<TableSaveResult> {
   const tables = useTablesStore();
   const pending = pendingSaves.get(tables);
-  if (pending) return pending;
+  if (pending) return pending.promise;
   const target = captureActiveTableSaveTarget(options.manifest);
   if (!target) return Promise.resolve('noop');
+  tables.revokeTableReads(target.modRoot, target.table);
   tables.setSaving(true);
   const saving = saveTarget(target, options).finally(() => {
     tables.setSaving(false);
     pendingSaves.delete(tables);
   });
-  pendingSaves.set(tables, saving);
+  pendingSaves.set(tables, { target, promise: saving });
   return saving;
 }
 
@@ -94,15 +102,15 @@ async function saveTarget(target: CapturedTableSaveTarget, options: TableSaveOpt
     },
   });
   if (!isTableSaveTargetCurrent(target)) return 'saved';
-  if (result.changes.length > 0) {
+  tables.revokeTableReads(modRoot, table);
+  const keyMap = deepClone(result.keyMap);
+  commitCsvTableSaveDraft(state, table, patches, keyMap);
+  state.baseVersions[table] = result.baseVersions;
+  csvEditHistory.applySavedRowKeyMap(modRoot, table, keyMap);
+  csvEditHistory.commitSaveHistory(modRoot, table, submittedHistory);
+  if (Object.keys(state.dirty[table]).length === 0) csvEditHistory.clearCsvEditHistory(modRoot, table);
+  if (result.changes.length > 0)
     await completeSavedWrite({ modRoot, result, label: `保存 ${table} CSV`, sessionId: manifest.sessionId }, useProjectStore());
-    if (!isTableSaveTargetCurrent(target)) return 'saved';
-    commitCsvTableSaveDraft(state, table, patches, result.keyMap);
-    state.baseVersions[table] = result.baseVersions;
-    csvEditHistory.applySavedRowKeyMap(modRoot, table, result.keyMap);
-    csvEditHistory.commitSaveHistory(modRoot, table, submittedHistory);
-    if (Object.keys(state.dirty[table]).length === 0) csvEditHistory.clearCsvEditHistory(modRoot, table);
-  }
   return 'saved';
 }
 

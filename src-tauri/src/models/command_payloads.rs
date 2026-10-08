@@ -117,7 +117,7 @@ pub struct QueryEntityListPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct EditorDraftResourcesPayload {
-    pub kind: EditorSpecKind,
+    pub kind: crate::models::EditorResourceKind,
     pub session_id: ProjectSessionId,
     pub id: String,
     pub draft: Value,

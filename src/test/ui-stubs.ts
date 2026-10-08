@@ -31,13 +31,13 @@ export const nInput = {
 };
 
 export const nInputNumber = {
-  props: ['value', 'disabled', 'min', 'max', 'size', 'step', 'showButton'],
+  props: ['value', 'disabled', 'min', 'max', 'size', 'step', 'showButton', 'format', 'parse', 'inputProps', 'status'],
   emits: ['update:value'],
   template: `<input
-    type="number"
-    :value="value ?? ''"
+    :type="format ? 'text' : 'number'"
+    :value="format ? format(value) : value ?? ''"
     :disabled="disabled"
-    @input="$emit('update:value', $event.target.value === '' ? null : Number($event.target.value))"
+    @input="inputProps?.onInput ? inputProps.onInput($event) : $emit('update:value', $event.target.value === '' ? null : Number($event.target.value))"
   />`,
 };
 

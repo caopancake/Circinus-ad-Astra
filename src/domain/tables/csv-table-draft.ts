@@ -6,6 +6,7 @@ import { createCsvDeletedRow, createCsvDirtyCells, csvDirtyCells, hasCsvDirtyCel
 import { defaultCsvFactionId } from '@/domain/tables/csv-faction-filter';
 import { isLoadedCsvTableRow } from '@/domain/tables/csv-table-rows';
 import { resolveTableRowKey, TABLE_ROW_KEY_FIELD } from '@/domain/tables/table-row-key';
+import { stableDeepEqual } from '@/shared/lib/stable-compare';
 
 export interface CsvDraftResult {
   changed: boolean;
@@ -29,6 +30,17 @@ export function csvRowTargetOf(result: CsvDraftResult): CsvRowTarget | null {
 export function applyCsvTableWindowDraft(state: ModTableState, window: CsvTableWindow, hasPendingInput = false): CsvDraftResult {
   const table = window.table;
   if (hasCsvTableDraftChanges(state, table) || hasPendingInput) {
+    const originalRows = new Map(
+      state.originalTables[table].filter(isLoadedCsvTableRow).map((row, index) => [csvTableRowKey(table, row, index), row]),
+    );
+    const business = (row: RowData) => Object.fromEntries(Object.entries(row).filter(([key]) => !isInternalJsonFieldKey(key)));
+    const sameBaseline =
+      stableDeepEqual(state.baseVersions[table], window.baseVersions) &&
+      window.rows.every((entry) => {
+        const original = originalRows.get(entry.rowKey);
+        return original !== undefined && stableDeepEqual(business(original), business(entry.row));
+      });
+    if (sameBaseline) return { changed: false };
     state.pendingExternalTableUpdates[table] = true;
     return { changed: false, externalUpdateMarked: true };
   }
@@ -223,7 +235,7 @@ export function commitCsvTableSaveDraft(state: ModTableState, tab: TableKey, pat
     }
   }
   rebuildCsvDirty(state, tab);
-  state.pendingExternalTableUpdates[tab] = hasCsvTableDraftChanges(state, tab);
+  state.pendingExternalTableUpdates[tab] = false;
 }
 
 export function replaceCsvTableDraft(state: ModTableState, tab: TableKey, rows: RowData[]): void {

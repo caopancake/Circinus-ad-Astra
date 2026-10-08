@@ -1,3 +1,5 @@
+vi.mock('@/orchestrators/config-save.orchestrator', () => ({ completeConfigSave: vi.fn(async () => {}) }));
+import { savedWriteFixture } from '@/test/write-result';
 import { mount } from '@vue/test-utils';
 import { createPinia, getActivePinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -70,10 +72,18 @@ function mountEditor(family = variantFamily) {
   );
   const selectedId = ref('v1');
   const saveFile = vi.fn(
-    async (_sessionId: string, _modRoot: string, current: ConfigFamilyFile, data: RowData): Promise<ConfigFamilyFile | null> => ({
-      baseVersions: [],
-      data,
-      relPath: current.relPath,
+    async (
+      _sessionId: string,
+      _modRoot: string,
+      current: ConfigFamilyFile,
+      data: RowData,
+    ): Promise<import('@/shared/types').SavedConfig<ConfigFamilyFile> | null> => ({
+      entity: {
+        baseVersions: [],
+        data,
+        relPath: current.relPath,
+      },
+      receipt: savedWriteFixture(),
     }),
   );
   const onSaved = vi.fn();
@@ -127,6 +137,7 @@ describe('useConfigFamilyEditorViewModel', () => {
 
   it('saves the current draft through the injected save callback', async () => {
     const { vm, saveFile, onSaved } = mountEditor();
+    await vi.waitFor(() => expect(vm.draftData.value.variantId).toBe('v1'));
     vm.draftData.value = { variantId: 'v1', hullId: 'h1', displayName: 'Edited' };
     await vm.save();
     expect(saveFile).toHaveBeenCalledWith(
@@ -141,6 +152,7 @@ describe('useConfigFamilyEditorViewModel', () => {
 
   it('reports save failures without invoking onSaved', async () => {
     const { vm, saveFile, onSaved } = mountEditor();
+    await vi.waitFor(() => expect(vm.draftData.value.variantId).toBe('v1'));
     saveFile.mockRejectedValue(new Error('locked'));
     await vm.save();
     expect(mocks.feedback.error).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('保存'));

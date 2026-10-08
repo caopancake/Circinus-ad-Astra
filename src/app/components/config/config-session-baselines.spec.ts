@@ -39,6 +39,7 @@ vi.mock('@/services/config-entity.service', () => ({
   queryFactionPreviewImages: async () => ({ crestSrc: '', logoSrc: '' }),
 }));
 vi.mock('@/orchestrators/config-save.orchestrator', () => ({
+  completeConfigSave: vi.fn(async () => {}),
   saveVariantAction: mocks.saveVariant,
   saveSkinAction: mocks.saveSkin,
   saveIndexedEntityAction: mocks.saveFaction,

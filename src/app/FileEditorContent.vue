@@ -41,7 +41,7 @@
         :value="text"
         class="file-editor-textarea"
         spellcheck="false"
-        :disabled="loading || saving"
+        :disabled="loading"
         @input="handleTextInput"
         @scroll="syncScroll"
       />

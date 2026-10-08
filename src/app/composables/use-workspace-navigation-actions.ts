@@ -3,6 +3,7 @@ import { useDraftTransitionConfirmation } from '@/app/composables/use-draft-tran
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useTablesStore } from '@/stores/tables.store';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
+import { useSaveCommandStore } from '@/stores/save-command.store';
 import type { ConfigView, TableKey } from '@/shared/types';
 
 export function useWorkspaceNavigationActions() {
@@ -42,6 +43,19 @@ export function useWorkspaceNavigationActions() {
   }
 
   function confirmNavigation(action: () => void) {
+    const commands = useSaveCommandStore();
+    const sequence = commands.beginTransition();
+    const waiting = commands.waitForSaves();
+    if (waiting) {
+      void waiting.then((saved) => {
+        if (saved && commands.isTransitionCurrent(sequence)) confirmIdleNavigation(action, sequence);
+      });
+      return;
+    }
+    confirmIdleNavigation(action, sequence);
+  }
+
+  function confirmIdleNavigation(action: () => void, sequence: number) {
     const modRoot = workspace.activeModRoot;
     if (modRoot && workspace.currentView === 'table') {
       const inputs = tables.getTableInputs(modRoot, tables.currentTab);
@@ -49,7 +63,8 @@ export function useWorkspaceNavigationActions() {
       if (pending) {
         void pending
           .then((accepted) => {
-            if (accepted && workspace.activeModRoot === modRoot) confirmConfigNavigation(action);
+            if (accepted && workspace.activeModRoot === modRoot && useSaveCommandStore().isTransitionCurrent(sequence))
+              confirmConfigNavigation(action);
           })
           .catch((error: unknown) => feedback.error(error));
         return;

@@ -102,7 +102,7 @@ export async function refreshBundleProjectiles(
   options: { projectileSpecs: boolean; projectileOptions: boolean },
 ): Promise<EditorEntityBundle> {
   if (bundle.kind !== 'weapon' && bundle.kind !== 'weapon-preview') return bundle;
-  const nextProjectileSpecs = options.projectileSpecs ? await queryProjectileSpecs(sessionId, bundle.projectileSpecs) : null;
+  const nextProjectileSpecs = options.projectileSpecs ? await queryProjectileSpecs(sessionId, bundle.weapon) : null;
   if (bundle.kind === 'weapon-preview' && nextProjectileSpecs) requirePreviewProjectile(bundle.weapon, nextProjectileSpecs);
   if (bundle.kind === 'weapon') {
     return {
@@ -183,14 +183,13 @@ async function queryWeaponLikeBundle(
   const resourceRefs = weaponOverride
     ? await querySessionEditorDraftResources(sessionId, 'weapon', id, weaponOverride)
     : weapon.resourceRefs;
-  const projectileId = typeof weaponSpec.projectileSpecId === 'string' ? weaponSpec.projectileSpecId : '';
-  const weaponProjectile = projectileId ? await querySessionEntity(sessionId, 'projectile', projectileId) : null;
+  const projectileSpecs = await queryProjectileSpecs(sessionId, weaponSpec);
   return {
     weapon: weaponSpec,
     baseVersions: weapon.baseVersions,
     weaponCsvRow,
     isNew,
-    projectileSpecs: weaponProjectile ? { [projectileId]: requireRowData(weaponProjectile.data, `弹体 ${projectileId} 数据无效`) } : {},
+    projectileSpecs,
     resourceRefs: Object.values(resourceRefs),
     weaponSpriteData: await queryWeaponSprites(sessionId, resourceRefs),
   };
@@ -229,7 +228,8 @@ export async function saveEditorSpecByKind(
 ): Promise<WriteResult> {
   ensureSpecContext(modRoot, id);
   try {
-    return await writeEditorSpec(sessionId, modRoot, kind, id, data, jsonWrite, baseVersions);
+    const result = await writeEditorSpec(sessionId, modRoot, kind, id, data, jsonWrite, baseVersions);
+    return { ...result, refreshedEntity: requireRowData(result.refreshedEntity, '规格保存返回内容无效') };
   } catch (error) {
     throw withCause(`保存 ${id} spec 失败`, error, `save-${kind}-spec`);
   }
@@ -272,14 +272,10 @@ async function queryProjectileOptions(sessionId: ProjectSessionId): Promise<Edit
   return projectiles.map((projectile) => ({ label: projectile.id, value: projectile.id }));
 }
 
-async function queryProjectileSpecs(sessionId: ProjectSessionId, currentSpecs: Record<string, RowData>): Promise<Record<string, RowData>> {
-  const entries = await Promise.all(
-    Object.keys(currentSpecs).map(async (id) => {
-      const projectile = await querySessionEntity(sessionId, 'projectile', id);
-      return projectile ? ([id, requireRowData(projectile.data, `弹体 ${id} 数据无效`)] as const) : null;
-    }),
-  );
-  return Object.fromEntries(entries.filter((entry): entry is [string, RowData] => entry !== null));
+async function queryProjectileSpecs(sessionId: ProjectSessionId, weapon: RowData): Promise<Record<string, RowData>> {
+  const id = typeof weapon.projectileSpecId === 'string' ? weapon.projectileSpecId : '';
+  const projectile = id ? await querySessionEntity(sessionId, 'projectile', id) : null;
+  return projectile ? { [id]: requireRowData(projectile.data, `弹体 ${id} 数据无效`) } : {};
 }
 
 function requireEditorEntity(entity: EntityData | null, kind: EditorSpecKind, id: string): EntityData {

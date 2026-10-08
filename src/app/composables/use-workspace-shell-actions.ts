@@ -1,11 +1,12 @@
-import { h, ref, type Ref } from 'vue';
+import { computed, getCurrentScope, h, onScopeDispose, ref, type Ref } from 'vue';
 import { NCheckbox } from 'naive-ui/es/checkbox';
 import type { AppFeedback, GameScanWarning, ModOpeningFailure } from '@/shared/types';
 import { useSettingsStore } from '@/stores/settings.store';
 import { openEditorWindow } from '@/windows/editor.window';
 import { useProjectStore } from '@/stores/project.store';
 import { pickDirectory, scanDirectoryGameOverview } from '@/services/session.service';
-import { saveActiveTableChanges } from '@/orchestrators/table-save.orchestrator';
+import { pendingTableSave, saveActiveTableChanges } from '@/orchestrators/table-save.orchestrator';
+import { useSaveCommandStore } from '@/stores/save-command.store';
 import { useTablesStore } from '@/stores/tables.store';
 import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
@@ -33,6 +34,28 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   const draftSessions = useDraftSessionsStore();
   const settings = useSettingsStore();
   const workspace = useWorkspaceStore();
+  const saveCommands = useSaveCommandStore();
+  const unregisterSave = saveCommands.registerSaveSession({
+    targetKey: computed(() => {
+      const target = pendingTableSave()?.target;
+      return tables.saving && target ? JSON.stringify([target.manifest.sessionId, target.modRoot, target.table]) : null;
+    }),
+    modRoot: computed(() => (tables.saving ? (pendingTableSave()?.target.modRoot ?? null) : null)),
+    saving: computed(() => tables.saving),
+    waitForSave: () =>
+      pendingTableSave()?.promise.then(
+        (result) => result !== 'cancelled',
+        () => false,
+      ) ?? Promise.resolve(true),
+  });
+  let disposed = false;
+  let closeIntent: Promise<void> | null = null;
+  const removeIntents = new Map<string, Promise<void>>();
+  if (getCurrentScope())
+    onScopeDispose(() => {
+      disposed = true;
+      unregisterSave();
+    });
 
   async function openDirectory() {
     try {
@@ -79,27 +102,55 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   }
 
   function confirmCloseWorkspace() {
+    if (closeIntent) return closeIntent;
+    closeIntent = requestWorkspaceClose()
+      .catch((error: unknown) => feedback.error(error, '关闭工作区失败'))
+      .finally(() => {
+        closeIntent = null;
+      });
+    return closeIntent;
+  }
+
+  async function requestWorkspaceClose() {
+    const pending = saveCommands.waitForSaves();
+    if ((pending && !(await pending)) || disposed) return;
     const target = captureWorkspaceCloseTarget();
+    const sessions = target.modRoots.map((root) => project.getSessionId(root));
     const hasDirtyMods = target.modRoots.some((modRoot) => draftSessions.hasUnsavedWorkForMod(modRoot));
-    feedback.confirmWarning({
+    const choice = await feedback.choose({
       title: '关闭工作区',
       content: hasDirtyMods ? '当前工作区有未保存修改，关闭后这些修改将丢失。确认关闭？' : '确认关闭当前工作区？',
-      actionText: '关闭',
-      onConfirm: () => closeWorkspace(target),
+      choices: [{ label: '关闭', value: 'close', type: 'warning' }],
     });
+    if (choice === 'close' && !disposed && target.modRoots.every((root, index) => project.getSessionId(root) === sessions[index]))
+      await closeWorkspace(target);
   }
 
   function confirmRemoveMod(modRoot: string) {
+    const active = removeIntents.get(modRoot);
+    if (active) return active;
+    const intent = requestModRemoval(modRoot)
+      .catch((error: unknown) => feedback.error(error, '移除 Mod 失败'))
+      .finally(() => {
+        removeIntents.delete(modRoot);
+      });
+    removeIntents.set(modRoot, intent);
+    return intent;
+  }
+
+  async function requestModRemoval(modRoot: string) {
+    const sessionId = project.getSessionId(modRoot);
+    const pending = saveCommands.waitForSaves(modRoot);
+    if ((pending && !(await pending)) || disposed) return;
     if (draftSessions.hasUnsavedWorkForMod(modRoot)) {
-      feedback.confirmWarning({
+      const choice = await feedback.choose({
         title: '移除 Mod',
         content: '该 Mod 有未保存修改，移除后修改将丢失。确认移除？',
-        actionText: '移除',
-        onConfirm: () => removeMod(modRoot),
+        choices: [{ label: '移除', value: 'remove', type: 'warning' }],
       });
-    } else {
-      void removeMod(modRoot);
+      if (choice !== 'remove') return;
     }
+    if (!disposed && project.getSessionId(modRoot) === sessionId) await removeMod(modRoot);
   }
 
   async function saveChanges() {

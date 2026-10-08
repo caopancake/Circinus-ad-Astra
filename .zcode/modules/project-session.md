@@ -24,7 +24,8 @@
 - 写入锁序必须为根目录事务租约、session 状态、core/sprite/持久化缓存；注册表锁只允许用于短暂句柄访问。
 - session 关闭只从注册表移除条目；已取得 handle 的在途操作自然完成，关闭后新操作按未知 session 拒绝。
 - 前端 project store 只保存活动 session 与 manifest，严禁读盘、扫描或按完整快照替代 query。
-- 写后失效必须先资源后查询，并按结构化 invalidation 精确处理，严禁扩大到全量刷新。
+- 写结果接纳与权威刷新必须分别消费 receipt 的结构化 invalidation，缓存失效必须先资源后查询。
+- 编辑草稿资源 query 必须消费 EditorResourceKind、实体身份与独立草稿；引用必须由后端正式实体资源定义产生。
 - 前端项目失效必须由刷新编排消费；按会话清理必须由工作区生命周期编排消费；查询、订阅和匹配能力必须分别声明消费者。
 - 查询 source options 的 tags 元数据依赖特殊物品蓝图包与势力标签；这些来源变化时必须覆盖所有注册 CSV 表的 tags source scope。
 - 查询缓存与媒体缓存的 pending/in-flight 请求在 session 失效或关闭时必须立即释放，迟到结果不得写入新代次。

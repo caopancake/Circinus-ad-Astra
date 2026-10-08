@@ -8,6 +8,9 @@ import { variantFamily, skinFamily, type ConfigFamilyFile } from '@/domain/confi
 import type { FileSchema } from '@/domain/schema/schema.types';
 import type { RowData } from '@/shared/types';
 import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
+import { savedWriteFixture } from '@/test/write-result';
+
+vi.mock('@/orchestrators/config-save.orchestrator', () => ({ completeConfigSave: vi.fn(async () => {}) }));
 
 vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ error: vi.fn(), warning: vi.fn(), success: vi.fn() }) }));
 vi.mock('@/app/composables/use-schema-runtime-context', () => ({ createSchemaRuntimeContext: () => ({}) }));
@@ -87,6 +90,7 @@ describe('configuration target boundaries', () => {
         schema: ref(missionSchema),
         onSaved: () => {},
         saveMission: capture,
+        queryMissionIcon: async () => '',
         queryMissionEditorData: async () => ({
           baseVersions: [],
           list: { mission: 'same' },
@@ -147,7 +151,7 @@ describe('configuration target boundaries', () => {
           await gate;
           const saved = { baseVersions: [], relPath: 'new.path', data: draft };
           files.value = [saved];
-          return saved;
+          return { entity: saved, receipt: savedWriteFixture() };
         },
       }),
     )!;

@@ -23,6 +23,11 @@ export function applyProjectSessionCacheInvalid(event: ProjectSessionInvalidated
   invalidateQueryCacheByProject(event.manifest.sessionId, event.invalidation);
 }
 
+export function applyCommittedWriteCacheInvalid(sessionId: string, result: WriteResult) {
+  invalidateResourceCacheByProject(sessionId, result.invalidation);
+  invalidateQueryCacheByProject(sessionId, result.invalidation);
+}
+
 export async function refreshProjectSessionAfterWrite(modRoot: string, result: WriteResult, expectedSessionId?: string | null) {
   const project = useProjectStore();
   const manifest = project.getManifest(modRoot);

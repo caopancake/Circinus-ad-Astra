@@ -27,6 +27,7 @@ export function useCsvTableViewModel() {
   let sourceOptionsRequestId = 0;
   let lastWidthTable = '';
   let disposed = false;
+  let refreshAfterSave = false;
   const target = computed(() =>
     project.activeSessionId && tables.activeModRoot
       ? {
@@ -135,7 +136,9 @@ export function useCsvTableViewModel() {
     if (event.sessionId !== project.activeSessionId) return;
     const tableWindowChanged = hasTableInvalidation(event, 'csv-table-window', tables.currentTab);
     if (tableWindowChanged) {
-      if (tables.saving || tables.hasTableDirtyChanges(tables.currentTab)) {
+      if (tables.saving) {
+        refreshAfterSave = true;
+      } else if (tables.hasTableDirtyChanges(tables.currentTab)) {
         tables.markTableExternalUpdate(tables.currentTab);
       } else {
         void reloadCurrentTableWindow();
@@ -146,6 +149,22 @@ export function useCsvTableViewModel() {
     if (!optionsChanged) return;
     void reloadVisibleSourceOptions();
   });
+  watch(
+    () => tables.saving,
+    (saving) => {
+      windowRequestId++;
+      loadedWindowKeys.value = new Set();
+      if (saving) {
+        refreshAfterSave = true;
+        return;
+      }
+      if (!disposed && refreshAfterSave) {
+        refreshAfterSave = false;
+        void loadTableWindow(0, 240);
+      }
+    },
+    { flush: 'sync' },
+  );
   const stopResourceInvalidation = subscribeResourceInvalidations((event) => {
     if (event.sessionId !== project.activeSessionId) return;
     if (!hasResourceInvalidation(event, loadedSourceResourceRefs())) return;
@@ -207,13 +226,17 @@ export function useCsvTableViewModel() {
     const sessionId = project.activeSessionId;
     if (!sessionId || count <= 0) return;
     const table = tables.currentTab;
+    const modRoot = tables.activeModRoot!;
+    const generation = tables.tableReadGeneration(modRoot, table);
+    const tableState = tables.getModTableState(modRoot);
+    const identity = targetKey.value;
     const searchText = tables.searchText;
     const faction = tables.currentFaction;
     const factionOptionValue = tables.currentFactionOptionValue;
     const requestId = windowRequestId;
     const alignedStart = Math.max(0, Math.floor(start / 80) * 80);
     const windowCount = Math.max(160, Math.ceil(count / 80) * 80);
-    const key = stableStringify([sessionId, table, searchText, factionOptionValue, alignedStart, windowCount]);
+    const key = stableStringify([sessionId, table, searchText, factionOptionValue, alignedStart, windowCount, generation]);
     if (loadedWindowKeys.value.has(key)) return;
     loadedWindowKeys.value.add(key);
     try {
@@ -223,6 +246,10 @@ export function useCsvTableViewModel() {
         return;
       }
       if (
+        disposed ||
+        identity !== targetKey.value ||
+        generation !== tables.tableReadGeneration(modRoot, table) ||
+        tableState !== tables.getModTableState(modRoot) ||
         requestId !== windowRequestId ||
         sessionId !== project.activeSessionId ||
         table !== tables.currentTab ||
@@ -235,7 +262,14 @@ export function useCsvTableViewModel() {
     } catch (error) {
       // Release the window key so a retry can re-query the failed window.
       loadedWindowKeys.value.delete(key);
-      if (requestId !== windowRequestId || sessionId !== project.activeSessionId) return;
+      if (
+        disposed ||
+        identity !== targetKey.value ||
+        generation !== tables.tableReadGeneration(modRoot, table) ||
+        requestId !== windowRequestId ||
+        sessionId !== project.activeSessionId
+      )
+        return;
       feedback.error(error, '加载表格数据失败');
     }
   }
@@ -264,10 +298,10 @@ export function useCsvTableViewModel() {
           return [source, options] as const;
         }),
       );
-      if (requestId !== sourceOptionsRequestId || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
+      if (disposed || requestId !== sourceOptionsRequestId || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
       loadedSourceOptions.value = new Map(entries);
     } catch (error) {
-      if (requestId !== sourceOptionsRequestId || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
+      if (disposed || requestId !== sourceOptionsRequestId || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
       feedback.error(error, '加载来源选项失败');
     }
   }

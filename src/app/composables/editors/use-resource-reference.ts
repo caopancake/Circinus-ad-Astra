@@ -5,13 +5,19 @@ import { pickImageFileDialog } from '@/shared/runtime/dialog.runtime';
 export function useResourceReference() {
   const feedback = useAppFeedback();
 
-  async function pickModImageReference(options: { sessionId: string; modRoot: string; title?: string }): Promise<string | null> {
+  async function pickModImageReference(options: {
+    sessionId: string;
+    modRoot: string;
+    accepts: () => boolean;
+    title?: string;
+  }): Promise<string | null> {
     const selected = await pickImageFileDialog({ defaultPath: options.modRoot, title: options.title ?? '选择贴图文件' });
-    if (!selected) return null;
+    if (!selected || !options.accepts()) return null;
     try {
-      return await resolveModImageReference(options.sessionId, options.modRoot, selected);
+      const relative = await resolveModImageReference(options.sessionId, options.modRoot, selected);
+      return options.accepts() ? relative : null;
     } catch (error) {
-      feedback.error(error);
+      if (options.accepts()) feedback.error(error);
       return null;
     }
   }

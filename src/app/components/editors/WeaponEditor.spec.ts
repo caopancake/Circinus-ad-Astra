@@ -46,7 +46,7 @@ function mountEditor(weapon: RowData) {
       weapon,
       spriteData: {},
       projectileOptions: [{ label: 'proj1', value: 'proj1' }],
-      draftRevision: 0,
+      editContext: null,
       dirty: false,
       canSave: false,
       saving: false,

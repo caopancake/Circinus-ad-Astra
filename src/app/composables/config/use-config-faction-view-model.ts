@@ -140,21 +140,22 @@ export function useConfigFactionViewModel() {
         feedback,
       );
     } finally {
+      factionsRequestId++;
       savingSessions.delete(saveSessionId);
     }
     if (!saved) return null;
     feedback.success(`势力 "${nextId}" 已保存`);
     if (disposed || project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId)
-      return { id: nextId, baseVersions: saved.baseVersions };
+      return { id: nextId, data: saved.entity.entityData!, receipt: saved.receipt, baseVersions: saved.entity.baseVersions };
     const nextFactions = { ...factions.value };
     delete nextFactions[previousId];
-    nextFactions[nextId] = draft.file;
+    nextFactions[nextId] = saved.entity.entityData!.file as RowData;
     factions.value = nextFactions;
     const nextVersions = { ...factionVersions.value };
     delete nextVersions[previousId];
-    nextVersions[nextId] = saved.baseVersions;
+    nextVersions[nextId] = saved.entity.baseVersions;
     factionVersions.value = nextVersions;
-    return { id: nextId, baseVersions: saved.baseVersions };
+    return { id: nextId, data: saved.entity.entityData!, receipt: saved.receipt, baseVersions: saved.entity.baseVersions };
   }
 
   async function deleteFaction(deleteSessionId: string, deleteModRoot: string, id: string, deleteFile: boolean): Promise<boolean> {
@@ -185,8 +186,8 @@ export function useConfigFactionViewModel() {
     stopResourceInvalidation();
   });
 
-  async function queryPreviewImages(targetSessionId: string, factionId: string) {
-    return queryFactionPreviewImages(targetSessionId, factionId);
+  async function queryPreviewImages(targetSessionId: string, factionId: string, draft: RowData) {
+    return queryFactionPreviewImages(targetSessionId, factionId, draft);
   }
 
   return {
