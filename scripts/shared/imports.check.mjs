@@ -101,8 +101,8 @@ test('missing internal modules produce a source-positioned failure', () => {
 
 test('reexports and imported aliases retain the protected capability origin', () => {
   const files = architectureFixtures({
-    'src/services/write.service.ts': 'export function writeCsvPatch() {}',
-    'src/shared/bridge.ts': "export { writeCsvPatch as submit } from '@/services/write.service';",
+    'src/services/csv-table.service.ts': 'export function saveCsvPatch() {}',
+    'src/shared/bridge.ts': "export { saveCsvPatch as submit } from '@/services/csv-table.service';",
     'src/shared/second.ts': "import { submit } from './bridge'; export const hidden = submit;",
     'src/app/sample.ts': "import { hidden } from '@/shared/second';",
   });
@@ -110,15 +110,15 @@ test('reexports and imported aliases retain the protected capability origin', ()
   const edge = fixtureFile(files, (file) => file.rel === 'src/app/sample.ts').dependencies[0];
   assert.deepEqual(
     dependencyOrigins(edge, nodes, (rel, name) => Boolean(capabilityFor(rel, name))),
-    [{ rel: 'src/services/write.service.ts', name: 'writeCsvPatch' }],
+    [{ rel: 'src/services/csv-table.service.ts', name: 'saveCsvPatch' }],
   );
 });
 
 test('namespace, export-star, export namespace and dynamic imports expand runtime capabilities', () => {
   for (const source of ["import * as write from '@/shared/bridge';", "const write = import('@/shared/bridge');"]) {
     const files = architectureFixtures({
-      'src/services/write.service.ts': 'export function writeCsvPatch() {} export interface Shape {}',
-      'src/shared/bridge.ts': "export * from '@/services/write.service';",
+      'src/services/csv-table.service.ts': 'export function saveCsvPatch() {} export interface Shape {}',
+      'src/shared/bridge.ts': "export * from '@/services/csv-table.service';",
       'src/app/sample.ts': source,
     });
     const nodes = new Map(files.map((file) => [file.rel, file]));
@@ -126,12 +126,12 @@ test('namespace, export-star, export namespace and dynamic imports expand runtim
       dependencyOrigins(fixtureFile(files, (file) => file.rel === 'src/app/sample.ts').dependencies[0], nodes, (rel, name) =>
         Boolean(capabilityFor(rel, name)),
       ),
-      [{ rel: 'src/services/write.service.ts', name: 'writeCsvPatch' }],
+      [{ rel: 'src/services/csv-table.service.ts', name: 'saveCsvPatch' }],
     );
   }
   const files = architectureFixtures({
-    'src/services/write.service.ts': 'export function writeCsvPatch() {}',
-    'src/shared/bridge.ts': "export * as write from '@/services/write.service';",
+    'src/services/csv-table.service.ts': 'export function saveCsvPatch() {}',
+    'src/shared/bridge.ts': "export * as write from '@/services/csv-table.service';",
     'src/app/sample.ts': "import { write } from '@/shared/bridge';",
   });
   const nodes = new Map(files.map((file) => [file.rel, file]));
@@ -139,15 +139,15 @@ test('namespace, export-star, export namespace and dynamic imports expand runtim
     dependencyOrigins(fixtureFile(files, (file) => file.rel === 'src/app/sample.ts').dependencies[0], nodes, (rel, name) =>
       Boolean(capabilityFor(rel, name)),
     )[0].name,
-    'writeCsvPatch',
+    'saveCsvPatch',
   );
 });
 
 test('type-only export-star has no runtime capability origin and cyclic barrels terminate', () => {
   const files = architectureFixtures({
-    'src/shared/first.ts': "export * from './second'; export type * from '@/services/write.service';",
+    'src/shared/first.ts': "export * from './second'; export type * from '@/services/csv-table.service';",
     'src/shared/second.ts': "export * from './first'; export const plain = 1;",
-    'src/services/write.service.ts': 'export interface Shape {}',
+    'src/services/csv-table.service.ts': 'export interface Shape {}',
     'src/app/sample.ts': "import * as first from '@/shared/first';",
   });
   const nodes = new Map(files.map((file) => [file.rel, file]));
@@ -161,8 +161,8 @@ test('type-only export-star has no runtime capability origin and cyclic barrels 
 
 test('classification expresses flat domain and actual responsibility suffixes consistently', () => {
   assert.equal(classifyFrontendPath('src/domain/edit-session.ts').domain, 'edit-session');
-  assert.equal(classifyFrontendPath('src/services/write.service.ts').domain, 'write');
-  assert.equal(classifyFrontendPath('src/shared/api/write-api.ts').domain, 'write');
+  assert.equal(classifyFrontendPath('src/services/csv-table.service.ts').domain, 'csv-table');
+  assert.equal(classifyFrontendPath('src/shared/api/files-api.ts').domain, 'files');
   assert.equal(classifyFrontendPath('src/orchestrators/table-save.orchestrator.ts').domain, 'table-save');
 });
 
@@ -197,15 +197,15 @@ test('JavaScript modules, side-effect imports and direct reexports share the sou
 
 test('explicit exports own their name when a star export offers the same name', () => {
   const files = architectureFixtures({
-    'src/services/write.service.ts': 'export function writeCsvPatch() {}',
-    'src/shared/bridge.ts': "export * from '@/services/write.service'; export function writeCsvPatch() {}",
+    'src/services/csv-table.service.ts': 'export function saveCsvPatch() {}',
+    'src/shared/bridge.ts': "export * from '@/services/csv-table.service'; export function saveCsvPatch() {}",
     'src/app/sample.ts': "import * as module from '@/shared/bridge';",
   });
   const nodes = new Map(files.map((file) => [file.rel, file]));
   const edge = fixtureFile(files, (file) => file.rel === 'src/app/sample.ts').dependencies[0];
   assert.deepEqual(
     dependencyOrigins(edge, nodes, (rel, name) => Boolean(capabilityFor(rel, name))),
-    [{ rel: 'src/shared/bridge.ts', name: 'writeCsvPatch' }],
+    [{ rel: 'src/shared/bridge.ts', name: 'saveCsvPatch' }],
   );
 });
 

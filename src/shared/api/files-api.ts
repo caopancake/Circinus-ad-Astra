@@ -1,12 +1,8 @@
 import { invokeCommand } from '@/shared/runtime/command.runtime';
-import type { EditableFileData, EditorSpecKind, ProjectSessionId, RowData } from '@/shared/types';
+import type { EditableFileData, ProjectSessionId } from '@/shared/types';
 
 export function loadEditableFile(sessionId: ProjectSessionId | null, modRoot: string, path: string): Promise<EditableFileData> {
   return invokeCommand('load_editable_file', { payload: { sessionId, modRoot, path } });
-}
-
-export function loadImportedEditorSpecFile(kind: EditorSpecKind, path: string): Promise<RowData> {
-  return invokeCommand('load_imported_editor_spec_file', { payload: { kind, path } });
 }
 
 export function queryTextIdentityIntent(

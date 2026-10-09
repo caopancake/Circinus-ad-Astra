@@ -58,15 +58,17 @@ const cases = [
   ['window-retarget', 'src/orchestrators/entity-identity.orchestrator.ts', 'src/services/window.service.ts', 'retargetNativeWindow'],
   ['entity-target-query', 'src/services/editor.service.ts', 'src/services/entity-query.service.ts', 'querySessionEntityEditTarget'],
   ['entity-intent-query', 'src/services/editor.service.ts', 'src/services/entity-query.service.ts', 'querySessionEntityIdentityIntent'],
-  ['config-write', 'src/orchestrators/config-save.orchestrator.ts', 'src/services/write.service.ts', 'writeModFiles'],
-  ['table-write', 'src/orchestrators/table-save.orchestrator.ts', 'src/services/write.service.ts', 'writeCsvPatch'],
-  ['spec-write', 'src/services/editor.service.ts', 'src/services/write.service.ts', 'writeEditorSpec'],
-  ['text-write', 'src/services/files.service.ts', 'src/services/write.service.ts', 'writeTextFile'],
-  ['text-transcode', 'src/services/files.service.ts', 'src/services/write.service.ts', 'writeTranscodedFile'],
-  ['history-replay', 'src/orchestrators/file-history-replay.orchestrator.ts', 'src/services/write.service.ts', 'replayFileChangeSet'],
-  ['write-wire', 'src/services/write.service.ts', 'src/shared/api/write-api.ts', 'saveCsvPatch'],
-  ['history-read-wire', 'src/services/file-history.service.ts', 'src/shared/api/write-api.ts', 'queryFileHistory'],
-  ['history-clear-wire', 'src/services/file-history.service.ts', 'src/shared/api/write-api.ts', 'clearFileHistory'],
+  ['config-write', 'src/orchestrators/config-save.orchestrator.ts', 'src/services/config-entity.service.ts', 'saveModInfo'],
+  ['table-write', 'src/orchestrators/table-save.orchestrator.ts', 'src/services/csv-table.service.ts', 'saveCsvPatch'],
+  ['spec-write', 'src/services/editor.service.ts', 'src/services/editor.service.ts', 'saveEditorSpec'],
+  ['text-write', 'src/app/composables/use-file-editor-view-model.ts', 'src/services/files.service.ts', 'writeEditableFileText'],
+  ['text-transcode', 'src/app/app-feedback.ts', 'src/services/files.service.ts', 'transcodeFileToUtf8'],
+  [
+    'history-replay',
+    'src/orchestrators/file-history-replay.orchestrator.ts',
+    'src/services/file-history.service.ts',
+    'replayFileChangeSet',
+  ],
   ['query-cache-load', 'src/services/entity-query.service.ts', 'src/services/query-cache.service.ts', 'queryCached'],
   ['live-query-load', 'src/services/entity-query.service.ts', 'src/services/query-cache.service.ts', 'queryLive'],
   ['source-query', 'src/app/composables/use-sample.ts', 'src/services/source-options.service.ts', 'querySourceOptionCatalog'],
@@ -174,8 +176,9 @@ test('the close boundary owns session cleanup and the refresh boundary owns proj
 test('explicit and extensionless imports reject the same capability once', () => {
   for (const suffix of ['', '.ts']) {
     const files = architectureFixtures({
-      'src/orchestrators/sample.orchestrator.ts': `import { writeCsvPatch, writeEditorSpec } from '@/services/write.service${suffix}';`,
-      'src/services/write.service.ts': 'export function writeCsvPatch() {} export function writeEditorSpec() {}',
+      'src/windows/audit.window.ts': `import { saveCsvPatch } from '@/services/csv-table.service${suffix}'; import { saveEditorSpec } from '@/services/editor.service${suffix}';`,
+      'src/services/csv-table.service.ts': 'export function saveCsvPatch() {}',
+      'src/services/editor.service.ts': 'export function saveEditorSpec() {}',
     });
     const failures = writeBoundaryRule.check(files);
     assert.equal(failures.length, 2);
@@ -193,8 +196,8 @@ test('protected namespace, export-star and dynamic module consumption retain cap
     const files = architectureFixtures({
       'src/app/composables/use-sample.ts': source,
       'src/shared/bridge.ts':
-        "export * from '@/services/write.service'; export { writeCsvPatch as patch } from '@/services/write.service';",
-      'src/services/write.service.ts': 'export function writeCsvPatch() {}',
+        "export * from '@/services/csv-table.service'; export { saveCsvPatch as patch } from '@/services/csv-table.service';",
+      'src/services/csv-table.service.ts': 'export function saveCsvPatch() {}',
     });
     assert.equal(writeBoundaryRule.check(files).length, 1);
   }
@@ -203,18 +206,16 @@ test('protected namespace, export-star and dynamic module consumption retain cap
 test('an imported alias in a forwarding module retains its original symbol permission', () => {
   const files = architectureFixtures({
     'src/app/composables/use-sample.ts': "import { submit } from '@/shared/bridge';",
-    'src/shared/bridge.ts': "import { writeCsvPatch as patch } from '@/services/write.service'; export const submit = patch;",
-    'src/services/write.service.ts': 'export function writeCsvPatch() {}',
+    'src/shared/bridge.ts': "import { saveCsvPatch as patch } from '@/services/csv-table.service'; export const submit = patch;",
+    'src/services/csv-table.service.ts': 'export function saveCsvPatch() {}',
   });
-  assert.match(writeBoundaryRule.check(files)[0], /table-write \(writeCsvPatch\)/);
+  assert.match(writeBoundaryRule.check(files)[0], /table-write \(saveCsvPatch\)/);
 });
 
 test('file history public aliases form their formal capability boundary', () => {
   const files = architectureFixtures({
     'src/app/composables/use-sample.ts': "import { loadFileHistory } from '@/services/file-history.service';",
-    'src/services/file-history.service.ts':
-      "import { queryFileHistory } from '@/shared/api/write-api'; export const loadFileHistory = queryFileHistory;",
-    'src/shared/api/write-api.ts': 'export function queryFileHistory() {}',
+    'src/services/file-history.service.ts': 'export function loadFileHistory() {}',
   });
   assert.deepEqual(writeBoundaryRule.check(files), []);
 });
@@ -222,8 +223,8 @@ test('file history public aliases form their formal capability boundary', () => 
 test('one invalid component dependency is reported once across the dependency rules', () => {
   const files = architectureFixtures({
     'src/app/components/editors/Audit.vue':
-      '<script setup lang="ts">import { writeCsvPatch } from "@/services/write.service";</script><template><div /></template>',
-    'src/services/write.service.ts': 'export function writeCsvPatch() {}',
+      '<script setup lang="ts">import { saveCsvPatch } from "@/services/csv-table.service";</script><template><div /></template>',
+    'src/services/csv-table.service.ts': 'export function saveCsvPatch() {}',
   });
   const failures = rules
     .flatMap((rule) => rule.check(files))
@@ -267,7 +268,7 @@ test('every actual repository dependency resolves and all registered rules execu
 });
 
 test('runtime exports at protected providers declare their capability contract', () => {
-  const files = architectureFixtures({ 'src/services/write.service.ts': 'export function writeExtra() {}' });
+  const files = architectureFixtures({ 'src/services/csv-table.service.ts': 'export function writeExtra() {}' });
   assert.match(writeBoundaryRule.check(files)[0], /writeExtra: public runtime exports must declare/);
 });
 

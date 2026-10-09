@@ -7,8 +7,7 @@ import {
 } from '@/services/entity-query.service';
 import { AppError, withCause } from '@/shared/lib/errors';
 import { queryResourceDataUrls } from '@/services/resource-cache.service';
-import { writeEditorSpec } from '@/services/write.service';
-import { loadImportedEditorSpecFile } from '@/services/files.service';
+import { invokeCommand } from '@/shared/runtime/command.runtime';
 import { WEAPON_SPRITE_FIELDS } from '@/domain/editors/lib/weapon-sprite-fields';
 import { createShipSpec, createProjectileSpec, createSystemSpec, createWeaponSpec } from '@/domain/editors/spec-construction';
 import { inferWeaponSpecClass } from '@/domain/tables/associated-spec-creation';
@@ -265,11 +264,31 @@ export async function saveEditorSpecByKind(
 ): Promise<WriteResult> {
   ensureSpecContext(modRoot, target.id);
   try {
-    const result = await writeEditorSpec(sessionId, modRoot, target, data, jsonWrite, baseVersions);
+    const result = await saveEditorSpec(sessionId, modRoot, target, data, jsonWrite, baseVersions);
     return { ...result, refreshedEntity: requireRowData(result.refreshedEntity, '规格保存返回内容无效') };
   } catch (error) {
     throw withCause(`保存 ${target.id} spec 失败`, error, `save-${target.kind}-spec`);
   }
+}
+
+export function saveEditorSpec(
+  sessionId: string,
+  modRoot: string,
+  target: EntityEditTarget,
+  data: RowData,
+  jsonWrite?: import('@/shared/types').JsonWriteOptions,
+  baseVersions: import('@/shared/types').FileVersion[] = [],
+): Promise<WriteResult> {
+  return invokeCommand('save_editor_spec', {
+    payload: {
+      baseVersions,
+      sessionId,
+      modRoot,
+      target,
+      data,
+      ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(data) } : {}),
+    },
+  });
 }
 
 export function queryEditorIdentityIntent(sessionId: string, source: EntityEditTarget, content: RowData, signal?: AbortSignal) {
@@ -281,7 +300,7 @@ export function queryEditorEditInfo(sessionId: string, kind: EntityEditTarget['k
   return querySessionEntityEditTarget(sessionId, kind, id, signal);
 }
 export async function loadImportedSpecFile(kind: EditorSpecKind, path: string): Promise<RowData> {
-  return loadImportedEditorSpecFile(kind, path);
+  return invokeCommand('load_imported_editor_spec_file', { payload: { kind, path } });
 }
 
 async function queryWeaponSprites(

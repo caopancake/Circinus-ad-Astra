@@ -1,14 +1,13 @@
 # Overview
 
-Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，目标是把 Mod 的表格、spec、配置实体与文件编辑放进同一个受控产品里。
+Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，统一管理 Mod 表格、规格、配置实体和文件编辑，并提供受控的保存、历史、资源和窗口能力。
 
 ## 项目目标
 
-- 统一管理已加载 Mod 的 CSV 表格、`.ship/.wpn/.proj/.system` 规格与配置实体编辑
-- 以 ProjectSession 驱动实体 query、受权写入与写后精确失效
-- 维护文件级与表格级两套草稿历史，支持撤销、重做与确认回放
-- 提供舰船/武器画布编辑器、弹体编辑窗口与只读发射预览
-- 统一资源引用、贴图批量解析与原版只读回退
+- 管理已加载 Mod 的 CSV、`.ship`、`.wpn`、`.proj`、`.system` 规格和配置实体。
+- 以项目会话隔离实体读取、授权写入、缓存、草稿、历史和窗口状态。
+- 提供字段编辑、舰船与武器画布、弹体编辑、只读发射预览和资源引用。
+- 保存、回放、外部更新和窗口交接遵循统一的目标、版本和生命周期原则。
 
 ## 技术栈
 
@@ -20,48 +19,58 @@ Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，目标�
 - Canvas 2D
 - Vite
 
-## 路径与职责速查
+## 宏观层级
 
 ### 前端
 
-- `src/app/`：承载窗口根、页面、组件、检查器与 ViewModel/composable；应用级装配在这里收口，不承载领域规则与后端能力。
-- `src/domain/`：承载纯规则与转换（编辑会话原语、schema 加载、主题令牌、表格与画布规则）；严禁依赖 app、services 或 stores。
-- `src/services/`：包装单一后端能力；横向依赖必须满足声明的能力依赖矩阵，公开操作按导入符号及正式 owner 授权。
-- `src/orchestrators/`：编排跨模块用户动作（保存、打开、历史、刷新）；依赖图必须单向无环。
-- `src/stores/`：保存内存运行态；严禁 IO、确认框或跨模块编排。
-- `src/windows/`：管理窗口身份、生命周期与事件。
-- `src/shared/`：承载 runtime、类型、纯工具与查询/持久化 wire 能力；command.runtime 是唯一原始 invoke 边界。
-- `schemas/`：保存配置字段与 CSV 列 schema 资产，经唯一加载入口消费。
-- `src/styles/`：承载全局主题、应用框架和业务样式。
+- `src/app/`：窗口根、页面、组件、检查器与 ViewModel/composable；应用装配在这里收口，不承载领域规则与后端能力。
+- `src/domain/`：编辑会话、表格、schema、配置、设置、workspace 和编辑器的纯规则与转换；严禁依赖 app、services、stores 或 windows。
+- `src/services/`：单一后端能力包装、参数装配和结果交接；跨进程能力不得由组件、store 或 domain 直接调用。
+- `src/orchestrators/`：保存、打开、导航、历史、刷新、生命周期和身份交接；拥有确认、等待、恢复和失效顺序。
+- `src/stores/`：内存运行态、manifest、表格、历史、设置、Core 和 workspace 状态；严禁拥有 IO、确认框或跨模块编排。
+- `src/windows/`：窗口 identity、URL、原生实例、事件过滤、关闭请求和销毁生命周期。
+- `src/shared/`：`command.runtime`、wire 类型、错误、读取票据、缓存、事件和纯工具；原始 `invoke` 只允许由 `command.runtime` 消费。
+- `schemas/`：配置字段、CSV 列和规格默认模板资产，经正式加载 owner 消费。
+- `src/styles/`：全局主题、应用框架和业务样式。
 
 ### Rust
 
-- `src-tauri/src/commands/`：处理 wire 参数、错误转换和 service 调用。
-- `src-tauri/src/services/`：提供目录打开、ProjectSession、配置实体、文件变更、文件编辑器、新建 Mod、schema 字段扫描、系统打开、应用配置、应用路径、应用设置、应用日志、workspace 持久化与资源能力。
-- `src-tauri/src/services/project/`：按 root、session、query、write、resources、cache 与 model 分工；query 只读，write 返回 changeset 与结构化 invalidation。
-- `src-tauri/src/domain/`：保存纯业务规则。
-- `src-tauri/src/io/`：保存路径和文件边界。
-- `src-tauri/src/parsers/`：保存格式解析与渲染。
-- `src-tauri/src/models/`：保存 wire 和内部模型。
+- `src-tauri/src/commands/`：处理 wire 参数、状态访问、错误转换和 service 调用。
+- `src-tauri/src/services/`：提供目录打开、workspace、ProjectSession、配置、文件、设置、日志、Core、资源和窗口能力。
+- `src-tauri/src/services/project/`：按 root、session、query、write、resources、cache 和 model 分工；query 只读，write 返回实际 changeset、版本和 invalidation。
+- `src-tauri/src/services/write_transactions/`：协调 FIFO 根租约、目标版本、文件历史、会话投影和提交恢复。
+- `src-tauri/src/domain/`：保存实体定义、编辑目标、资源引用、Mod 创建规则和纯业务投影。
+- `src-tauri/src/io/`：保存 canonical 路径边界、文件读写、目录快照、改名和 changeset 应用。
+- `src-tauri/src/parsers/`：保存 CSV-like、JSON-like、spec 和文本解析、渲染及诊断位置。
+- `src-tauri/src/models/`：保存 wire 模型、内部模型、归一化映射和结构化错误数据。
 
-### 跨层链路
+## 跨层链路
 
-- 实体读取：`组件 -> ViewModel/composable -> 读取能力 -> command.runtime -> Rust command -> project query -> parser/IO/cache`，返回实体数据与资源引用，写入前端按 session 隔离的查询缓存（manifest 由目录打开链路返回）。
-- 保存：`组件动作 -> orchestrator -> 写入能力 -> command.runtime -> Rust FIFO 事务 -> changeset、File History 与会话投影 -> receipt 基线接纳 -> 历史、manifest 与缓存接纳 -> 统一提交事件`；待同步结果经原提交恢复入口继续接纳。
-- 目录打开：`组件 -> directory-opening orchestrator -> 后端识别（game-root / mod-in-game / external-mod / unknown 类型化 outcome，边界失败走错误通道）-> 游戏概览或 ProjectSession -> workspace/project 运行态`。
-- 撤销重做：`快捷键命令 -> 主窗口历史分派 -> CSV 草稿历史优先 -> 文件历史回放（强制用户确认，按已加载会话逐一刷新）-> 编辑器同步`。
-- 资源读取：`后端 ResourceRef -> Mod/Core 解析（Core 兜底）-> 批量 data URL -> 前端 query/resource/media 三级缓存与后端 media cache -> 组件`；无上传入口，路径字段只能选择当前 Mod 目录内的文件。
-- 窗口同步：`判别窗口 identity -> window service/wire -> Rust 身份与原生实例登记 -> 结构化提交/身份事件 -> 当前目标快照与未保存交接`；草稿快照超 8000 字符丢弃、URL 超 12000 字符报错。
+- 目录与会话：目录选择 → `directory-opening orchestrator` → `detect_directory` → canonical root → `open_project_session` → `ProjectSession` → workspace runtime
+- 查询与编辑目标：组件 → `ViewModel/composable` → query service → `command.runtime` → Rust `ProjectSession` query → parser/IO/cache → `EntityData`、`EntityEditTarget` 与 `ResourceRef` → 前端 query cache
+- 保存事务：`EditSession` → save orchestrator → 目标与版本准备 → write service → `command.runtime` → Rust FIFO transaction → changeset、`File History` 与 `ProjectSession projection` → `WriteResult`
+- 写后接纳：`WriteResult` → committed-write synchronizer → `synchronize_committed_write` → projection revision → resource/query invalidation → manifest、列表、历史和窗口接纳
+- 历史回放：main history dispatch → CSV draft history 优先 → `File History` replay plan → 当前路径和版本复核 → changeset replay → `ProjectSession refresh`
+- 资源读取：`ResourceRef` → resource-reference service → Rust root authorization → Mod/Core resource query → resource/media cache → 组件展示
+- Core 生命周期：`WindowShell` → Core orchestrator → fields/graphics command → Rust Core index → root generation → Core store
+- 窗口生命周期：业务 identity → window service → Rust native registry → 原生窗口与目标占用 → identity event → URL、标题、目标和 dirty 接纳 → close guard 与释放
+- workspace 生命周期：workspace action → pending/save wait → 子窗口关闭 → cache invalidation → `close_project_session` → tables/project/editor/history/store cleanup → restore 或总览
 
-## 边界速查
+## 项目内关键链路
 
-- 模块级定义、边界、链路与规范写在 `.zcode/modules/` 并经 module-map 索引；overview 只维护项目级边界与整体规则。
-- 前端拥有交互、草稿和运行时投影；Rust 拥有磁盘路径、格式解析、FIFO 写入事务、文件历史、版本冲突与 changeset 回放权威。
-- session 由 `sessionId + modRoot` 身份约束；按 Mod 归属的缓存、草稿、历史与窗口状态按 `modRoot` 隔离。
-- 编辑目标必须由后端加载记录提供实际来源、写入目标与关联记录；写入、版本及回放必须共同消费该定义。
-- 规格身份修改必须经同一事务交接业务 ID、所属 CSV 或索引与实际文件名；窗口原生 label 必须保持稳定。
-- 当前 Mod 数据优先于原版只读数据；资源 fallback、引用解析与 data URL hydration 经后端 query 与批量资源缓存。
-- workspace、settings、日志和派生索引只写工具私有目录；Mod 内容与工具私有状态由独立 owner 管理。
-- 保存、删除、导入和 undo/redo 必须经所属模块的 changeset 链路；字段编辑服从全局 edit mode。
-- 架构边界由 `scripts/architecture` 规则强制（`node scripts/check-architecture.mjs`）；可静态证明的边界不允许只写入文档。
-- 依赖规则必须消费同一份实际节点、类型与运行时边及符号来源；层级、模块与能力事实必须具有唯一检查 owner。
+- `sessionId + modRoot` 必须贯穿 ProjectSession、query、write、cache、history、window 和事件；任何调用不得使用活动 Mod、裸路径或字符串拼接补齐身份。
+- 实际编辑目标只能由 `query_entity_edit_target`、`query_text_identity_intent` 或后端恢复目标提供；前端不得扫描磁盘或构造正式目标。
+- 所有写入必须经过 `write_transactions::begin`、版本复核和统一 `WriteResult`；组件、store、query 和资源能力不得直接写文件。
+- `WriteResult` 接纳顺序固定为实际基线、File History、ProjectSession projection、resource/query cache、列表和窗口事件；pending 只能通过 `synchronize_committed_write` 恢复。
+- CSV draft history 与 File History 是不同 owner；当前表格 operation 必须优先，文件回放不得绕过 CSV 草稿历史。
+- replay 必须重新校验当前路径、父链、版本、session 和目标；历史记录只能提供候选 changeset，不提供当前授权。
+- `ReadTicket` 必须同时拥有读取身份、取消信号、Promise 和接纳状态；失效或关闭只结束所属等待，迟到结果不得写入新生命周期。
+- `ResourceRef` 必须由后端授权并绑定 session、source 和规范化相对路径；Core fallback 只读，不能把 Core 内容写入 Mod。
+- resource cache、media cache、visible registry 和超额 data URL 必须共同服从引用生命周期；可见媒体必须增量释放，菜单与已选值资源不得互相覆盖。
+- Core fields 与 graphics 必须由同一 WindowShell 生命周期分别加载；root、generation、A-B-A、根清空和窗口销毁是唯一接纳条件。
+- 窗口 identity 必须包含完整 session、`modRoot`、kind 和业务目标；原生 label、目标占用、URL、标题、事件过滤和 ViewModel 目标必须共同交接。
+- dirty 或 saving 窗口必须先拦截关闭；保存、pending 恢复和最新 dirty 判定完成前不得销毁窗口、移除 Mod 或关闭 session。
+- workspace、settings、日志和派生索引只允许写工具私有目录；Mod、Core 和用户外部目录必须由所属 path owner 授权。
+- 子窗口只允许消费主窗口 settings snapshot；主窗口拥有 settings 持久化，子窗口不得自行读盘、补默认值或广播镜像。
+- 结构化错误必须保留稳定码、原始诊断、路径、行列、action、command 和 payload；用户文案、日志诊断和恢复授权不得互相推导。
+- 所有跨层公开入口、command owner、能力依赖和生产文件主归属必须由静态检查与模块索引登记；新增绕过入口必须被规则拒绝。

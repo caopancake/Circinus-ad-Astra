@@ -17,7 +17,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/orchestrators/file-history-write.orchestrator', () => ({ completeSavedWrite: mocks.completeSavedWrite }));
-vi.mock('@/services/config-entity.service', () => ({
+vi.mock('@/orchestrators/entity-identity.orchestrator', () => ({ reserveFileIdentityIntent: vi.fn(async () => {}) }));
+vi.mock('@/services/window.service', () => ({ releaseNativeWindowTargets: vi.fn(async () => {}) }));
+
+vi.mock('@/services/config-entity.service', async () => ({
+  ...(await vi.importActual('@/services/config-entity.service')),
   captureConfigIdentityIntent: async (_session: string, kind: import('@/shared/types').EntityKind, sourceId: string, nextId: string) => {
     const source = entityTargetFixture(kind, sourceId);
     const next = entityTargetFixture(kind, nextId);
@@ -26,21 +30,16 @@ vi.mock('@/services/config-entity.service', () => ({
       intent: { source, nextId, nextWrite: next.write, destinationVersion: { path: next.write.path, fingerprint: null } },
     };
   },
-}));
-vi.mock('@/orchestrators/entity-identity.orchestrator', () => ({ reserveFileIdentityIntent: vi.fn(async () => {}) }));
-vi.mock('@/services/window.service', () => ({ releaseNativeWindowTargets: vi.fn(async () => {}) }));
-
-vi.mock('@/services/write.service', () => ({
-  writeModInfo: mocks.writeModInfo,
-  writeIndexedConfigEntity: mocks.writeIndexedConfigEntity,
-  writeCreateIndexedConfigEntity: mocks.writeCreateIndexedConfigEntity,
-  writeDeleteIndexedConfigEntity: mocks.writeDeleteIndexedConfigEntity,
-  writeVariantEntity: mocks.writeVariantEntity,
-  writeCreateVariantEntity: mocks.writeCreateVariantEntity,
-  writeDeleteVariantEntity: mocks.writeDeleteVariantEntity,
-  writeSkinEntity: mocks.writeSkinEntity,
-  writeCreateSkinEntity: mocks.writeCreateSkinEntity,
-  writeDeleteSkinEntity: mocks.writeDeleteSkinEntity,
+  saveModInfo: mocks.writeModInfo,
+  saveIndexedConfigEntity: mocks.writeIndexedConfigEntity,
+  createIndexedConfigEntity: mocks.writeCreateIndexedConfigEntity,
+  deleteIndexedConfigEntity: mocks.writeDeleteIndexedConfigEntity,
+  saveVariantEntity: mocks.writeVariantEntity,
+  createVariantEntity: mocks.writeCreateVariantEntity,
+  deleteVariantEntity: mocks.writeDeleteVariantEntity,
+  saveSkinEntity: mocks.writeSkinEntity,
+  createSkinEntity: mocks.writeCreateSkinEntity,
+  deleteSkinEntity: mocks.writeDeleteSkinEntity,
 }));
 
 import {

@@ -15,6 +15,83 @@ import {
 } from '@/domain/config/config-records';
 import type { ConfigMissionEditorData, ProjectSessionId, RowData } from '@/shared/types';
 import { cloneQuerySnapshot } from '@/shared/lib/query-snapshot';
+import { invokeCommand } from '@/shared/runtime/command.runtime';
+import type {
+  DeleteIndexedConfigEntityWrite,
+  DeleteSkinEntityWrite,
+  DeleteVariantEntityWrite,
+  IndexedConfigEntityWrite,
+  JsonWriteOptions,
+  SkinEntityWrite,
+  VariantEntityWrite,
+  WriteResult,
+} from '@/shared/types';
+
+export function saveModInfo(
+  sessionId: string,
+  modRoot: string,
+  data: RowData,
+  jsonWrite: JsonWriteOptions,
+  baseVersions: import('@/shared/types').FileVersion[] = [],
+): Promise<WriteResult> {
+  return invokeCommand('save_mod_info', {
+    payload: { baseVersions, sessionId, modRoot, data, jsonWrite, orderedJson: JSON.stringify(data) },
+  });
+}
+
+export function saveIndexedConfigEntity(write: IndexedConfigEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
+  return invokeCommand('save_indexed_config_entity', {
+    payload: {
+      modRoot: write.modRoot,
+      baseVersions: write.baseVersions,
+      sessionId: write.sessionId,
+      kind: write.kind,
+      previousId: write.previousId,
+      nextId: write.nextId,
+      indexRow: write.indexRow,
+      entityData: write.entityData,
+      ...(jsonWrite
+        ? { jsonWrite, orderedJson: JSON.stringify(write.kind === 'faction' ? write.entityData.file : write.entityData.descriptor) }
+        : {}),
+    },
+  });
+}
+
+export function createIndexedConfigEntity(write: IndexedConfigEntityWrite): Promise<WriteResult> {
+  return invokeCommand('create_indexed_config_entity', { payload: { ...write } });
+}
+
+export function deleteIndexedConfigEntity(write: DeleteIndexedConfigEntityWrite): Promise<WriteResult> {
+  return invokeCommand('delete_indexed_config_entity', { payload: write });
+}
+
+export function saveVariantEntity(write: VariantEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
+  return invokeCommand('save_variant_entity', {
+    payload: { ...write, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(write.data) } : {}) },
+  });
+}
+
+export function createVariantEntity(write: VariantEntityWrite): Promise<WriteResult> {
+  return invokeCommand('create_variant_entity', { payload: write });
+}
+
+export function deleteVariantEntity(write: DeleteVariantEntityWrite): Promise<WriteResult> {
+  return invokeCommand('delete_variant_entity', { payload: write });
+}
+
+export function saveSkinEntity(write: SkinEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
+  return invokeCommand('save_skin_entity', {
+    payload: { ...write, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(write.data) } : {}) },
+  });
+}
+
+export function createSkinEntity(write: SkinEntityWrite): Promise<WriteResult> {
+  return invokeCommand('create_skin_entity', { payload: write });
+}
+
+export function deleteSkinEntity(write: DeleteSkinEntityWrite): Promise<WriteResult> {
+  return invokeCommand('delete_skin_entity', { payload: write });
+}
 
 export async function captureConfigIdentityIntent(
   sessionId: string,
@@ -30,8 +107,8 @@ export async function captureConfigIdentityIntent(
 /**
  * Read service for config entities: the only wrapper around config entity queries
  * (the app layer must not call querySession* directly). Record shaping is delegated
- * to domain/config/config-records; write paths belong to write.service and the
- * config-save orchestration, never to this service.
+ * to domain/config/config-records; write payloads belong to this capability and
+ * save orchestration owns confirmation, identity reservation and receipt acceptance.
  */
 export async function listConfigFactionRecords(sessionId: ProjectSessionId, signal?: AbortSignal) {
   const entities = await querySessionEntityList(sessionId, 'faction', signal);

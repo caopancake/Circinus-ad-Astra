@@ -15,8 +15,7 @@
 `src/orchestrators/table-save.orchestrator.spec.ts`：保存编排行为测试。
 `src/orchestrators/table-save.orchestrator.ts`：保存编排 owner，以 `saveTableChanges` 拥有明确 Mod/表的输入提交、快照捕获、关联选择、写入与 receipt 接纳。
 `src/orchestrators/entity-identity.orchestrator.ts`：跨窗口关联表准备、短暂表锁与写结果交接 owner。
-`src/services/write.service.ts`：写入能力包装，提交 patches、版本凭据与关联动作。
-`src/shared/api/write-api.ts`：CSV 保存 wire API。
+`src/services/csv-table.service.ts`：CSV 查询与保存能力包装，提交 patches、版本凭据与关联动作。
 
 ## 边界
 

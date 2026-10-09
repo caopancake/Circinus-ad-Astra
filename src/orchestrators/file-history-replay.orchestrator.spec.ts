@@ -8,8 +8,11 @@ const mocks = vi.hoisted(() => ({
   emitWindowEvent: vi.fn(async () => {}),
   loadFileHistory: vi.fn(),
 }));
-vi.mock('@/services/write.service', () => ({ replayFileChangeSet: mocks.replayFileChangeSet }));
-vi.mock('@/services/file-history.service', () => ({ loadFileHistory: mocks.loadFileHistory }));
+vi.mock('@/services/file-history.service', async () => ({
+  ...(await vi.importActual('@/services/file-history.service')),
+  replayFileChangeSet: mocks.replayFileChangeSet,
+  loadFileHistory: mocks.loadFileHistory,
+}));
 vi.mock('@/orchestrators/project-session-refresh.orchestrator', () => ({
   publishCommittedWrite: mocks.publishCommittedWrite,
   retryPendingWritesForMod: vi.fn(async () => {}),

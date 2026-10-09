@@ -1,7 +1,7 @@
 import type { AppFeedback, AssociatedSpecChange, CsvRowPatch, ModTableState, ProjectManifest, TableKey } from '@/shared/types';
 import { getAssociatedSpecCandidates } from '@/domain/tables/associated-spec-candidates';
 import { isCsvDeletedRow } from '@/domain/tables/csv-dirty';
-import { writeCsvPatch } from '@/services/write.service';
+import { saveCsvPatch } from '@/services/csv-table.service';
 import { useTablesStore } from '@/stores/tables.store';
 import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
 import { useProjectStore } from '@/stores/project.store';
@@ -127,7 +127,7 @@ async function saveTarget(target: CapturedTableSaveTarget, options: TableSaveOpt
   });
   if (reservations.length > 0) await reserveNativeWindowTargets(reservations);
   const result = await runConfirmedJsonWrite(options.feedback, (writeOptions) =>
-    writeCsvPatch(manifest.sessionId, modRoot, table, patches, writes, writeOptions, baseVersions),
+    saveCsvPatch(manifest.sessionId, modRoot, table, patches, writes, writeOptions, baseVersions),
   );
   if (!result) return { status: 'cancelled' };
   recordLogBestEffort({

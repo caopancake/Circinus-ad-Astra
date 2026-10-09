@@ -8,17 +8,18 @@ import { createPinia, setActivePinia } from 'pinia';
 const writeCsvPatch = vi.hoisted(() => vi.fn());
 const completeSavedWrite = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
-vi.mock('@/services/write.service', () => ({ writeCsvPatch }));
-vi.mock('@/services/window.service', () => ({
-  reserveNativeWindowTargets: vi.fn(async () => {}),
-  releaseNativeWindowTargets: vi.fn(async () => {}),
-}));
-vi.mock('@/services/csv-table.service', () => ({
+vi.mock('@/services/csv-table.service', async () => ({
+  ...(await vi.importActual('@/services/csv-table.service')),
+  saveCsvPatch: writeCsvPatch,
   captureAssociatedSpecTarget: vi.fn(async (_session: string, _table: string, change: AssociatedSpecChange) => {
     const id = change.action === 'rename' ? change.previousId : change.action === 'delete' ? change.id : change.create.id;
     const target = entityTargetFixture('ship', id);
     return { target, nextWrite: target.write, versions: [] };
   }),
+}));
+vi.mock('@/services/window.service', () => ({
+  reserveNativeWindowTargets: vi.fn(async () => {}),
+  releaseNativeWindowTargets: vi.fn(async () => {}),
 }));
 vi.mock('@/orchestrators/file-history-write.orchestrator', () => ({ completeSavedWrite }));
 

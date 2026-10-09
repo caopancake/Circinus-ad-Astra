@@ -2,10 +2,32 @@ import { querySessionEntityEditTarget, querySessionEntityIdentityIntent } from '
 import { invokeCommand } from '@/shared/runtime/command.runtime';
 import { queryCached } from '@/services/query-cache.service';
 import { queryResourceDataUrls } from '@/services/resource-cache.service';
-import type { AssociatedSpecChange, CsvFactionFilter, TableKey } from '@/shared/types';
+import type {
+  AssociatedSpecChange,
+  AssociatedSpecWrite,
+  CsvFactionFilter,
+  CsvRowPatch,
+  JsonWriteOptions,
+  TableKey,
+  WriteResult,
+} from '@/shared/types';
 import type { QueryValue } from '@/shared/types';
 import { associatedSpecKind } from '@/domain/tables/associated-specs';
 import { cloneQuerySnapshot } from '@/shared/lib/query-snapshot';
+
+export function saveCsvPatch(
+  sessionId: string,
+  modRoot: string,
+  table: TableKey,
+  patches: CsvRowPatch[],
+  associatedSpecs: AssociatedSpecWrite[],
+  jsonWrite?: JsonWriteOptions,
+  baseVersions: import('@/shared/types').FileVersion[] = [],
+): Promise<WriteResult> {
+  return invokeCommand('save_csv_patch', {
+    payload: { baseVersions, sessionId, modRoot, table, patches, associatedSpecs, ...(jsonWrite ? { jsonWrite } : {}) },
+  });
+}
 
 export async function captureAssociatedSpecTarget(sessionId: string, table: TableKey, change: AssociatedSpecChange) {
   const kind = associatedSpecKind(table)!;

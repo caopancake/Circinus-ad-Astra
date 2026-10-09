@@ -31,20 +31,20 @@ test('a mixed type import still participates in runtime cycle detection', () => 
 test('component dependency rejection has one owner and one source-positioned diagnostic', () => {
   const files = architectureFixtures({
     'src/app/components/config/Audit.vue':
-      '<script setup lang="ts">\nimport { writeCsvPatch, writeTextFile } from "@/services/write.service";\n</script><template><div /></template>',
-    'src/services/write.service.ts': 'export function writeCsvPatch() {} export function writeTextFile() {}',
+      '<script setup lang="ts">\nimport { saveCsvPatch, writeEditableFileText } from "@/services/csv-table.service";\n</script><template><div /></template>',
+    'src/services/csv-table.service.ts': 'export function saveCsvPatch() {} export function writeEditableFileText() {}',
   });
   const failures = frontendLayerBoundaryRule.check(files);
   assert.equal(failures.length, 1);
-  assert.match(failures[0], /Audit.vue:2:\d+: src\/services\/write.service.ts: components must consume/);
+  assert.match(failures[0], /Audit.vue:2:\d+: src\/services\/csv-table.service.ts: components must consume/);
 });
 
 test('layer directions govern type imports and production capability constraints exempt test fixtures', () => {
   const files = architectureFixtures({
     'src/domain/sample.ts': "import type { State } from '@/stores/sample.store';",
     'src/stores/sample.store.ts': 'export interface State {}',
-    'src/app/components/sample.spec.ts': "import { writeCsvPatch } from '@/services/write.service';",
-    'src/services/write.service.ts': 'export function writeCsvPatch() {}',
+    'src/app/components/sample.spec.ts': "import { saveCsvPatch } from '@/services/csv-table.service';",
+    'src/services/csv-table.service.ts': 'export function saveCsvPatch() {}',
   });
   assert.equal(frontendLayerBoundaryRule.check(files).length, 1);
 });

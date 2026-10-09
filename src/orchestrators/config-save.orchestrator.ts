@@ -1,17 +1,17 @@
 import type { AppFeedback, SavedConfig, IndexedConfigKind, ConfigFamilyFile, WriteResult } from '@/shared/types';
 import type { RowData } from '@/shared/types';
 import {
-  writeCreateIndexedConfigEntity,
-  writeCreateSkinEntity,
-  writeCreateVariantEntity,
-  writeDeleteIndexedConfigEntity,
-  writeDeleteSkinEntity,
-  writeDeleteVariantEntity,
-  writeIndexedConfigEntity,
-  writeModInfo,
-  writeSkinEntity,
-  writeVariantEntity,
-} from '@/services/write.service';
+  createIndexedConfigEntity,
+  createSkinEntity,
+  createVariantEntity,
+  deleteIndexedConfigEntity,
+  deleteSkinEntity,
+  deleteVariantEntity,
+  saveIndexedConfigEntity,
+  saveModInfo,
+  saveSkinEntity,
+  saveVariantEntity,
+} from '@/services/config-entity.service';
 import { createDefaultSkin, createDefaultVariant } from '@/domain/config/config-entities';
 import { indexedConfigEntityData, configFamilyEntityData } from '@/domain/config/config-records';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
@@ -57,7 +57,7 @@ export async function saveModInfoAction(
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult | null> {
   await retryPendingWritesForMod(modRoot);
-  const result = await runConfirmedJsonWrite(feedback, (options) => writeModInfo(sessionId, modRoot, data, options, baseVersions));
+  const result = await runConfirmedJsonWrite(feedback, (options) => saveModInfo(sessionId, modRoot, data, options, baseVersions));
   if (!result) return null;
   return result;
 }
@@ -84,7 +84,7 @@ export async function saveIndexedEntityAction(
     write.baseVersions,
   );
   const result = await retainConfigReservation(
-    runConfirmedJsonWrite(feedback, (options) => writeIndexedConfigEntity({ ...write, baseVersions: versions }, options)),
+    runConfirmedJsonWrite(feedback, (options) => saveIndexedConfigEntity({ ...write, baseVersions: versions }, options)),
   );
   if (!result) return null;
   const entity = indexedConfigEntityData(result);
@@ -102,7 +102,7 @@ export async function createIndexedEntityAction(write: {
   entityData: RowData;
 }): Promise<SavedConfig<import('@/shared/types').IndexedConfigEntityData>> {
   const baseVersions = await capturedVersions(write.sessionId, write.modRoot, write.kind, write.nextId, write.nextId, [], true);
-  const result = await retainConfigReservation(writeCreateIndexedConfigEntity({ ...write, baseVersions }));
+  const result = await retainConfigReservation(createIndexedConfigEntity({ ...write, baseVersions }));
   const entity = indexedConfigEntityData(result);
   return { entity, receipt: result };
 }
@@ -115,7 +115,7 @@ export async function deleteIndexedEntityAction(
   deleteTarget: boolean,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  const result = await writeDeleteIndexedConfigEntity({ sessionId, modRoot, kind, id, deleteTarget, baseVersions });
+  const result = await deleteIndexedConfigEntity({ sessionId, modRoot, kind, id, deleteTarget, baseVersions });
   return result;
 }
 
@@ -139,7 +139,7 @@ export async function saveVariantAction(
     data,
     relPath,
   };
-  const result = await retainConfigReservation(runConfirmedJsonWrite(feedback, (options) => writeVariantEntity(write, options)));
+  const result = await retainConfigReservation(runConfirmedJsonWrite(feedback, (options) => saveVariantEntity(write, options)));
   if (!result) return null;
   const variant = configFamilyEntityData(result);
   return { entity: variant, receipt: result };
@@ -153,7 +153,7 @@ export async function createVariantAction(
 ): Promise<SavedConfig<ConfigFamilyFile>> {
   const baseVersions = await capturedVersions(sessionId, modRoot, 'variant', variantId, variantId, [], true);
   const result = await retainConfigReservation(
-    writeCreateVariantEntity({
+    createVariantEntity({
       baseVersions,
       sessionId,
       modRoot,
@@ -174,7 +174,7 @@ export async function deleteVariantAction(
   variantId: string,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  const result = await writeDeleteVariantEntity({ sessionId, modRoot, relPath, entityId: variantId, baseVersions });
+  const result = await deleteVariantEntity({ sessionId, modRoot, relPath, entityId: variantId, baseVersions });
   return result;
 }
 
@@ -198,7 +198,7 @@ export async function saveSkinAction(
     data,
     relPath,
   };
-  const result = await retainConfigReservation(runConfirmedJsonWrite(feedback, (options) => writeSkinEntity(write, options)));
+  const result = await retainConfigReservation(runConfirmedJsonWrite(feedback, (options) => saveSkinEntity(write, options)));
   if (!result) return null;
   const skin = configFamilyEntityData(result);
   return { entity: skin, receipt: result };
@@ -212,7 +212,7 @@ export async function createSkinAction(
 ): Promise<SavedConfig<ConfigFamilyFile>> {
   const baseVersions = await capturedVersions(sessionId, modRoot, 'skin', skinHullId, skinHullId, [], true);
   const result = await retainConfigReservation(
-    writeCreateSkinEntity({
+    createSkinEntity({
       baseVersions,
       sessionId,
       modRoot,
@@ -233,7 +233,7 @@ export async function deleteSkinAction(
   skinHullId: string,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  const result = await writeDeleteSkinEntity({ sessionId, modRoot, relPath, entityId: skinHullId, baseVersions });
+  const result = await deleteSkinEntity({ sessionId, modRoot, relPath, entityId: skinHullId, baseVersions });
   return result;
 }
 

@@ -9,8 +9,7 @@ const mocks = vi.hoisted(() => ({
   querySessionEntityList: vi.fn(async () => [] as { id: string }[]),
   querySessionEditorDraftResources: vi.fn(async () => ({})),
   queryResourceDataUrls: vi.fn(async () => [] as (string | null)[]),
-  writeEditorSpec: vi.fn(),
-  loadImportedEditorSpecFile: vi.fn(),
+  invokeCommand: vi.fn(),
 }));
 
 vi.mock('@/services/entity-query.service', () => ({
@@ -27,12 +26,8 @@ vi.mock('@/services/resource-cache.service', () => ({
   queryResourceDataUrls: mocks.queryResourceDataUrls,
 }));
 
-vi.mock('@/services/write.service', () => ({
-  writeEditorSpec: mocks.writeEditorSpec,
-}));
-
-vi.mock('@/services/files.service', () => ({
-  loadImportedEditorSpecFile: mocks.loadImportedEditorSpecFile,
+vi.mock('@/shared/runtime/command.runtime', () => ({
+  invokeCommand: mocks.invokeCommand,
 }));
 
 import { editorMissingTargetText, isEditorWindowKind } from '@/domain/editors/editor-definitions';
@@ -243,24 +238,25 @@ describe('saveEditorSpecByKind and import', () => {
   });
 
   it('wraps write failures with the spec save cause', async () => {
-    mocks.writeEditorSpec.mockRejectedValue(new Error('disk on fire'));
+    mocks.invokeCommand.mockRejectedValue(new Error('disk on fire'));
     await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', entityTargetFixture('ship', 'XY'), { hullId: 'XY' })).rejects.toThrow(
       '保存 XY spec 失败',
     );
-    expect(mocks.writeEditorSpec).toHaveBeenCalledWith(
-      's1',
-      'C:/mods/alpha',
-      entityTargetFixture('ship', 'XY'),
-      { hullId: 'XY' },
-      undefined,
-      [],
-    );
+    expect(mocks.invokeCommand).toHaveBeenCalledWith('save_editor_spec', {
+      payload: {
+        baseVersions: [],
+        sessionId: 's1',
+        modRoot: 'C:/mods/alpha',
+        target: entityTargetFixture('ship', 'XY'),
+        data: { hullId: 'XY' },
+      },
+    });
   });
 
   it('passes successful writes through unchanged', async () => {
     const result = writeResultFixture();
     result.refreshedEntity = { id: 'S1' };
-    mocks.writeEditorSpec.mockResolvedValue(result);
+    mocks.invokeCommand.mockResolvedValue(result);
     await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', entityTargetFixture('system', 'S1'), { id: 'S1' })).resolves.toEqual(result);
   });
 
@@ -269,12 +265,15 @@ describe('saveEditorSpecByKind and import', () => {
     await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', entityTargetFixture('ship', ''), {})).rejects.toMatchObject({
       action: 'save-spec',
     });
-    expect(mocks.writeEditorSpec).not.toHaveBeenCalled();
+    expect(mocks.invokeCommand).not.toHaveBeenCalled();
   });
 
   it('delegates imported spec file loads', async () => {
-    mocks.loadImportedEditorSpecFile.mockResolvedValue({ id: 'imported' });
+    mocks.invokeCommand.mockResolvedValue({ id: 'imported' });
     await expect(loadImportedSpecFile('ship', 'C:/temp/x.ship')).resolves.toEqual({ id: 'imported' });
+    expect(mocks.invokeCommand).toHaveBeenCalledWith('load_imported_editor_spec_file', {
+      payload: { kind: 'ship', path: 'C:/temp/x.ship' },
+    });
   });
 });
 

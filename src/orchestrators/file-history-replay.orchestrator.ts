@@ -3,7 +3,7 @@ import type { AppFeedback } from '@/shared/types';
 import type { useProjectStore } from '@/stores/project.store';
 import type { useTablesStore } from '@/stores/tables.store';
 import { useFileHistoryStore } from '@/stores/file-history.store';
-import { replayFileChangeSet } from '@/services/write.service';
+import { replayFileChangeSet } from '@/services/file-history.service';
 import { publishCommittedWrite, retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
 import type { FileChangeRecord, FileChangeReplayDirection, FileSaveHistoryEntry } from '@/shared/types';
 import { AppError } from '@/shared/lib/errors';
