@@ -27,6 +27,8 @@ pub enum AppError {
     Json(#[from] serde_json::Error),
     #[error("{0}")]
     Base64(#[from] base64::DecodeError),
+    #[error("{0}")]
+    Tauri(#[from] tauri::Error),
     #[error("JSON 格式保留需要确认")]
     JsonRewriteRequired { files: Vec<JsonRewriteFile> },
 }
@@ -56,6 +58,7 @@ impl AppError {
             Self::Csv(_) => "parse.csv",
             Self::Json(_) => "parse.json",
             Self::Base64(_) => "data.base64",
+            Self::Tauri(_) => "window.native",
             Self::JsonRewriteRequired { .. } => "json.rewrite_confirmation_required",
         }
     }

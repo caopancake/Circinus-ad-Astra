@@ -30,12 +30,34 @@ pub fn save_spec_entity_with_json_options(
     let SpecSaveInput {
         source_rel_path,
         target_exists_in_index,
-        data,
+        mut data,
         json_write,
         ordered_json,
     } = input;
     let definition = spec_entity_definition(kind)?;
     let next_id = validate_config_id(next_id, definition.invalid_id_message)?.to_string();
+    let content_id = data
+        .get(definition.id_field)
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            AppError::message(
+                "spec.id_mismatch",
+                format!(
+                    "{}数据缺少 {}",
+                    definition.display_name, definition.id_field
+                ),
+            )
+        })?;
+    if validate_config_id(content_id, definition.invalid_id_message)? != next_id {
+        return Err(AppError::message(
+            "spec.id_mismatch",
+            format!(
+                "{}数据 {} 与保存目标不一致",
+                definition.display_name, definition.id_field
+            ),
+        ));
+    }
+    data[definition.id_field] = Value::String(next_id.clone());
     let mod_root = Path::new(mod_root);
     let previous_id = previous_id
         .filter(|value| !value.trim().is_empty())
@@ -62,24 +84,22 @@ pub fn save_spec_entity_with_json_options(
         definition.default_rel_path(&next_id)
     };
     let target = mod_root.join(&next_rel_path);
-    if (renamed || source_rel_path.is_none()) && (target.exists() || target_exists_in_index) {
+    let source_path = source_rel_path.map(|source| mod_root.join(source));
+    let same_file = source_path
+        .as_ref()
+        .is_some_and(|source| crate::io::same_physical_path(source, &target));
+    if (renamed || source_rel_path.is_none())
+        && ((target.exists() && !same_file) || target_exists_in_index)
+    {
         return Err(AppError::message(
             "spec.target_exists",
             format!("{}目标已存在: {next_rel_path}", definition.display_name),
         ));
     }
 
-    let (entity_id, refreshed) = build_spec_file(kind, mod_root, &next_rel_path, &data)?;
-    if entity_id != next_id {
-        return Err(AppError::message(
-            "spec.id_mismatch",
-            format!(
-                "{}数据 {} 与保存目标不一致: {entity_id}",
-                definition.display_name, definition.id_field
-            ),
-        ));
-    }
+    let (_, refreshed) = build_spec_file(kind, mod_root, &next_rel_path, &data)?;
 
+    let existing = source_rel_path.is_some();
     let source_rel_path = source_rel_path.unwrap_or(&next_rel_path);
     let boundary = FsRootBoundary::new(mod_root, "mod root")?;
     let source_path = boundary.resolve_relative(source_rel_path, "实体源路径")?;
@@ -87,21 +107,64 @@ pub fn save_spec_entity_with_json_options(
     let mut json = JsonWriteBatch::new(json_write);
     let rendered = json.render(&source_path, &data, ordered_json)?;
     json.finish()?;
-    if preserve_original_json
+    let unchanged = preserve_original_json
         && source_rel_path == next_rel_path
         && source_path.exists()
-        && crate::io::read_utf8_no_bom(&source_path)? == rendered
-    {
-        return Ok(WriteResult::from_refreshed_entity(Vec::new(), refreshed));
-    }
-    let mut builder = FileChangeSetBuilder::new_with_lock(mod_root, write_lock)?;
-    if renamed {
-        builder.text_file(source_rel_path, None)?;
-    }
-    builder.text_file(&next_rel_path, Some(rendered))?;
-    let changes = builder.apply()?;
+        && crate::io::read_utf8_no_bom(&source_path)? == rendered;
+    let changes = if unchanged {
+        Vec::new()
+    } else {
+        let mut builder = FileChangeSetBuilder::new_with_lock(mod_root, write_lock)?;
+        if renamed {
+            builder.rename_text_file(source_rel_path, &next_rel_path, rendered)?;
+        } else {
+            builder.text_file(&next_rel_path, Some(rendered))?;
+        }
+        builder.apply()?
+    };
 
-    Ok(WriteResult::from_refreshed_entity(changes, refreshed))
+    let mut result = WriteResult::from_refreshed_entity(changes, refreshed);
+    let source_id = previous_id.as_deref().unwrap_or(&next_id);
+    let before_location = crate::models::EntityFileLocation {
+        source: crate::models::ResourceSource::Mod,
+        root: boundary.root().to_string_lossy().to_string(),
+        rel_path: source_rel_path.to_string(),
+        path: source_path.to_string_lossy().to_string(),
+    };
+    let next_location = crate::models::EntityFileLocation {
+        source: crate::models::ResourceSource::Mod,
+        root: boundary.root().to_string_lossy().to_string(),
+        rel_path: next_rel_path.clone(),
+        path: boundary
+            .root()
+            .join(&next_rel_path)
+            .to_string_lossy()
+            .to_string(),
+    };
+    let before = crate::models::EntityEditTarget {
+        kind,
+        id: source_id.to_string(),
+        source: existing.then(|| before_location.clone()),
+        write: before_location,
+        state: if existing {
+            crate::models::EntityTargetState::Existing
+        } else {
+            crate::models::EntityTargetState::Create
+        },
+        linked_record: None,
+    };
+    let after = crate::models::EntityEditTarget {
+        kind,
+        id: next_id,
+        source: Some(next_location.clone()),
+        write: next_location,
+        state: crate::models::EntityTargetState::Existing,
+        linked_record: None,
+    };
+    result
+        .identity_changes
+        .push(crate::models::EntityIdentityChange { before, after });
+    Ok(result)
 }
 
 pub fn create_spec_entity(
@@ -254,7 +317,7 @@ mod tests {
         )
         .unwrap();
         let text = read_utf8_no_bom(&root.join("data/variants/new.variant")).unwrap();
-        assert_eq!(result.changes.len(), 2);
+        assert_eq!(result.changes.len(), 1);
         assert!(!old.exists());
         assert!(text.contains("# author note"));
         assert!(text.find("hullId").unwrap() < text.find("variantId").unwrap());
@@ -280,7 +343,7 @@ mod tests {
         .unwrap();
         assert!(root.join("data/variants/nested/new.variant").exists());
         assert!(!root.join("data/variants/new.variant").exists());
-        assert_eq!(result.changes.len(), 2);
+        assert_eq!(result.changes.len(), 1);
         let _ = fs::remove_dir_all(root);
     }
 
@@ -525,7 +588,7 @@ mod tests {
                 },
             )
             .unwrap();
-            assert_eq!(result.changes.len(), 2);
+            assert_eq!(result.changes.len(), 1);
             assert_eq!(
                 Path::new(
                     result.refreshed_entity.as_ref().unwrap()["relPath"]

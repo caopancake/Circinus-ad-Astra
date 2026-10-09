@@ -22,8 +22,7 @@ export async function openEditorWindow(request: EditorWindowRequest): Promise<vo
   const definition = editorWindowDefinition(request.kind);
   const serializedDraft = draftSnapshotParam(request.draftSnapshot);
   await openManagedWindow({
-    labelPrefix: `editor-${request.kind}`,
-    singletonKey: JSON.stringify([request.sessionId, request.kind, request.modRoot, request.id]),
+    identity: { type: 'spec', sessionId: request.sessionId, kind: request.kind, modRoot: request.modRoot, id: request.id },
     title: request.title ?? editorWindowTitle(request.kind, request.id),
     urlParams: {
       window: 'editor',

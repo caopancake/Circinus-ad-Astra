@@ -51,13 +51,15 @@ Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，目标�
 - 目录打开：`组件 -> directory-opening orchestrator -> 后端识别（game-root / mod-in-game / external-mod / unknown 类型化 outcome，边界失败走错误通道）-> 游戏概览或 ProjectSession -> workspace/project 运行态`。
 - 撤销重做：`快捷键命令 -> 主窗口历史分派 -> CSV 草稿历史优先 -> 文件历史回放（强制用户确认，按已加载会话逐一刷新）-> 编辑器同步`。
 - 资源读取：`后端 ResourceRef -> Mod/Core 解析（Core 兜底）-> 批量 data URL -> 前端 query/resource/media 三级缓存与后端 media cache -> 组件`；无上传入口，路径字段只能选择当前 Mod 目录内的文件。
-- 窗口同步：`窗口 identity（managed singletonKey + URL 参数 + ViewModel target key）-> managed window -> 全局广播结构化事件、消费端按身份过滤 -> 主窗口保存与 refresh -> dirty 外部版本交接`；草稿快照超 8000 字符丢弃、URL 超 12000 字符报错。
+- 窗口同步：`判别窗口 identity -> window service/wire -> Rust 身份与原生实例登记 -> 结构化提交/身份事件 -> 当前目标快照与未保存交接`；草稿快照超 8000 字符丢弃、URL 超 12000 字符报错。
 
 ## 边界速查
 
 - 模块级定义、边界、链路与规范写在 `.zcode/modules/` 并经 module-map 索引；overview 只维护项目级边界与整体规则。
 - 前端拥有交互、草稿和运行时投影；Rust 拥有磁盘路径、格式解析、FIFO 写入事务、文件历史、版本冲突与 changeset 回放权威。
 - session 由 `sessionId + modRoot` 身份约束；按 Mod 归属的缓存、草稿、历史与窗口状态按 `modRoot` 隔离。
+- 编辑目标必须由后端加载记录提供实际来源、写入目标与关联记录；写入、版本及回放必须共同消费该定义。
+- 规格身份修改必须经同一事务交接业务 ID、所属 CSV 或索引与实际文件名；窗口原生 label 必须保持稳定。
 - 当前 Mod 数据优先于原版只读数据；资源 fallback、引用解析与 data URL hydration 经后端 query 与批量资源缓存。
 - workspace、settings、日志和派生索引只写工具私有目录；Mod 内容与工具私有状态由独立 owner 管理。
 - 保存、删除、导入和 undo/redo 必须经所属模块的 changeset 链路；字段编辑服从全局 edit mode。

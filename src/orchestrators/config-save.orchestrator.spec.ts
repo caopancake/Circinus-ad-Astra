@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { entityTargetFixture } from '@/test/entity-target';
 import { createPinia, setActivePinia } from 'pinia';
 
 const mocks = vi.hoisted(() => ({
@@ -16,6 +17,18 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/orchestrators/file-history-write.orchestrator', () => ({ completeSavedWrite: mocks.completeSavedWrite }));
+vi.mock('@/services/config-entity.service', () => ({
+  captureConfigIdentityIntent: async (_session: string, kind: import('@/shared/types').EntityKind, sourceId: string, nextId: string) => {
+    const source = entityTargetFixture(kind, sourceId);
+    const next = entityTargetFixture(kind, nextId);
+    return {
+      info: { target: source, baseVersions: [] },
+      intent: { source, nextId, nextWrite: next.write, destinationVersion: { path: next.write.path, fingerprint: null } },
+    };
+  },
+}));
+vi.mock('@/orchestrators/entity-identity.orchestrator', () => ({ reserveFileIdentityIntent: vi.fn(async () => {}) }));
+vi.mock('@/services/window.service', () => ({ releaseNativeWindowTargets: vi.fn(async () => {}) }));
 
 vi.mock('@/services/write.service', () => ({
   writeModInfo: mocks.writeModInfo,
@@ -49,13 +62,17 @@ const MOD_ROOT = 'M:\\test-mod';
 const SESSION_ID = 'sess-1';
 
 function writeResult(refreshedEntity: Record<string, unknown> | null = null) {
+  const kind = refreshedEntity?.variantId ? 'variant' : 'skin';
+  const id = (refreshedEntity?.variantId ?? refreshedEntity?.skinHullId ?? '') as string;
+  const target = entityTargetFixture(kind, id);
   return {
     baseVersions: [],
     commitId: 1,
     history: { revision: 1, undoStack: [], redoStack: [] },
     changes: [
       {
-        path: `${MOD_ROOT}\\x.csv`,
+        beforePath: `${MOD_ROOT}\\x.csv`,
+        afterPath: `${MOD_ROOT}\\x.csv`,
         kind: 'file',
         beforeExists: true,
         beforeText: '',
@@ -68,6 +85,7 @@ function writeResult(refreshedEntity: Record<string, unknown> | null = null) {
       },
     ],
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
+    identityChanges: id ? [{ before: target, after: target }] : [],
     keyMap: [],
     refreshedEntity,
     warnings: [],
@@ -84,6 +102,18 @@ beforeEach(() => {
 });
 
 describe('config-save orchestrator', () => {
+  it.each(['variant', 'skin'] as const)('preserves %s loaded credentials for same-ID and case-only writes', async (kind) => {
+    const source = entityTargetFixture(kind, 'Demo');
+    const baseVersions = [{ path: source.write.path, fingerprint: 'loaded-spec' }];
+    const save = kind === 'variant' ? saveVariantAction : saveSkinAction;
+    const write = kind === 'variant' ? mocks.writeVariantEntity : mocks.writeSkinEntity;
+    const field = kind === 'variant' ? 'variantId' : 'skinHullId';
+    for (const nextId of ['Demo', 'demo']) {
+      write.mockResolvedValue(writeResult({ [field]: nextId, data: { [field]: nextId } }));
+      await save(SESSION_ID, MOD_ROOT, nextId, { [field]: nextId }, 'Demo', source.write.relPath, undefined, baseVersions);
+      expect(write.mock.lastCall?.[0].baseVersions).toEqual(baseVersions);
+    }
+  });
   it('writes canonical mod info and synchronizes its captured receipt', async () => {
     mocks.writeModInfo.mockResolvedValue(writeResult());
 
@@ -122,7 +152,6 @@ describe('config-save orchestrator', () => {
       nextId: 'npc_dave',
       indexRow: {},
       entityData: {},
-      deletePreviousTarget: false,
     });
 
     expect(entityId?.entity).toMatchObject({ entityId: 'npc_dave', baseVersions: [] });
@@ -145,7 +174,6 @@ describe('config-save orchestrator', () => {
       nextId: 'mission_new',
       indexRow: {},
       entityData: {},
-      deletePreviousTarget: false,
     });
 
     expect(entityId).toBe('mission_new');
@@ -195,7 +223,7 @@ describe('config-save orchestrator', () => {
 
     const variant = await createVariantAction(SESSION_ID, MOD_ROOT, 'npc_dave', 'variant_new');
 
-    expect(variant.variantId).toBe('variant_new');
+    expect(variant.id).toBe('variant_new');
     const payload = mocks.writeCreateVariantEntity.mock.calls[0]![0];
     expect(payload.nextId).toBe('variant_new');
     expect(payload.data).toEqual(createDefaultVariant('npc_dave', 'variant_new'));
@@ -221,7 +249,7 @@ describe('config-save orchestrator', () => {
 
     expect(mocks.writeVariantEntity).toHaveBeenCalledWith(
       expect.objectContaining({
-        baseVersions: [],
+        baseVersions: [{ path: 'M:/mod/data/variants/variant_b.variant', fingerprint: null }],
         sessionId: SESSION_ID,
         modRoot: MOD_ROOT,
         previousId: 'variant_a',
@@ -264,7 +292,7 @@ describe('config-save orchestrator', () => {
 
     const skin = await createSkinAction(SESSION_ID, MOD_ROOT, 'npc_dave', 'skin_new');
 
-    expect(skin.skinHullId).toBe('skin_new');
+    expect(skin.id).toBe('skin_new');
     expect(mocks.writeCreateSkinEntity).toHaveBeenCalledTimes(1);
   });
 
@@ -289,7 +317,7 @@ describe('config-save orchestrator', () => {
 
     expect(mocks.writeSkinEntity).toHaveBeenCalledWith(
       expect.objectContaining({
-        baseVersions: [],
+        baseVersions: [{ path: 'M:/mod/data/hulls/skins/skin_b.skin', fingerprint: null }],
         sessionId: SESSION_ID,
         modRoot: MOD_ROOT,
         previousId: 'skin_a',

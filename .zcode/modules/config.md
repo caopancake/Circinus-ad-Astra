@@ -10,7 +10,9 @@
 `scripts/architecture/rules/write-boundary.mjs`：配置写入能力归属的检查 owner。
 `src-tauri/src/commands/editor_config.rs`：配置实体 command 边界。
 `src-tauri/src/domain/editor_config_definitions.rs`：实体定义与目录规则 owner。
-`src-tauri/src/services/editor_config/`：后端配置实体 owner，拥有 indexed 与 spec 实体的 query、write 与目录。
+`src-tauri/src/services/editor_config/`：任务索引、任务目录及单文件实体族的保存 owner。
+`src-tauri/src/services/project/write/faction_identity.rs`：势力索引、实际规格目标及保存删除 owner。
+`src-tauri/src/io/faction_index.rs`：势力索引引用的所属根授权 owner。
 `src/app/components/config/`：配置页面组件目录，拥有列表、编辑器、Mod 信息与文件历史视图。
 `src/app/composables/config/use-config-faction-view-model.ts`：势力列表与新建 ViewModel。
 `src/app/composables/config/use-config-family-view-model.ts`：装配/皮肤族列表 ViewModel。
@@ -79,6 +81,10 @@
 - 配置列表必须以 sessionId 与 modRoot 共同归属数据、版本凭据、资源引用和选择；身份切换必须同步清空这些状态，新列表到达后才允许建立编辑目标。
 - 配置编辑器生命周期必须按 session 与 Mod 隔离；同名实体切换必须加载目标基线，保存回调严禁读取其他 Mod 的活动目标。
 - 重命名必须同时更新索引行、实体文件与文件名，并保持 history 可回放。
+- 势力加载身份必须消费规格内容的字符串 id；索引必须提供实际文件目标，读取、版本、保存与删除必须消费同一授权路径。
+- 势力索引修改必须保留表头、行位置与业务列，只允许更新所属 ID 和引用字段。
+- Mission 与 Faction 的写入职责必须分别归任务目录 owner 与势力身份 owner；修改 ID 必须按所属格式执行完整改名。
+- 创建与改名必须在 FIFO 事务中复核源版本、关联索引及目标不存在凭据；源与下一目标必须分别表达。
 
 ## 陷阱
 

@@ -1,5 +1,6 @@
 import { computed, onUnmounted, ref, watch } from 'vue';
-import { listConfigFactionRecords, queryFactionPreviewImages } from '@/services/config-entity.service';
+import { listConfigFactionRecords, queryFactionPreviewImages, getConfigFactionRecord } from '@/services/config-entity.service';
+import { useConfigIdentityReception } from '@/app/composables/config/use-config-identity-reception';
 import { createIndexedEntityAction, deleteIndexedEntityAction, saveIndexedEntityAction } from '@/orchestrators/config-save.orchestrator';
 import {
   buildFactionIndexRow,
@@ -35,6 +36,23 @@ export function useConfigFactionViewModel() {
   const savingSessions = new Set<string>();
   let listSessionKey: string | null = null;
   let disposed = false;
+  const identity = useConfigIdentityReception({
+    target: () =>
+      sessionId.value && modRoot.value && selectedFaction.value
+        ? { sessionId: sessionId.value, modRoot: modRoot.value, kind: 'faction' as const, id: selectedFaction.value }
+        : null,
+    read: getConfigFactionRecord,
+    accept: (record, id) => {
+      factionsRequestId++;
+      const next = { ...factions.value };
+      delete next[identity.handoff.value!.sourceId];
+      next[id] = record.data;
+      factions.value = next;
+      factionVersions.value = { ...factionVersions.value, [id]: record.baseVersions };
+      selectedFaction.value = id;
+      factionDataRevision.value++;
+    },
+  });
 
   function sessionKey() {
     return JSON.stringify([sessionId.value, modRoot.value]);
@@ -57,7 +75,10 @@ export function useConfigFactionViewModel() {
     try {
       const records = await listConfigFactionRecords(sessionId);
       if (disposed || requestId !== factionsRequestId || key !== sessionKey()) return;
+      const selected = selectedFaction.value;
+      const held = selected ? factions.value[selected] : null;
       factions.value = Object.fromEntries(records.map((record) => [record.id, record.data]));
+      if (identity.receiving.value && selected && held && !factions.value[selected]) factions.value[selected] = held;
       factionVersions.value = Object.fromEntries(records.map((record) => [record.id, record.baseVersions]));
       factionCrestRefs.value = Object.fromEntries(records.map((record) => [record.id, record.crestRef]));
       factionCrestResourceRefs.value = records.flatMap((record) => (record.crestRef ? [record.crestRef] : []));
@@ -91,7 +112,6 @@ export function useConfigFactionViewModel() {
         nextId: id,
         indexRow: buildFactionIndexRow(id),
         entityData: { file: createDefaultFaction(id) },
-        deletePreviousTarget: false,
       });
       feedback.success(`势力 "${id}" 已创建`);
       if (project.activeManifest?.modRoot !== createModRoot || project.activeManifest.sessionId !== createSessionId) return true;
@@ -120,7 +140,6 @@ export function useConfigFactionViewModel() {
       feedback.warning(configEntityIdInvalidMessage('势力 ID', nextId), 'config.id_invalid');
       return null;
     }
-    const idChanged = nextId !== previousId;
     savingSessions.add(saveSessionId);
     factionsRequestId++;
     let saved;
@@ -135,7 +154,6 @@ export function useConfigFactionViewModel() {
           nextId,
           indexRow: buildFactionIndexRow(nextId),
           entityData: { file: draft.file },
-          deletePreviousTarget: idChanged,
         },
         feedback,
       );
@@ -191,6 +209,7 @@ export function useConfigFactionViewModel() {
   }
 
   return {
+    identityHandoff: identity.handoff,
     selectedFaction,
     factionDataRevision,
     factionPreviewRevision,

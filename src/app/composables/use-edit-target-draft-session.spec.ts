@@ -34,6 +34,35 @@ function createSession(options: Partial<EditTargetDraftSessionOptions<SampleValu
 }
 
 describe('target snapshots', () => {
+  it('retries the persisted synchronization receipt while retaining subsequent edits', async () => {
+    const save = vi.fn(() => snapshot(2, 'v2'));
+    const synchronize = vi.fn().mockRejectedValueOnce(new Error('broadcast')).mockResolvedValueOnce(undefined);
+    const session = createSession({ save, afterSaved: synchronize });
+    session.setDraft({ a: 2 });
+    await expect(session.saveDraft()).rejects.toMatchObject({ action: 'sync-saved-target' });
+    expect(session.hasPendingSynchronization.value).toBe(true);
+    session.setDraft({ a: 3 });
+    await session.saveDraft();
+    expect(save).toHaveBeenCalledOnce();
+    expect(synchronize).toHaveBeenCalledTimes(2);
+    expect(session.draftValue.value).toEqual({ a: 3 });
+    expect(session.hasPendingSynchronization.value).toBe(false);
+    expect(session.dirty.value).toBe(true);
+  });
+  it('accepts identity credentials and preserves raw fields and current draft in one handoff', () => {
+    const session = createSession();
+    const raw = ref(true);
+    const cancel = vi.fn();
+    session.inputs.register({ key: 'a', label: 'a', dirty: raw, commit: () => null, focus: vi.fn(), cancel });
+    session.setDraft({ a: 7 });
+    expect(session.adoptIdentity(target, snapshot(2, 'v2', 'next', 'next'), (draft) => draft)).toBe(true);
+    expect(session.currentTarget.value).toEqual({ id: 'next' });
+    expect(session.baselineSnapshot.value?.baseVersions).toEqual([{ path: 'target.json', fingerprint: 'v2' }]);
+    expect(session.draftValue.value).toEqual({ a: 7 });
+    expect(raw.value).toBe(true);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(session.context.value?.handoff).toBe('external');
+  });
   it('owns isolated draft, baseline, versions and metadata', () => {
     const session = createSession();
     const draft = { a: 2 };

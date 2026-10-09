@@ -69,7 +69,7 @@ export function frontendFile(path) {
 /// do not govern them.
 /** @param {string} path @returns {boolean} */
 export function specFile(path) {
-  return path.endsWith('.spec.ts');
+  return /\.spec\.(ts|tsx)$/.test(path) || path.startsWith('src/test/');
 }
 
 /** @param {string} path @returns {boolean} */

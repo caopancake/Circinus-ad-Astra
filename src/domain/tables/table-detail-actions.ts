@@ -1,12 +1,11 @@
 import { rowSpecId } from '@/shared/lib/starsector';
-import { joinRootRelativePath } from '@/shared/lib/paths';
-import type { EditorWindowKind, RowData, TableKey } from '@/shared/types';
+import type { EditorWindowKind, EntityKind, RowData, TableKey } from '@/shared/types';
 import { isCsvCommentRow } from '@/domain/tables/csv-comment-row';
-import { associatedSpecEditorKinds, associatedSpecRelPath } from '@/domain/tables/associated-specs';
+import { associatedSpecEditorKinds, associatedSpecKind } from '@/domain/tables/associated-specs';
 import { editorWindowLabel } from '@/domain/editors/editor-definitions';
 
 export type TableDetailAction =
-  | { type: 'file-editor'; modRoot: string; path: string; sessionId: string; title: string; contextLabel?: string; message?: string }
+  | { type: 'file-editor'; modRoot: string; kind: EntityKind; id: string; sessionId: string; title: string }
   | {
       type: 'editor-window';
       kind: EditorWindowKind;
@@ -31,7 +30,7 @@ export function detailActionsForRow(
   if (isCsvCommentRow(row, table)) return [];
   const id = rowSpecId(row, table);
   if (!id) return [];
-  const relPath = associatedSpecRelPath(table, id);
+  const specKind = associatedSpecKind(table);
   const editorActions: TableDetailAction[] = associatedSpecEditorKinds(table).map((kind) => ({
     type: 'editor-window' as const,
     kind,
@@ -40,7 +39,7 @@ export function detailActionsForRow(
     starsectorRoot: context.starsectorRoot,
     id,
   }));
-  return relPath ? [...editorActions, specFileAction(context, relPath)] : editorActions;
+  return specKind ? [...editorActions, specFileAction(context, specKind, id)] : editorActions;
 }
 
 export function detailActionLabel(action: TableDetailAction): string {
@@ -50,15 +49,16 @@ export function detailActionLabel(action: TableDetailAction): string {
 
 export function detailActionKey(action: TableDetailAction): string {
   return action.type === 'file-editor'
-    ? JSON.stringify([action.type, action.modRoot, action.sessionId, action.path])
+    ? JSON.stringify([action.type, action.kind, action.modRoot, action.sessionId, action.id])
     : JSON.stringify([action.type, action.kind, action.modRoot, action.sessionId, action.id]);
 }
 
-function specFileAction(context: TableDetailActionContext, relPath: string): TableDetailAction {
+function specFileAction(context: TableDetailActionContext, kind: EntityKind, id: string): TableDetailAction {
   return {
     type: 'file-editor',
     modRoot: context.modRoot,
-    path: joinRootRelativePath(context.modRoot, relPath),
+    kind,
+    id,
     sessionId: context.sessionId,
     title: '文件编辑器',
   };

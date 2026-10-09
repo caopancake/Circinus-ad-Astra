@@ -1,14 +1,30 @@
-import { querySessionEditorDraftResources, querySessionEntity, querySessionEntityList } from '@/services/query.service';
+import {
+  querySessionEditorDraftResources,
+  querySessionEntity,
+  querySessionEntityList,
+  querySessionEntityEditTarget,
+  querySessionEntityIdentityIntent,
+} from '@/services/query.service';
 import { hydrateFactionPreviewImages, hydrateMissionIcon } from '@/services/config-resource.service';
 import {
   missionEditorDataFromEntity,
   toConfigFactionRecord,
   toConfigMissionRecord,
-  toConfigSkinRecord,
-  toConfigVariantRecord,
+  toConfigFamilyRecord,
   type ConfigFactionPreviewImages,
 } from '@/domain/config/config-records';
 import type { ConfigMissionEditorData, ProjectSessionId, RowData } from '@/shared/types';
+
+export async function captureConfigIdentityIntent(
+  sessionId: string,
+  kind: import('@/shared/types').EntityKind,
+  sourceId: string,
+  nextId: string,
+) {
+  const info = await querySessionEntityEditTarget(sessionId, kind, sourceId);
+  const intent = await querySessionEntityIdentityIntent(sessionId, info.target, nextId);
+  return { info, intent };
+}
 
 /**
  * Read service for config entities: the only wrapper around config entity queries
@@ -28,12 +44,21 @@ export async function listConfigMissionRecords(sessionId: ProjectSessionId) {
 
 export async function listVariantRecords(sessionId: ProjectSessionId) {
   const entities = await querySessionEntityList(sessionId, 'variant');
-  return entities.map(toConfigVariantRecord);
+  return entities.map(toConfigFamilyRecord);
+}
+
+export async function getConfigFamilyRecord(sessionId: string, kind: 'variant' | 'skin', id: string) {
+  const entity = await querySessionEntity(sessionId, kind, id);
+  return entity ? toConfigFamilyRecord(entity) : null;
+}
+export async function getConfigFactionRecord(sessionId: string, id: string) {
+  const entity = await querySessionEntity(sessionId, 'faction', id);
+  return entity ? toConfigFactionRecord(entity) : null;
 }
 
 export async function listSkinRecords(sessionId: ProjectSessionId) {
   const entities = await querySessionEntityList(sessionId, 'skin');
-  return entities.map(toConfigSkinRecord);
+  return entities.map(toConfigFamilyRecord);
 }
 
 export async function queryFactionPreviewImages(

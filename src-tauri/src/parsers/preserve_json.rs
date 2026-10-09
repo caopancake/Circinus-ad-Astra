@@ -8,6 +8,44 @@ pub enum PreserveResult {
     NeedsRewrite(&'static str),
 }
 
+pub fn replace_root_string(source: &str, field: &str, replacement: &str) -> AppResult<String> {
+    parse_starsector_json(source)?;
+    let node = Scanner::new(source).parse_root().ok_or_else(|| {
+        crate::errors::AppError::message("text.identity_range", "无法定位身份字段文本范围")
+    })?;
+    let NodeKind::Object(members) = node.kind else {
+        unreachable!("parsed root is an object")
+    };
+    let member = members
+        .iter()
+        .find(|member| member.key == field)
+        .ok_or_else(|| {
+            crate::errors::AppError::message("spec.id_missing", format!("缺少身份字段: {field}"))
+        })?;
+    let mut text = source.to_string();
+    text.replace_range(
+        member.value.span.clone(),
+        &serde_json::to_string(replacement)?,
+    );
+    Ok(text)
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    #[test]
+    fn root_identity_replacement_keeps_other_text_ranges() {
+        let source =
+            "{ # hullId: ignored\n hullId: 'old', nested: {hullId:'other'}, array:[{id:'old'}]}\n";
+        let next = replace_root_string(source, "hullId", "new").unwrap();
+        assert_eq!(
+            next,
+            "{ # hullId: ignored\n hullId: \"new\", nested: {hullId:'other'}, array:[{id:'old'}]}\n"
+        );
+        assert!(replace_root_string("{hullId:", "hullId", "new").is_err());
+    }
+}
+
 #[derive(Clone, Debug)]
 struct Member {
     key: String,

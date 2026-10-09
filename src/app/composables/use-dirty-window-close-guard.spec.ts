@@ -35,9 +35,15 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@/windows/current.window', () => ({
+  currentWindowLabel: () => 'managed-1',
   destroyCurrentWindow: mocks.destroyCurrentWindow,
   listenCurrentWindowCloseRequest: mocks.listenCurrentWindowCloseRequest,
 }));
+vi.mock('@/services/window.service', () => ({
+  updateNativeWindowStatus: vi.fn(async () => {}),
+  cancelNativeWindowClose: vi.fn(async () => {}),
+}));
+vi.mock('@/windows/tauri.events', () => ({ listenWindowEvent: vi.fn(async () => () => {}) }));
 
 vi.mock('@/app/composables/use-app-feedback', () => ({
   useAppFeedback: () => mocks.feedback,

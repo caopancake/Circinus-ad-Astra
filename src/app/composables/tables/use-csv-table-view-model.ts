@@ -91,7 +91,7 @@ export function useCsvTableViewModel() {
         lastWidthTable = '';
         return;
       }
-      if (tables.saving || tables.hasTableDirtyChanges(table)) {
+      if (tables.saving || tables.currentTableLocked || tables.hasTableDirtyChanges(table)) {
         tables.markTableExternalUpdate(table);
         return;
       }
@@ -129,7 +129,7 @@ export function useCsvTableViewModel() {
     if (event.sessionId !== project.activeSessionId) return;
     const tableWindowChanged = hasTableInvalidation(event, 'csv-table-window', tables.currentTab);
     if (tableWindowChanged) {
-      if (tables.saving) {
+      if (tables.saving || tables.currentTableLocked) {
         refreshAfterSave = true;
       } else if (tables.hasTableDirtyChanges(tables.currentTab)) {
         tables.markTableExternalUpdate(tables.currentTab);
@@ -143,7 +143,7 @@ export function useCsvTableViewModel() {
     void reloadVisibleSourceOptions();
   });
   watch(
-    () => tables.saving,
+    () => tables.saving || tables.currentTableLocked,
     (saving) => {
       windowRequestId++;
       loadedWindowKeys.value = new Set();
@@ -234,7 +234,7 @@ export function useCsvTableViewModel() {
     loadedWindowKeys.value.add(key);
     try {
       const window = await queryTableWindow(sessionId, table, alignedStart, windowCount, searchText, faction);
-      if (tables.saving) {
+      if (tables.saving || tables.currentTableLocked) {
         loadedWindowKeys.value.delete(key);
         return;
       }

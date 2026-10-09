@@ -14,7 +14,7 @@ use crate::{
         WellKnownLabelEntry, well_known_hint_labels, well_known_tag_labels,
     },
     errors::{AppError, AppResult},
-    models::{CsvTableKey, EntityData, ResourceSource, SourceOptionGroup},
+    models::{CsvTableKey, ResourceSource, SourceOptionGroup},
 };
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -172,7 +172,7 @@ fn entity_source_option_groups(
 
 fn entity_source_options(
     origin: ResourceSource,
-    entities: Vec<EntityData>,
+    entities: Vec<super::super::model::EntityProjection>,
     seen: &mut BTreeSet<String>,
 ) -> Vec<crate::models::SourceOption> {
     let mut options = Vec::new();
@@ -191,11 +191,10 @@ fn entity_source_options(
     options
 }
 
-fn entity_source_option_label(entity: &EntityData) -> String {
+fn entity_source_option_label(entity: &super::super::model::EntityProjection) -> String {
     let display_name = entity
         .data
-        .get("data")
-        .and_then(|data| data.get("displayName"))
+        .get("displayName")
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default();
     if display_name.trim().is_empty() || display_name == entity.id {
@@ -492,12 +491,12 @@ fn add_faction_blueprint_metadata(
         let faction_name = session
             .faction_files
             .get(faction_id)
-            .and_then(|v| v.get("displayName"))
+            .and_then(|v| v.data.get("displayName"))
             .or_else(|| {
                 session
                     .faction_files
                     .get(faction_id)
-                    .and_then(|v| v.get("displayNameLong"))
+                    .and_then(|v| v.data.get("displayNameLong"))
             })
             .and_then(serde_json::Value::as_str)
             .unwrap_or(faction_id);

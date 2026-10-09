@@ -101,6 +101,7 @@ export interface SourceOption {
 }
 
 export interface EntityData {
+  target: import('@/shared/types/entity-target.types').EntityEditTarget;
   baseVersions: import('@/shared/types/write.types').FileVersion[];
   kind: EntityKind;
   id: string;

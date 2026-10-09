@@ -21,6 +21,8 @@
 - session 必须由 `sessionId + modRoot` 身份约束；注册表只允许保护句柄表，session 状态必须各自持锁，跨 session 操作严禁互阻。已登记 session 必须保留至显式关闭。
 - 所有外部路径必须重新 canonicalize 并验证属于声明 root；已有父链中的 symlink、junction 与 reparse point 一律拒绝。默认拒绝让边界漂移成为硬失败，而不是依赖人肉 review。
 - 保存、删除、导入与回放必须先构建文件或目录快照，再由 IO 应用可回放 changeset；目录变更必须展开为正式目录事件，保证失效推导精确。
+- 加载记录必须分别承载业务内容、加载 ID 与实际来源；编辑查询、版本范围与写入必须共同消费正式目标定义。
+- 文件变化必须分别表达 beforePath 与 afterPath；索引引用、源与目标路径必须在所属根边界完成授权，改名与回放必须复用正式 IO 原语。
 - 已知 CP1252 智能引号归一化映射唯一 owner 在 models，读取时执行并随保存不可逆写回；parsers 与 io 复用同一份。
 - 持久化索引只存工具私有目录并按 canonical `modRoot` 分片；读取前必须以内容指纹校验，不一致即丢弃重建，损坏或不可写只降级不阻塞。
 - workspace、settings、日志与派生索引只写工具私有目录，严禁写入 Mod 目标。

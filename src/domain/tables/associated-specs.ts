@@ -1,34 +1,32 @@
 import type { EditorWindowKind, TableKey } from '@/shared/types';
 
 interface AssociatedSpecDefinition {
+  kind: 'ship' | 'weapon' | 'system' | 'skill';
   editorKinds: EditorWindowKind[];
-  relPath: (id: string) => string;
 }
 
 const ASSOCIATED_SPEC_DEFINITIONS: Partial<Record<TableKey, AssociatedSpecDefinition>> = {
   ships: {
+    kind: 'ship',
     editorKinds: ['ship'],
-    relPath: (id) => `data/hulls/${id}.ship`,
   },
   weapons: {
+    kind: 'weapon',
     editorKinds: ['weapon', 'weapon-preview'],
-    relPath: (id) => `data/weapons/${id}.wpn`,
   },
   shipSystems: {
+    kind: 'system',
     editorKinds: ['system'],
-    relPath: (id) => `data/shipsystems/${id}.system`,
   },
   skills: {
+    kind: 'skill',
     editorKinds: [],
-    relPath: (id) => `data/characters/skills/${id}.skill`,
   },
 };
 
 export function associatedSpecEditorKinds(table: TableKey): EditorWindowKind[] {
   return [...(ASSOCIATED_SPEC_DEFINITIONS[table]?.editorKinds ?? [])];
 }
-
-export function associatedSpecRelPath(table: TableKey, id: string): string | null {
-  if (!id) return null;
-  return ASSOCIATED_SPEC_DEFINITIONS[table]?.relPath(id) ?? null;
+export function associatedSpecKind(table: TableKey) {
+  return ASSOCIATED_SPEC_DEFINITIONS[table]?.kind ?? null;
 }

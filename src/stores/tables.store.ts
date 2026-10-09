@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
 import { computed, reactive, ref, shallowReactive } from 'vue';
 import { createFieldInputs, type FieldInputs } from '@/shared/runtime/field-inputs';
-import type { CsvCellTarget } from '@/shared/types';
+import type { CsvCellTarget, CsvTableTarget } from '@/shared/types';
+import { normalizeFsPath } from '@/shared/lib/paths';
 import {
   TABLE_KEYS,
   type CsvRowKeyMapping,
@@ -97,6 +98,21 @@ export const useTablesStore = defineStore('tables', () => {
   const inputMap = shallowReactive(new Map<string, Map<TableKey, FieldInputs>>());
   const readGenerations = new WeakMap<ModTableState, Map<TableKey, number>>();
   const saving = ref(false);
+  const identityLocks = shallowReactive(new Map<string, { target: CsvTableTarget; owner: string }>());
+  const lockKey = (root: string, table: TableKey) => JSON.stringify([normalizeFsPath(root), table]);
+  const currentTableLocked = computed(() => (activeModRoot.value ? isTableLocked(activeModRoot.value, currentTab.value) : false));
+
+  function isTableLocked(root: string, table: TableKey) {
+    return identityLocks.has(lockKey(root, table));
+  }
+  function lockTable(target: CsvTableTarget, owner: string) {
+    identityLocks.set(lockKey(target.modRoot, target.table), { target, owner });
+  }
+  function releaseTableLock(owner: string) {
+    for (const [key, lock] of identityLocks) {
+      if (lock.owner === owner) identityLocks.delete(key);
+    }
+  }
   // Active mod identity is owned by the workspace store; tables projects it
   // onto its per-Mod table state instead of keeping its own copy in sync.
   const activeModRoot = computed(() => workspace.activeModRoot);
@@ -216,6 +232,9 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   function removeModState(modRoot: string) {
+    for (const [key, lock] of identityLocks) {
+      if (normalizeFsPath(lock.target.modRoot) === normalizeFsPath(modRoot)) identityLocks.delete(key);
+    }
     inputMap.get(modRoot)?.forEach((inputs) => inputs.release());
     inputMap.delete(modRoot);
     stateMap.delete(modRoot);
@@ -298,21 +317,25 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   function updateCellValue(target: CsvCellTarget, value: string) {
+    if (isTableLocked(target.modRoot, target.table)) return;
     const state = stateMap.get(target.modRoot)!;
     pushCsvDraftResult(target.table, setCsvCellValueDraft(state, target.table, target.rowKey, target.column, value), target.modRoot);
   }
 
   function undoCurrentTableEdit(): string | null {
+    if (currentTableLocked.value) return null;
     if (activeModRoot.value) revokeTableReads(activeModRoot.value, currentTab.value);
     return activeModRoot.value ? csvEditHistory.undoCsvEdit(activeModRoot.value, currentTab.value, getActiveState()) : null;
   }
 
   function redoCurrentTableEdit(): string | null {
+    if (currentTableLocked.value) return null;
     if (activeModRoot.value) revokeTableReads(activeModRoot.value, currentTab.value);
     return activeModRoot.value ? csvEditHistory.redoCsvEdit(activeModRoot.value, currentTab.value, getActiveState()) : null;
   }
 
   function addNewRow(): CsvRowTarget | null {
+    if (currentTableLocked.value) return null;
     const state = getActiveState();
     if (!state) return null;
     const result = createCsvRowDraft(state, Date.now());
@@ -321,6 +344,7 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   function deleteSelected(): CsvRowTarget | null {
+    if (currentTableLocked.value) return null;
     const state = getActiveState();
     if (!state) return null;
     const result = deleteSelectedCsvRowDraft(state);
@@ -374,6 +398,10 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   return {
+    currentTableLocked,
+    isTableLocked,
+    lockTable,
+    releaseTableLock,
     currentFaction,
     currentFactionOptionValue,
     currentTab,

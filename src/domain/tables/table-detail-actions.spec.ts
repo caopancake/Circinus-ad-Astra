@@ -28,7 +28,7 @@ describe('detailActionsForRow', () => {
       modRoot: context.modRoot,
       sessionId: context.sessionId,
     });
-    expect(actions[1]).toMatchObject({ type: 'file-editor', path: 'C:/mods/alpha\\data\\hulls\\XY.ship' });
+    expect(actions[1]).toMatchObject({ type: 'file-editor', kind: 'ship', id: 'XY' });
   });
 
   it('returns both weapon editors plus the file editor for weapon rows', () => {
@@ -39,7 +39,7 @@ describe('detailActionsForRow', () => {
   it('returns only the file editor for skills rows without editor windows', () => {
     const actions = detailActionsForRow(context, 'skills', { id: 'helmanship' });
     expect(actions).toHaveLength(1);
-    expect(actions[0]).toMatchObject({ type: 'file-editor', path: 'C:/mods/alpha\\data\\characters\\skills\\helmanship.skill' });
+    expect(actions[0]).toMatchObject({ type: 'file-editor', kind: 'skill', id: 'helmanship' });
   });
 
   it('returns no actions for tables without associated specs', () => {

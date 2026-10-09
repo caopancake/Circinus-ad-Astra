@@ -13,7 +13,8 @@
 `src/domain/tables/csv-dirty.ts`：dirty 行形状 owner。
 `src/orchestrators/file-history-write.orchestrator.ts`：保存完成登记 owner。
 `src/orchestrators/table-save.orchestrator.spec.ts`：保存编排行为测试。
-`src/orchestrators/table-save.orchestrator.ts`：保存编排 owner，以 `saveActiveTableChanges` 拥有输入提交、快照捕获、关联选择、写入与保存后接纳。
+`src/orchestrators/table-save.orchestrator.ts`：保存编排 owner，以 `saveTableChanges` 拥有明确 Mod/表的输入提交、快照捕获、关联选择、写入与 receipt 接纳。
+`src/orchestrators/entity-identity.orchestrator.ts`：跨窗口关联表准备、短暂表锁与写结果交接 owner。
 `src/services/write.service.ts`：写入能力包装，提交 patches、版本凭据与关联动作。
 `src/shared/api/write-api.ts`：CSV 保存 wire API。
 
@@ -64,6 +65,12 @@
 - 保存状态必须覆盖整个提交窗口，同一编辑器重复触发必须保持当前请求；跨窗口请求必须进入后端队列。
 - 保存请求期间的新编辑必须保留，original 必须以实际提交 patches 更新，dirty 必须按该基线重算。
 - 关联 spec 动作必须与 CSV 变更构成同一次原子 changeset，严禁分次写入。
+- 关联目标与版本必须在确认前捕获；正式提交必须携带 AssociatedSpecWrite 的动作与实际 EntityEditTarget。
+- 已有来源的保存、删除与改名必须消费实际已加载路径；改名必须保留原目录，来源缺失必须消费所属默认创建构造。
+- 保存入口必须显式接收 manifest 与 table，结果必须共同表达 status 与已写盘 receipt；关联表准备必须复用该动作。
+- 规格保存前必须提交并保存所属 CSV 草稿；取消或失败必须保留规格编辑面，完成准备后必须锁定所属表。
+- 表锁必须覆盖提交与本地 receipt 接纳；锁定期间必须保持读取接纳与编辑动作归属，失败、窗口销毁和会话结束必须释放锁。
+- 表运行态只允许接纳所属 CSV 的基线版本；规格版本必须归关联保存快照与实体记录。
 - 关联 spec 改名必须按本次 `preserveOriginalJson` 设置更新旧文件文本；需要整体重排时必须在 CSV 与 spec changeset 应用前确认。
 - 关联候选列表必须在当前窗口内独立滚动，确认与取消必须保持可操作。
 - 关联创建必须携带所属格式的创建参数；删除必须携带 ID，重命名必须携带原 ID 与目标创建参数。

@@ -14,6 +14,73 @@ pub fn save_text_file(mod_root: &str, path: &str, text: String) -> AppResult<Wri
     save_text_file_with_lock(mod_root, path, text, write_lock)
 }
 
+pub fn load_project_editable_file(
+    session_id: Option<&str>,
+    mod_root: &str,
+    path: String,
+) -> AppResult<EditableFileData> {
+    let mut loaded = load_editable_file(mod_root, path)?;
+    if let Some(session_id) = session_id {
+        loaded.entity = super::project::query_file_entity_target(session_id, &loaded.path)?;
+        if let Some(entity) = &loaded.entity {
+            loaded.base_versions = entity.base_versions.clone();
+        }
+    }
+    Ok(loaded)
+}
+
+pub fn save_project_text_file(
+    session_id: Option<&str>,
+    mod_root: &str,
+    path: &str,
+    text: String,
+    versions: &[crate::models::FileVersion],
+) -> AppResult<WriteResult<serde_json::Value>> {
+    if let Some(session_id) = session_id
+        && let Some(info) = super::project::query_file_entity_target(session_id, path)?
+    {
+        super::project::require_entity_version_scope(
+            session_id,
+            info.target.kind,
+            &info.target.id,
+            versions,
+        )?;
+        super::project::save_entity_text(session_id, &info.target, text)
+    } else {
+        Ok(save_text_file(mod_root, path, text.clone())?
+            .with_refreshed_entity(serde_json::json!({"text":text})))
+    }
+}
+
+pub fn query_text_identity_intent(
+    session_id: &str,
+    source: &crate::models::EntityEditTarget,
+    text: &str,
+) -> AppResult<crate::models::EntityIdentityIntent> {
+    let content = crate::parsers::parse_starsector_json(text).map_err(|error| {
+        AppError::context(format!("解析 JSON 文件失败 ({})", source.write.path), error)
+    })?;
+    let definition = crate::domain::editor_config_definitions::entity_spec_definition(source.kind)
+        .expect("recognized file has spec definition");
+    let next = content
+        .get(definition.id_field)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| {
+            AppError::message("spec.id_missing", format!("缺少 {}", definition.id_field))
+        })?;
+    super::project::query_entity_identity_intent(session_id, source, next)
+}
+
+pub fn follow_text_identity(
+    kind: crate::models::EntityKind,
+    text: &str,
+    next_id: &str,
+) -> AppResult<String> {
+    let definition = crate::domain::editor_config_definitions::entity_spec_definition(kind)
+        .expect("recognized file has spec definition");
+    crate::parsers::replace_root_string(text, definition.id_field, next_id)
+}
+
 fn save_text_file_with_lock(
     mod_root: &str,
     path: &str,
@@ -40,6 +107,7 @@ pub fn load_editable_file(mod_root: &str, path: String) -> AppResult<EditableFil
     let target = boundary.resolve_absolute(target, "file path")?;
     let base_versions = vec![crate::io::file_version(&target)?];
     read_utf8_no_bom(&target).map(|text| EditableFileData {
+        entity: None,
         path: target.display().to_string(),
         text,
         base_versions,

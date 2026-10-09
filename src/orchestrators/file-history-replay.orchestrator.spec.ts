@@ -41,7 +41,8 @@ function entry(id = 1): FileSaveHistoryEntry {
 function change(): FileChangeRecord {
   return {
     kind: 'file',
-    path: entry().paths[0]!,
+    beforePath: entry().paths[0]!,
+    afterPath: entry().paths[0]!,
     beforeExists: true,
     beforeText: 'B',
     beforeDataBase64: null,
@@ -56,6 +57,7 @@ function savedResult(): WriteResult {
   return {
     changes: [change()],
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
+    identityChanges: [],
     keyMap: [],
     refreshedEntity: null,
     baseVersions: [],
@@ -151,7 +153,8 @@ describe('authoritative file history replay', () => {
       {
         ...change(),
         kind: 'directory',
-        path: root + '/mission',
+        beforePath: root + '/mission',
+        afterPath: root + '/mission',
         beforeFiles: [{ relPath: 'old.txt', text: 'old', dataBase64: null }],
         afterFiles: [{ relPath: 'new.txt', text: 'restored', dataBase64: null }],
       },

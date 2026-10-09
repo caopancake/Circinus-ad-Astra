@@ -1,20 +1,15 @@
 use crate::{
     errors::{AppError, AppResult},
-    io::{read_csv_data, read_json_file},
-    models::FactionMeta,
+    io::{FsRootBoundary, forward_slash_path, read_faction_index, read_json_file},
+    models::{
+        EntityFileLocation, FactionIndexEntry, FactionMeta, LoadedSpecRecord, ResourceSource,
+    },
 };
 use serde_json::{Map, Value};
 use std::{
     collections::{BTreeMap, HashMap},
-    path::{Path, PathBuf},
+    path::Path,
 };
-
-use super::super::model::is_comment_row;
-
-struct FactionIndexEntry {
-    id: String,
-    path: PathBuf,
-}
 
 pub(in crate::services::project) fn discover_factions(
     mod_root: &Path,
@@ -22,12 +17,7 @@ pub(in crate::services::project) fn discover_factions(
     let mut factions = BTreeMap::new();
     let mut tag_map = HashMap::new();
     for entry in read_faction_index(mod_root)? {
-        let obj = read_faction_object(&entry)?;
-        let fid = obj
-            .get("id")
-            .and_then(Value::as_str)
-            .unwrap_or(&entry.id)
-            .to_string();
+        let (fid, obj) = read_faction_object(&entry)?;
         let Some(name) = obj
             .get("displayName")
             .or_else(|| obj.get("displayNameLong"))
@@ -66,23 +56,49 @@ pub(in crate::services::project) fn discover_factions(
 
 pub(in crate::services::project) fn load_faction_files(
     mod_root: &Path,
-) -> AppResult<BTreeMap<String, Value>> {
+) -> AppResult<BTreeMap<String, LoadedSpecRecord>> {
     let mut defs = BTreeMap::new();
     for entry in read_faction_index(mod_root)? {
-        let obj = read_faction_object(&entry)?;
-        let id = obj
-            .get("id")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .unwrap_or(entry.id);
-        defs.insert(id, Value::Object(obj));
+        let (id, obj) = read_faction_object(&entry)?;
+        let boundary = FsRootBoundary::new(mod_root, "faction root")?;
+        let rel_path = forward_slash_path(
+            entry
+                .path
+                .strip_prefix(boundary.root())
+                .expect("faction belongs to authorized root"),
+        );
+        defs.insert(
+            id.clone(),
+            LoadedSpecRecord {
+                id,
+                location: EntityFileLocation {
+                    source: ResourceSource::Mod,
+                    root: boundary.root().to_string_lossy().to_string(),
+                    rel_path,
+                    path: entry.path.to_string_lossy().to_string(),
+                },
+                data: Value::Object(obj),
+            },
+        );
     }
     Ok(defs)
 }
 
-fn read_faction_object(entry: &FactionIndexEntry) -> AppResult<Map<String, Value>> {
+fn read_faction_object(entry: &FactionIndexEntry) -> AppResult<(String, Map<String, Value>)> {
     match read_json_file(&entry.path)? {
-        Value::Object(obj) => Ok(obj),
+        Value::Object(obj) => {
+            let id = obj
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    AppError::message(
+                        "faction.id_missing",
+                        format!("势力文件缺少字符串 id: {}", entry.path.display()),
+                    )
+                })?
+                .to_string();
+            Ok((id, obj))
+        }
         _ => Err(AppError::message(
             "faction.file_not_object",
             format!(
@@ -90,127 +106,6 @@ fn read_faction_object(entry: &FactionIndexEntry) -> AppResult<Map<String, Value
                 entry.path.display()
             ),
         )),
-    }
-}
-
-fn read_faction_index(mod_root: &Path) -> AppResult<Vec<FactionIndexEntry>> {
-    let dir = mod_root.join("data/world/factions");
-    let table = read_csv_data(&dir.join("factions.csv"))?;
-    if table.header.is_empty() {
-        return Ok(vec![]);
-    }
-    let id_col = pick_col(&table.header, &["id", "faction", "factionId"])
-        .or_else(|| table.header.first().cloned());
-    let Some(id_col) = id_col else {
-        return Ok(vec![]);
-    };
-    let file_col = pick_col(&table.header, &["file", "path", "filename", "factionFile"])
-        .or_else(|| table.header.iter().find(|col| *col != &id_col).cloned());
-
-    let mut entries = Vec::new();
-    for (index, row) in table.rows.iter().enumerate() {
-        if is_faction_index_padding_row(row) {
-            continue;
-        }
-        entries.push(
-            faction_index_entry(mod_root, &dir, row, &id_col, file_col.as_deref()).map_err(
-                |error| {
-                    AppError::context(format!("解析 factions.csv 失败: row {}", index + 2), error)
-                },
-            )?,
-        );
-    }
-    Ok(entries)
-}
-
-fn pick_col(header: &[String], candidates: &[&str]) -> Option<String> {
-    candidates.iter().find_map(|candidate| {
-        header
-            .iter()
-            .find(|col| col.eq_ignore_ascii_case(candidate))
-            .cloned()
-    })
-}
-
-fn faction_index_entry(
-    mod_root: &Path,
-    dir: &Path,
-    row: &Map<String, Value>,
-    id_col: &str,
-    file_col: Option<&str>,
-) -> AppResult<FactionIndexEntry> {
-    let raw_id = row
-        .get(id_col)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .ok_or_else(|| {
-            AppError::message(
-                "faction.id_column_missing",
-                format!("missing faction id column: {id_col}"),
-            )
-        })?;
-    if raw_id.is_empty() {
-        return Err(AppError::message(
-            "faction.id_missing",
-            "missing faction id",
-        ));
-    }
-    let raw_file = file_col
-        .and_then(|col| row.get(col))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    let file_value = raw_file.or_else(|| looks_like_faction_file(raw_id).then_some(raw_id));
-    let id = if let Some(file) = file_value {
-        faction_id_from_file(file)
-    } else {
-        raw_id.to_string()
-    };
-    if id.is_empty() {
-        return Err(AppError::message(
-            "faction.id_missing",
-            "missing faction id",
-        ));
-    }
-    let file = file_value
-        .map(ToString::to_string)
-        .unwrap_or_else(|| format!("{id}.faction"));
-    Ok(FactionIndexEntry {
-        id,
-        path: faction_file_path(mod_root, dir, &file),
-    })
-}
-
-fn is_faction_index_padding_row(row: &Map<String, Value>) -> bool {
-    is_comment_row(row)
-        || row
-            .values()
-            .all(|value| value.as_str().is_none_or(|text| text.trim().is_empty()))
-}
-
-fn looks_like_faction_file(value: &str) -> bool {
-    value.ends_with(".faction") || value.contains('/') || value.contains('\\')
-}
-
-fn faction_id_from_file(value: &str) -> String {
-    Path::new(value)
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or(value)
-        .to_string()
-}
-
-fn faction_file_path(mod_root: &Path, dir: &Path, value: &str) -> PathBuf {
-    let normalized = value.replace('\\', "/");
-    let file = if normalized.ends_with(".faction") {
-        normalized
-    } else {
-        format!("{normalized}.faction")
-    };
-    if file.contains('/') {
-        mod_root.join(file)
-    } else {
-        dir.join(file)
     }
 }
 

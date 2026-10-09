@@ -25,6 +25,7 @@
 - 列宽必须使用结构化 `modRoot/table/column`，严禁拼接 key。
 - 单元格提交必须消费完整 `CsvCellTarget`，包含 sessionId、modRoot、table、rowKey 与 column；历史必须沿用同一目标。
 - 活动单元格身份必须唯一归 tables 运行态；原始输入必须归控件，输入集合必须按 session、Mod 与表隔离。
+- 身份交接表锁必须按会话、Mod 与表归属；控件、工具栏、快捷键与窗口读取必须共同消费锁定状态。
 - 脏标记只允许经草稿变更边界写入，组件严禁直改 dirty 结构。
 - 行身份只使用 Rust rowKey 或前端临时 new key，严禁按数组索引、显示文本或过滤结果定位行。
 - 表格组件严禁直接 IPC、写盘或维护 history；保存必须经保存编排，撤销重做必须经草稿历史。

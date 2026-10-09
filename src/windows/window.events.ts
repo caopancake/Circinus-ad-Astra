@@ -4,6 +4,12 @@ import type { AppSettings } from '@/shared/types';
 import type { EditorSpecKind } from '@/shared/types';
 
 export const WINDOW_EVENTS = {
+  windowCloseIntent: 'window-lifecycle-close-requested',
+  managedWindowReleased: 'managed-window-released',
+  entityTablePrepare: 'entity-table-prepare',
+  entityTablePrepared: 'entity-table-prepared',
+  entityTableRelease: 'entity-table-release',
+  entityIdentityApplied: 'entity-identity-applied',
   editorSpecSaved: 'editor-spec-saved',
   editorPreviewDraftUpdated: 'editor-preview-draft-updated',
   fileEditorFocusLine: 'file-editor-focus-line',
@@ -47,6 +53,7 @@ export interface FileEditorSavedEvent {
 }
 
 export interface FileEditorTextAppliedEvent {
+  commitId: number;
   baseVersions: import('@/shared/types').FileVersion[];
   modRoot: string;
   path: string;
@@ -60,3 +67,29 @@ export interface ProjectSessionInvalidatedEvent {
 }
 
 export type AppSettingsChangedEvent = AppSettings;
+
+export interface EntityTablePrepareEvent {
+  requestId: string;
+  ownerLabel: string;
+  sessionId: string;
+  modRoot: string;
+  source: import('@/shared/types').EntityEditTarget;
+}
+export type EntityTablePreparedEvent = EntityTablePrepareEvent &
+  (
+    | { status: 'ready'; info: import('@/shared/types').EntityEditInfo; receipt: WriteResult | null }
+    | { status: 'cancelled' }
+    | { status: 'failed'; message: string }
+  );
+export interface EntityTableReleaseEvent {
+  requestId: string;
+  ownerLabel: string;
+  sessionId: string;
+  modRoot: string;
+  receipt: WriteResult | null;
+}
+export interface EntityIdentityAppliedEvent {
+  sessionId: string;
+  modRoot: string;
+  result: WriteResult;
+}

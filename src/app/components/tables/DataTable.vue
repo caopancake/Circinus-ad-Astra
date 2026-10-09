@@ -1,9 +1,13 @@
 <template>
+  <div v-if="csvTable.tables.currentTableLocked" class="table-external-update-note">
+    <span>规格身份正在交接，本表稍后恢复编辑。</span>
+  </div>
   <div v-if="csvTable.tables.hasCurrentTableExternalUpdate" class="table-external-update-note">
     <span>当前 CSV 文件已在外部更新，未保存修改已保留。</span>
     <n-button size="tiny" secondary type="warning" @click="csvTable.loadExternalTableUpdate">载入外部版本</n-button>
   </div>
   <CsvGrid
+    :inert="csvTable.tables.currentTableLocked"
     :editing="csvTable.tables.editing"
     :is-dirty="csvTable.tables.isDirty"
     :model="effectiveGridModel"

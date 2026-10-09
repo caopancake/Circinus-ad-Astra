@@ -11,7 +11,7 @@ mod services;
 pub(crate) mod testutil;
 
 use models::{AppLogEntry, AppLogLevel};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 pub fn run() {
     tauri::Builder::default()
@@ -22,6 +22,21 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Err(error) = services::windows::release_window(window.label())
+            {
+                diagnostics::record(format!("release window registration: {error}"));
+            }
+            if matches!(event, tauri::WindowEvent::Destroyed)
+                && let Err(error) = window.app_handle().emit(
+                    "managed-window-released",
+                    serde_json::json!({"label": window.label()}),
+                )
+            {
+                diagnostics::record(format!("notify window release: {error}"));
+            }
+        })
         .setup(|app| {
             let handle = app.handle().clone();
             diagnostics::install(Box::new(move |message| {
@@ -40,8 +55,16 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::open_managed_window,
+            commands::request_session_window_close,
+            commands::cancel_window_close_request,
+            commands::update_managed_window_status,
+            commands::reserve_window_targets,
+            commands::release_window_targets,
+            commands::retarget_managed_window,
             commands::query_file_history,
-            commands::query_entity_base_versions,
+            commands::query_entity_edit_target,
+            commands::query_entity_identity_intent,
             commands::clear_file_history,
             commands::open_project_session,
             commands::close_project_session,
@@ -82,6 +105,8 @@ pub fn run() {
             commands::scan_core_fields,
             commands::scan_core_graphics,
             commands::load_editable_file,
+            commands::query_text_identity_intent,
+            commands::follow_text_identity,
             commands::load_imported_editor_spec_file,
             commands::save_text_file,
             commands::transcode_file_to_utf8,

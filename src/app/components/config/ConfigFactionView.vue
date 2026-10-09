@@ -16,6 +16,7 @@
       :key="JSON.stringify([sessionId, modRoot])"
       :faction-id="selectedFaction"
       :faction-versions="factionVersions"
+      :identity-handoff="identityHandoff"
       :data-revision="factionDataRevision"
       :preview-revision="factionPreviewRevision"
       :factions="factions"
@@ -39,6 +40,7 @@ import { useConfigFactionViewModel } from '@/app/composables/config/use-config-f
 
 const {
   selectedFaction,
+  identityHandoff,
   factionDataRevision,
   factionPreviewRevision,
   listLoadStartedAt,

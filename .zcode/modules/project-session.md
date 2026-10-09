@@ -8,6 +8,8 @@
 
 `src-tauri/src/services/project/cache/`：按实体类型的懒加载缓存 owner。
 `src-tauri/src/services/project/query/`：只读实体与表格 query owner。
+`src-tauri/src/services/project/query/entity_targets.rs`：实际编辑目标、身份意图及正式版本范围 owner。
+`src-tauri/src/services/project/cache/spec_records.rs`：实际来源根、相对路径、加载 ID 与业务内容的记录 owner。
 `src-tauri/src/services/project/resources/`：Mod/Core 资源解析 owner。
 `src-tauri/src/services/project/root.rs`：canonical 游戏根与持久化缓存 owner。
 `src-tauri/src/services/project/session.rs`：session 注册表与状态锁 owner，拥有打开、关闭与 session 查询。
@@ -75,9 +77,14 @@
 - 所有 Mod 缓存与索引必须按 session 隔离，严禁跨 session 复用。
 - 打开时必须对全部索引输入计算内容指纹；路径集合、内容或格式版本任一不一致即丢弃快照。
 - 持久化索引只存于工具私有目录并按 canonical `modRoot` 分片；只保存可由源文件重新推导的规格、阵营、任务和表计数。
-- 持久化缓存必须消费格式版本 3 的正式行记录，并按源指纹和格式标识核对恢复内容。
+- 持久化缓存必须消费格式版本 4 的来源记录与行记录，并按源指纹和格式标识核对恢复内容。
 - 缓存损坏或不可写只降级为重建，严禁读取旧快照。
 - 编辑 query 必须随数据返回 baseVersions；派生信息刷新必须保留 CSV 行身份，内容刷新必须按实际写盘方向处理。
+- detail、list 与编辑目标查询必须消费同一目标定义；规格目标必须承载实际来源、所属根、写入目标、加载身份及关联行。
+- Variant 与 Skin 的业务输出必须是文件内容；加载身份、文件目标、版本与资源必须分别归正式记录。
+- 多文件版本必须覆盖实际规格与所属 CSV、势力索引与授权规格、任务索引与任务目录；新建必须携带目标不存在凭据。
+- Core 弹体必须保留 Core 实际来源，同时必须声明当前 Mod 的覆盖创建目标；失效重建必须消费相同来源组合。
+- 来源指纹、缓存恢复与目录加载必须经同一根边界授权实际文件及父链；索引引用必须纳入源指纹与版本范围。
 - 舰体引用查询的指定 ID 结果必须包含内置武器槽目录，并按当前 Mod 优先、原版补集与皮肤继承规则计算。
 - 重命名的失效必须同时携带旧 ID 与新 ID。
 

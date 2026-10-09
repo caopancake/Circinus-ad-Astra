@@ -14,10 +14,10 @@ const mocks = vi.hoisted(() => ({
   scanDirectoryGameOverview: vi.fn(),
   openDirectoryTarget: vi.fn(),
   openModFromOverview: vi.fn(),
-  saveActiveTableChanges: vi.fn(),
+  saveTableChanges: vi.fn(),
   captureWorkspaceCloseTarget: vi.fn(),
-  closeWorkspaceRuntime: vi.fn(async () => {}),
-  removeLoadedModRuntime: vi.fn(async () => {}),
+  closeWorkspaceRuntime: vi.fn(async () => true),
+  removeLoadedModRuntime: vi.fn(async () => true),
   openEditorWindow: vi.fn(async () => {}),
   openFileEditorWindow: vi.fn(async () => {}),
   recordLogBestEffort: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock('@/services/session.service', () => ({
 }));
 
 vi.mock('@/orchestrators/table-save.orchestrator', () => ({
-  saveActiveTableChanges: mocks.saveActiveTableChanges,
+  saveTableChanges: mocks.saveTableChanges,
   pendingTableSave: () => null,
 }));
 
@@ -39,6 +39,7 @@ vi.mock('@/orchestrators/directory-opening.orchestrator', () => ({
 }));
 
 vi.mock('@/orchestrators/workspace-lifecycle.orchestrator', () => ({
+  closeWorkspaceWindows: vi.fn(async () => true),
   captureWorkspaceCloseTarget: mocks.captureWorkspaceCloseTarget,
   closeWorkspaceRuntime: mocks.closeWorkspaceRuntime,
   removeLoadedModRuntime: mocks.removeLoadedModRuntime,
@@ -201,28 +202,33 @@ describe('useWorkspaceShellActions', () => {
   });
 
   it('skips saving when there is no captured table target', async () => {
-    mocks.saveActiveTableChanges.mockResolvedValue('noop');
+    mocks.saveTableChanges.mockResolvedValue({ status: 'noop' });
     const feedback = feedbackStub();
     const actions = useWorkspaceShellActions(feedback);
     await actions.saveChanges();
-    expect(mocks.saveActiveTableChanges).toHaveBeenCalledTimes(1);
+    expect(mocks.saveTableChanges).toHaveBeenCalledTimes(1);
   });
 
   it('reports the save result of the active table', async () => {
-    mocks.saveActiveTableChanges.mockResolvedValue('saved');
+    mocks.saveTableChanges.mockResolvedValue({ status: 'saved' });
     const feedback = feedbackStub();
     const actions = useWorkspaceShellActions(feedback);
     await actions.saveChanges();
-    expect(mocks.saveActiveTableChanges).toHaveBeenCalledWith({ manifest: null, selectAssociatedSpecs: expect.any(Function), feedback });
+    expect(mocks.saveTableChanges).toHaveBeenCalledWith({
+      table: 'ships',
+      manifest: null,
+      selectAssociatedSpecs: expect.any(Function),
+      feedback,
+    });
     expect(feedback.success).toHaveBeenCalledWith('当前 CSV 表已保存');
   });
 
   it('returns the adjusted weapon creation branch and selected actions from the confirmation', async () => {
-    mocks.saveActiveTableChanges.mockResolvedValue('noop');
+    mocks.saveTableChanges.mockResolvedValue({ status: 'noop' });
     const feedback = feedbackStub();
     const actions = useWorkspaceShellActions(feedback);
     await actions.saveChanges();
-    const select = mocks.saveActiveTableChanges.mock.calls[0]![0].selectAssociatedSpecs as (
+    const select = mocks.saveTableChanges.mock.calls[0]![0].selectAssociatedSpecs as (
       choices: AssociatedSpecCandidate[],
     ) => Promise<AssociatedSpecChange[] | null>;
     (feedback.choose as ReturnType<typeof vi.fn>).mockImplementationOnce(async (options: ChooseOptions) => {
@@ -252,7 +258,7 @@ describe('useWorkspaceShellActions', () => {
   });
 
   it('informs when there is nothing to save', async () => {
-    mocks.saveActiveTableChanges.mockResolvedValue('noop');
+    mocks.saveTableChanges.mockResolvedValue({ status: 'noop' });
     const feedback = feedbackStub();
     const actions = useWorkspaceShellActions(feedback);
     await actions.saveChanges();

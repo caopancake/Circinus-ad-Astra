@@ -9,8 +9,8 @@ use crate::{
     errors::{AppError, AppResult},
     io::{FileChangeSetBuilder, JsonWriteBatch, acquire_root_write_lock, read_json_file},
     models::{
-        AssociatedSpecChange, AssociatedSpecCreateParams, CsvRowKeyMapping, CsvRowPatch,
-        CsvRowPatchAction, CsvTableKey, WriteResult,
+        AssociatedSpecChange, AssociatedSpecCreateParams, AssociatedSpecWrite, CsvRowKeyMapping,
+        CsvRowPatch, CsvRowPatchAction, CsvTableKey, WriteResult,
     },
     parsers::render_csv_text,
 };
@@ -33,11 +33,42 @@ pub fn save_csv_patch(
     )
 }
 
+#[cfg(test)]
 pub fn save_csv_patch_with_json_options(
     session_id: &str,
     table: CsvTableKey,
     patches: Vec<CsvRowPatch>,
     associated_specs: Vec<AssociatedSpecChange>,
+    options: crate::models::JsonWriteOptions,
+) -> AppResult<WriteResult> {
+    let definition = associated_spec_definition(table);
+    let associated = associated_specs
+        .into_iter()
+        .map(|change| {
+            let definition = definition.expect("associated table has format");
+            let id = match &change {
+                AssociatedSpecChange::Rename { previous_id, .. } => previous_id.as_str(),
+                _ => change.id(),
+            };
+            let info = super::super::query::query_entity_edit_target(
+                session_id,
+                definition.entity_kind,
+                id,
+            )?;
+            Ok(AssociatedSpecWrite {
+                change,
+                target: info.target,
+            })
+        })
+        .collect::<AppResult<Vec<_>>>()?;
+    save_csv_patch_snapshot(session_id, table, patches, associated, options)
+}
+
+pub fn save_csv_patch_snapshot(
+    session_id: &str,
+    table: CsvTableKey,
+    patches: Vec<CsvRowPatch>,
+    associated_specs: Vec<AssociatedSpecWrite>,
     options: crate::models::JsonWriteOptions,
 ) -> AppResult<WriteResult> {
     let handle = session_handle(session_id)?;
@@ -63,7 +94,18 @@ pub fn save_csv_patch_with_json_options(
     let mut json = JsonWriteBatch::new(options);
     builder.text_file(&rel_path, Some(csv_text.clone()))?;
     for spec in &associated_specs {
-        add_associated_spec_change(&mut builder, table, spec, &mut json)?;
+        let current = super::super::query::entity_targets::describe_entity_target(
+            &mut session,
+            spec.target.kind,
+            &spec.target.id,
+        )?;
+        if current.target != spec.target {
+            return Err(AppError::message(
+                "spec.target_changed",
+                "关联规格目标已变化",
+            ));
+        }
+        add_associated_spec_change(&mut builder, table, &spec.change, &spec.target, &mut json)?;
     }
     json.finish()?;
     let changes = builder.apply()?;
@@ -75,7 +117,48 @@ pub fn save_csv_patch_with_json_options(
         table_data.saved_text = Some(csv_text);
     }
     super::super::cache::refresh_faction_annotations(&mut session);
-    let write_result: WriteResult<()> = WriteResult::new(changes, key_map, None);
+    let mut write_result: WriteResult<()> = WriteResult::new(changes, key_map, None);
+    for spec in &associated_specs {
+        let definition = associated_spec_definition(table).expect("associated format exists");
+        let mut next = spec.target.clone();
+        next.id = spec.change.id().to_string();
+        next.write.rel_path = if spec.target.state == crate::models::EntityTargetState::Existing
+            && matches!(spec.change, AssociatedSpecChange::Rename { .. })
+        {
+            crate::io::forward_slash_path(
+                &Path::new(&spec.target.write.rel_path)
+                    .with_file_name(format!("{}{}", next.id, definition.extension)),
+            )
+        } else if matches!(spec.change, AssociatedSpecChange::Delete { .. }) {
+            spec.target.write.rel_path.clone()
+        } else {
+            definition.default_rel_path(&next.id)
+        };
+        next.write.path = Path::new(&mod_root)
+            .join(&next.write.rel_path)
+            .to_string_lossy()
+            .to_string();
+        next.state = if matches!(spec.change, AssociatedSpecChange::Delete { .. }) {
+            crate::models::EntityTargetState::Create
+        } else {
+            crate::models::EntityTargetState::Existing
+        };
+        next.source =
+            (next.state == crate::models::EntityTargetState::Existing).then(|| next.write.clone());
+        next.linked_record = loaded_registered_csv_rows(&session, table)?
+            .iter()
+            .find(|row| row.data.get("id").and_then(Value::as_str) == Some(&next.id))
+            .map(|row| crate::models::EntityLinkedRecord::Csv {
+                table,
+                row_key: row.row_key.clone(),
+            });
+        write_result
+            .identity_changes
+            .push(crate::models::EntityIdentityChange {
+                before: spec.target.clone(),
+                after: next,
+            });
+    }
     debug_assert!(
         write_result
             .invalidation
@@ -164,6 +247,7 @@ fn add_associated_spec_change(
     builder: &mut FileChangeSetBuilder,
     table: CsvTableKey,
     change: &AssociatedSpecChange,
+    target: &crate::models::EntityEditTarget,
     json: &mut JsonWriteBatch,
 ) -> AppResult<()> {
     let definition = associated_spec_definition(table).ok_or_else(|| {
@@ -174,9 +258,29 @@ fn add_associated_spec_change(
     })?;
     let id = change.id();
     let id = crate::domain::config::validate_config_id(id, definition.invalid_id_message)?;
-    let rel_path = definition.default_rel_path(id);
+    if target.kind != definition.entity_kind {
+        return Err(AppError::message(
+            "table.associated_spec_kind_mismatch",
+            "关联规格目标种类不属于本表",
+        ));
+    }
+    let rel_path = if matches!(change, AssociatedSpecChange::Rename { .. }) {
+        if target.state == crate::models::EntityTargetState::Existing {
+            crate::io::forward_slash_path(
+                &Path::new(&target.write.rel_path)
+                    .with_file_name(format!("{id}{}", definition.extension)),
+            )
+        } else {
+            definition.default_rel_path(id)
+        }
+    } else {
+        target.write.rel_path.clone()
+    };
     match change {
         AssociatedSpecChange::Create { create } => {
+            if target.id != id || target.state != crate::models::EntityTargetState::Create {
+                return Err(AppError::message("spec.target_exists", "关联规格已存在"));
+            }
             if builder.root().join(&rel_path).exists() {
                 return Err(AppError::message(
                     "spec.target_exists",
@@ -186,13 +290,18 @@ fn add_associated_spec_change(
             builder.text_file(rel_path, Some(default_associated_spec_text(table, create)?))?;
         }
         AssociatedSpecChange::Delete { .. } => {
-            builder.text_file(rel_path, None)?;
+            builder.text_file(&target.write.rel_path, None)?;
         }
         AssociatedSpecChange::Rename {
             previous_id,
             create,
         } => {
-            if builder.root().join(&rel_path).exists() {
+            if builder.root().join(&rel_path).exists()
+                && !crate::io::same_physical_path(
+                    &builder.root().join(&target.write.rel_path),
+                    &builder.root().join(&rel_path),
+                )
+            {
                 return Err(AppError::message(
                     "spec.target_exists",
                     format!("关联目标已存在: {rel_path}"),
@@ -202,15 +311,31 @@ fn add_associated_spec_change(
                 previous_id,
                 definition.invalid_id_message,
             )?;
-            let previous_rel_path = definition.default_rel_path(previous_id);
+            if target.id != previous_id {
+                return Err(AppError::message(
+                    "spec.path_id_mismatch",
+                    "关联规格源身份不一致",
+                ));
+            }
+            let previous_rel_path = target.write.rel_path.clone();
             let previous_full = builder.root().join(&previous_rel_path);
             let content = if previous_full.exists() {
-                rewrite_associated_spec_id(table, definition.id_field, &previous_full, id, json)?
+                rewrite_associated_spec_id(
+                    table,
+                    definition.id_field,
+                    &previous_full,
+                    previous_id,
+                    id,
+                    json,
+                )?
             } else {
                 default_associated_spec_text(table, create)?
             };
-            builder.text_file(previous_rel_path, None)?;
-            builder.text_file(rel_path, Some(content))?;
+            if previous_full.exists() {
+                builder.rename_text_file(&previous_rel_path, &rel_path, content)?;
+            } else {
+                builder.text_file(definition.default_rel_path(id), Some(content))?;
+            }
         }
     }
     Ok(())
@@ -233,10 +358,17 @@ fn rewrite_associated_spec_id(
     table: CsvTableKey,
     id_field: &str,
     path: &Path,
+    previous_id: &str,
     new_id: &str,
     json: &mut JsonWriteBatch,
 ) -> AppResult<String> {
     let mut value = read_json_file(path)?;
+    if value.get(id_field).and_then(Value::as_str) != Some(previous_id) {
+        return Err(AppError::message(
+            "spec.path_id_mismatch",
+            format!("关联规格源 ID 已变化: {}", path.display()),
+        ));
+    }
     let Some(object) = value.as_object_mut() else {
         return Err(AppError::message(
             "spec.file_not_object",
@@ -333,6 +465,129 @@ mod tests {
             .unwrap();
             assert_eq!(read_utf8_no_bom(&csv_path).unwrap(), csv);
             assert_eq!(read_json_file(&spec_path).unwrap(), expected);
+            close_project_session(manifest.session_id).unwrap();
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn command_renames_nested_associated_targets_and_replays_case_only_names() {
+        use crate::models::{EntityKind, FileChangeReplayDirection, WeaponSpecClass};
+        use crate::services::{project, write_transactions};
+        for next_id in ["Next", "demo"] {
+            let root = temp_dir("csv_nested_identity_command");
+            let directory = root.join("data/weapons/nested");
+            std::fs::create_dir_all(&directory).unwrap();
+            let csv_path = root.join("data/weapons/weapon_data.csv");
+            write_utf8_no_bom(&csv_path, "id,custom\nDemo,keep\n").unwrap();
+            write_utf8_no_bom(
+                &directory.join("Demo.wpn"),
+                "{id:'Demo',specClass:'projectile',custom:{'_key':1}}\n",
+            )
+            .unwrap();
+            let mut trace = project::PerformanceTrace::new("project.openSession");
+            let manifest = open_project_session_traced(&root, None, &mut trace).unwrap();
+            let info =
+                project::query_entity_edit_target(&manifest.session_id, EntityKind::Weapon, "Demo")
+                    .unwrap();
+            let intent =
+                project::query_entity_identity_intent(&manifest.session_id, &info.target, next_id)
+                    .unwrap();
+            let window = query_csv_table_window(
+                &manifest.session_id,
+                CsvTableKey::Weapons,
+                0,
+                10,
+                None,
+                CsvFactionFilter::All,
+            )
+            .unwrap();
+            let mut row = window.rows[0].data.clone();
+            row.insert("id".into(), Value::String(next_id.to_string()));
+            let mut base_versions = info.base_versions;
+            if !base_versions.iter().any(|version| {
+                crate::io::same_physical_path(
+                    Path::new(&version.path),
+                    Path::new(&intent.destination_version.path),
+                )
+            }) {
+                base_versions.push(intent.destination_version);
+            }
+            let saved = crate::commands::save_csv_patch(
+                crate::models::command_payloads::SaveCsvPatchPayload {
+                    session_id: manifest.session_id.clone(),
+                    mod_root: manifest.mod_root.clone(),
+                    base_versions,
+                    table: CsvTableKey::Weapons,
+                    patches: vec![CsvRowPatch {
+                        row_key: window.rows[0].row_key.clone(),
+                        insert_at: None,
+                        action: CsvRowPatchAction::Upsert,
+                        row,
+                    }],
+                    associated_specs: vec![AssociatedSpecWrite {
+                        target: info.target,
+                        change: AssociatedSpecChange::Rename {
+                            previous_id: "Demo".into(),
+                            create: AssociatedSpecCreateParams::Weapon {
+                                id: next_id.into(),
+                                spec_class: WeaponSpecClass::Projectile,
+                            },
+                        },
+                    }],
+                    json_write: Default::default(),
+                },
+            )
+            .unwrap();
+            let actual_name = || {
+                std::fs::read_dir(&directory)
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .to_string()
+            };
+            assert_eq!(actual_name(), format!("{next_id}.wpn"));
+            assert_eq!(
+                read_json_file(&directory.join(format!("{next_id}.wpn"))).unwrap()["custom"]["_key"],
+                1
+            );
+            assert_eq!(
+                crate::io::read_csv_data(&csv_path).unwrap().rows[0]["custom"],
+                "keep"
+            );
+            let next = project::query_entity_edit_target(
+                &manifest.session_id,
+                EntityKind::Weapon,
+                next_id,
+            )
+            .unwrap();
+            assert_eq!(saved.base_versions, next.base_versions);
+            assert_eq!(saved.identity_changes[0].after, next.target);
+            let undone = write_transactions::replay(
+                &manifest.session_id,
+                &manifest.mod_root,
+                FileChangeReplayDirection::Undo,
+                saved.history.undo_stack[0].id,
+                saved.history.revision,
+            )
+            .unwrap();
+            assert_eq!(actual_name(), "Demo.wpn");
+            assert_eq!(
+                crate::io::read_csv_data(&csv_path).unwrap().rows[0]["id"],
+                "Demo"
+            );
+            write_transactions::replay(
+                &manifest.session_id,
+                &manifest.mod_root,
+                FileChangeReplayDirection::Redo,
+                undone.history.redo_stack[0].id,
+                undone.history.revision,
+            )
+            .unwrap();
+            assert_eq!(actual_name(), format!("{next_id}.wpn"));
             close_project_session(manifest.session_id).unwrap();
             std::fs::remove_dir_all(root).unwrap();
         }
@@ -665,8 +920,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         assert_eq!(change_paths(&result.changes), expected_paths);
         assert_eq!(result.invalidation.paths, change_paths(&result.changes));
-        assert!(!result.changes[1].after_exists);
-        assert!(result.changes[2].after_exists);
+        assert!(result.changes[1].before_exists);
+        assert!(result.changes[1].after_exists);
         assert!(!renamed.contains("old_weapon"));
         assert!(renamed.contains("\"id\": \"new_weapon\""));
         assert!(renamed.contains("\"weaponType\": \"BALLISTIC\""));
@@ -723,7 +978,7 @@ mod tests {
         )
         .unwrap();
         let renamed = read_utf8_no_bom(&root.join("data/weapons/new_weapon.wpn")).unwrap();
-        assert_eq!(result.changes.len(), 3);
+        assert_eq!(result.changes.len(), 2);
         assert!(renamed.contains("# note"));
         assert!(renamed.find("weaponType").unwrap() < renamed.find("id:").unwrap());
         assert!(!root.join("data/weapons/old_weapon.wpn").exists());
@@ -829,7 +1084,6 @@ mod tests {
         let created = read_utf8_no_bom(&root.join("data/weapons/new_weapon.wpn")).unwrap();
         let expected_paths = [
             path_string(root.join("data/weapons/weapon_data.csv")),
-            path_string(root.join("data/weapons/missing.wpn")),
             path_string(root.join("data/weapons/new_weapon.wpn")),
         ];
 
@@ -837,8 +1091,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         assert_eq!(change_paths(&result.changes), expected_paths);
         assert_eq!(result.invalidation.paths, change_paths(&result.changes));
-        assert!(!result.changes[1].after_exists);
-        assert!(result.changes[2].after_exists);
+        assert!(!result.changes[1].before_exists);
+        assert!(result.changes[1].after_exists);
         assert!(created.contains("\"id\": \"new_weapon\""));
     }
 
@@ -1081,7 +1335,15 @@ mod tests {
     }
 
     fn change_paths(changes: &[crate::models::FileChangeRecord]) -> Vec<String> {
-        changes.iter().map(|change| change.path.clone()).collect()
+        let mut paths = Vec::new();
+        for change in changes {
+            for path in [&change.before_path, &change.after_path] {
+                if !paths.contains(path) {
+                    paths.push(path.clone());
+                }
+            }
+        }
+        paths
     }
 
     fn path_string(path: impl AsRef<Path>) -> String {

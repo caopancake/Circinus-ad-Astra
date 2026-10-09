@@ -10,6 +10,7 @@
 `src-tauri/src/io/file_changes.rs`：changeset 构建、应用与回放 owner。
 `src-tauri/src/io/csv_files.rs`：CSV 文件读写与路径上下文 owner。
 `src-tauri/src/io/json_files.rs`：JSON 文件读取与目录遍历 owner。
+`src-tauri/src/io/faction_index.rs`：索引引用的实际根与父链授权 owner。
 `src-tauri/src/io/text.rs`：UTF-8 文本读取 owner，拥有 BOM 拒绝与 CP1252 归一化入口。
 `src-tauri/src/models/`：CP1252 归一化映射与 FileChangeRecord 模型 owner。
 `src-tauri/src/services/file_changes.rs`：变更服务实现 owner。
@@ -57,6 +58,11 @@
 - 新建 Mod 的 `mod_info.json` renderer 必须输出 UTF-8 无 BOM 与 CRLF；其它格式遵守各自 parser 或保存模型的输出语义。
 - 目录必须以正式目录事件表达，严禁让前端递归枚举。
 - 每个保存入口只允许写所属模块声明的持久化目标；关联文件操作必须由同一正式保存模型显式声明。
+- FileChangeRecord 必须共同承载 beforePath、afterPath 与前后内容；普通写入必须使用相同路径，文件或目录改名必须使用源与目标路径。
+- 构造、应用、失败恢复、版本校验与回放必须共同消费双路径；撤销必须同时反转路径、存在状态与内容快照。
+- Windows 仅大小写改名必须按同一物理文件检查占用，并且必须由正式文件改名原语交接实际名称。
+- 源记录与目标凭据必须在同一 FIFO 租约中复核；缺少所属目标的读取凭据必须以 write.version_scope_missing 拒绝写入。
+- 势力索引目标、规格目录与指纹输入必须经 FsRootBoundary 授权之后读取或遍历。
 
 ## 陷阱
 

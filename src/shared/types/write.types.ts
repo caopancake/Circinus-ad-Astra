@@ -15,6 +15,7 @@ export interface CsvRowKeyMapping {
 }
 
 export interface WriteResult {
+  identityChanges: import('@/shared/types/entity-target.types').EntityIdentityChange[];
   changes: FileChangeRecord[];
   invalidation: ProjectInvalidation;
   keyMap: CsvRowKeyMapping[];
@@ -52,6 +53,11 @@ export type AssociatedSpecChange =
   | { action: 'create'; create: AssociatedSpecCreateParams }
   | { action: 'delete'; id: string }
   | { action: 'rename'; previousId: string; create: AssociatedSpecCreateParams };
+
+export interface AssociatedSpecWrite {
+  change: AssociatedSpecChange;
+  target: import('@/shared/types/entity-target.types').EntityEditTarget;
+}
 
 export type CsvRowPatchAction = 'upsert' | 'delete';
 

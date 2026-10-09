@@ -24,3 +24,6 @@ export function transcodeFileToUtf8(sessionId: string | null, modRoot: string, p
 export function loadImportedEditorSpecFile(kind: EditorSpecKind, path: string): Promise<RowData> {
   return filesApi.loadImportedEditorSpecFile(kind, path);
 }
+
+export const queryFileTextIdentityIntent = filesApi.queryTextIdentityIntent;
+export const followFileTextIdentity = filesApi.followTextIdentity;

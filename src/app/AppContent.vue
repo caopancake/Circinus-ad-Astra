@@ -57,11 +57,12 @@ const workspace = useWorkspaceStore();
 const draftSessions = useDraftSessionsStore();
 const feedback = useAppFeedback();
 const actions = useWorkspaceShellActions(feedback);
-useWorkspaceShellLifecycle(feedback);
+useWorkspaceShellLifecycle(feedback, actions.selectAssociatedSpecs);
 const saveCommand = useSaveCommandStore();
 useMainWindowShortcuts(feedback);
 const hasUnsavedMainWindowChanges = computed(() => workspace.loadedModList.some((mod) => draftSessions.hasUnsavedWorkForMod(mod.modRoot)));
 const closeGuard = useDirtyWindowCloseGuard({
+  beforeClose: actions.closeWorkspaceWindows,
   content: '主窗口中仍有未保存修改，关闭后这些修改将丢失。',
   dirty: hasUnsavedMainWindowChanges,
   title: '放弃未保存修改并关闭？',

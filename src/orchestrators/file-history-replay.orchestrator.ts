@@ -14,6 +14,7 @@ import { logFields } from '@/shared/lib/log-fields';
 import { joinRootRelativePath, normalizeFsPath } from '@/shared/lib/paths';
 import { useWriteSyncStore } from '@/stores/write-sync.store';
 import { loadFileHistory } from '@/services/file-history.service';
+import { emitEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
 type TablesStore = ReturnType<typeof useTablesStore>;
@@ -66,9 +67,10 @@ export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project
   const result = await replayFileChangeSet(plan.sessionId, plan.modRoot, plan.direction, plan.entry.id, plan.revision);
   if (project.getSessionId(plan.modRoot) !== plan.sessionId) return;
   useFileHistoryStore().applySnapshot(plan.modRoot, result.history);
+  await emitEntityIdentityApplied({ sessionId: plan.sessionId, modRoot: plan.modRoot, result });
   const invalidatedSessions = await refreshLoadedSessionsAfterWrite(result, plan.modRoot);
   const sync = useWriteSyncStore().enqueue(plan.modRoot, plan.sessionId, result.changes);
-  await notifyOpenFileEditors(plan.sessionId, plan.modRoot, result.changes, 'redo', result.baseVersions);
+  await notifyOpenFileEditors(plan.sessionId, plan.modRoot, result.changes, 'redo', result.baseVersions, result.commitId);
   refreshActiveTableIfAffected(project, tables, plan.modRoot, invalidatedSessions);
   syncStoreComplete(sync.id);
   recordLogBestEffort({
@@ -83,7 +85,7 @@ export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project
       direction: plan.direction,
       entryId: plan.entry.id,
       label: plan.entry.label,
-      files: result.changes.length,
+      changes: result.changes.length,
     }),
   });
 }
@@ -137,7 +139,7 @@ function renderConfirmContent(entry: FileSaveHistoryEntry, action: string) {
   return h('div', { class: 'file-history-confirm' }, [
     h('p', `${action}会直接写回磁盘。`),
     h('p', `历史记录：${entry.label}`),
-    h('p', `涉及文件：${paths.length} 个`),
+    h('p', `涉及路径：${paths.length} 条`),
     h(
       'ul',
       { class: 'file-history-confirm-list' },
@@ -186,6 +188,7 @@ async function notifyOpenFileEditors(
   changes: FileChangeRecord[],
   direction: FileHistoryReplayDirection,
   baseVersions: import('@/shared/types').FileVersion[],
+  commitId: number,
 ): Promise<void> {
   const behavior = replayBehavior(direction);
   await Promise.all(
@@ -199,9 +202,10 @@ async function notifyOpenFileEditors(
             const snapshot = snapshots.get(normalizeFsPath(relPath));
             if (snapshot?.dataBase64) return;
             await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, {
+              commitId,
               baseVersions,
               modRoot,
-              path: joinRootRelativePath(change.path, relPath),
+              path: joinRootRelativePath(change.afterPath, relPath),
               sessionId,
               text: snapshot?.text ?? '',
             });
@@ -211,7 +215,14 @@ async function notifyOpenFileEditors(
       }
       const text = behavior.textForChange(change);
       if (text === null && behavior.hasBinaryContent(change)) return;
-      await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, { modRoot, path: change.path, sessionId, text: text ?? '', baseVersions });
+      await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, {
+        modRoot,
+        path: change.afterPath,
+        sessionId,
+        text: text ?? '',
+        baseVersions,
+        commitId,
+      });
     }),
   );
 }

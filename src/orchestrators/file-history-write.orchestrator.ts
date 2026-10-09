@@ -5,6 +5,7 @@ import { AppError, withCause } from '@/shared/lib/errors';
 import type { WriteResult } from '@/shared/types';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { formatError } from '@/shared/lib/errors';
+import { emitEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
 
@@ -23,6 +24,7 @@ export async function completeSavedWrite(completion: SavedWriteCompletion, proje
   fileHistory.applySnapshot(completion.modRoot, completion.result.history);
   applyCommittedWriteCacheInvalid(completion.sessionId, completion.result);
   try {
+    await emitEntityIdentityApplied({ sessionId: completion.sessionId, modRoot: completion.modRoot, result: completion.result });
     await refreshProjectSessionAfterWrite(completion.modRoot, completion.result, completion.sessionId);
   } catch (error) {
     recordLogBestEffort({

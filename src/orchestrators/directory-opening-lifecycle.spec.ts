@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('@/services/window.service', () => ({ closeNativeSessionWindows: vi.fn(async () => true) }));
 import { createPinia, setActivePinia } from 'pinia';
 import { openDirectoryTarget, openModFromOverview } from '@/orchestrators/directory-opening.orchestrator';
 import {

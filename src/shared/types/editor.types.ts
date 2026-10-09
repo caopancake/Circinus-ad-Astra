@@ -10,6 +10,7 @@ export type ProjectileSpecClass = 'projectile' | 'missile';
 export type EditorResourceKind = EditorSpecKind | 'faction' | 'mission';
 
 export interface EditableFileData {
+  entity: import('@/shared/types/entity-target.types').EntityEditInfo | null;
   path: string;
   text: string;
   baseVersions: import('@/shared/types/write.types').FileVersion[];

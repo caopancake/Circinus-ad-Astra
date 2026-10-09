@@ -107,7 +107,6 @@ export function useConfigMissionViewModel() {
         nextId: id,
         indexRow: buildMissionIndexRow([], ['mission'], id),
         entityData: { descriptor: { title: id }, text: '' },
-        deletePreviousTarget: false,
       });
       feedback.success(`战役 "${id}" 已创建`);
       if (modRoot.value !== createModRoot || sessionId.value !== createSessionId) return true;
@@ -158,7 +157,6 @@ export function useConfigMissionViewModel() {
     draft: ConfigMissionSaveDraft,
     baseVersions: import('@/shared/types').FileVersion[],
   ) {
-    const idChanged = draft.nextId !== previousId;
     savingSessions.add(activeSessionId);
     missionsRequestId++;
     let saved;
@@ -177,7 +175,6 @@ export function useConfigMissionViewModel() {
             draft.nextId,
           ),
           entityData: { descriptor: deepClone(draft.descriptor), text: draft.text },
-          deletePreviousTarget: idChanged,
         },
         feedback,
       );

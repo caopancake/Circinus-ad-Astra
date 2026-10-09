@@ -1,5 +1,7 @@
 import { onMounted, onUnmounted } from 'vue';
-import type { AppFeedback } from '@/shared/types';
+import type { AppFeedback, AssociatedSpecChange } from '@/shared/types';
+import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
+import { listenEntityTablePreparation } from '@/orchestrators/entity-identity.orchestrator';
 import { useSettingsStore } from '@/stores/settings.store';
 import { listenWindowSaveEvents } from '@/orchestrators/window-save.orchestrator';
 import { removeLoadedModRuntime } from '@/orchestrators/workspace-lifecycle.orchestrator';
@@ -15,14 +17,19 @@ import { buildModOpeningFailure } from '@/shared/lib/errors';
 
 // Main-window-only bootstrap: startup restore, workspace-state persistence and
 // window save events run once per application shell, never per page component.
-export function useWorkspaceShellLifecycle(feedback: AppFeedback) {
+export function useWorkspaceShellLifecycle(
+  feedback: AppFeedback,
+  selectAssociatedSpecs: (candidates: AssociatedSpecCandidate[]) => Promise<AssociatedSpecChange[] | null>,
+) {
   const settings = useSettingsStore();
   const workspace = useWorkspaceStore();
   const { loadCoreFields } = useCoreSchema();
   let stopWindowSaveEvents: (() => void) | null = null;
+  let stopIdentityPreparation: (() => void) | null = null;
   let workspacePersistence: WorkspacePersistenceWatcher | null = null;
 
   onMounted(async () => {
+    stopIdentityPreparation = await listenEntityTablePreparation(feedback, selectAssociatedSpecs);
     recordLogBestEffort({
       level: 'info',
       code: 'app.started',
@@ -91,6 +98,7 @@ export function useWorkspaceShellLifecycle(feedback: AppFeedback) {
       fields: { version: __APP_VERSION__ },
     });
     stopWindowSaveEvents?.();
+    stopIdentityPreparation?.();
     stopWindowSaveEvents = null;
     workspacePersistence?.stop();
     workspacePersistence = null;

@@ -1,15 +1,17 @@
-use crate::{errors::AppResult, io::load_json_dir};
-use serde_json::Value;
+use crate::{
+    errors::AppResult,
+    models::{LoadedSpecRecord, ResourceSource},
+};
 use std::{collections::BTreeMap, path::Path};
 
 /// Merges Mod projectile specs over core fallbacks; a Mod spec with the same
 /// id always wins, core-only specs fill the rest.
 pub(in crate::services::project) fn load_projectile_specs(
     mod_root: &Path,
-    core_projectiles: Option<&BTreeMap<String, Value>>,
-) -> AppResult<BTreeMap<String, Value>> {
+    core_projectiles: Option<&BTreeMap<String, LoadedSpecRecord>>,
+) -> AppResult<BTreeMap<String, LoadedSpecRecord>> {
     let mut result = BTreeMap::new();
-    insert_projectiles(&mut result, &mod_root.join("data/weapons/proj"))?;
+    insert_projectiles(&mut result, mod_root)?;
     if let Some(core_projectiles) = core_projectiles {
         for (id, value) in core_projectiles {
             result.entry(id.clone()).or_insert_with(|| value.clone());
@@ -18,16 +20,17 @@ pub(in crate::services::project) fn load_projectile_specs(
     Ok(result)
 }
 
-fn insert_projectiles(result: &mut BTreeMap<String, Value>, dir: &Path) -> AppResult<()> {
-    for value in load_json_dir(dir, "proj")? {
-        if let Some(id) = value
-            .get("id")
-            .and_then(Value::as_str)
-            .map(ToString::to_string)
-        {
-            result.insert(id, value);
-        }
-    }
+fn insert_projectiles(
+    result: &mut BTreeMap<String, LoadedSpecRecord>,
+    root: &Path,
+) -> AppResult<()> {
+    result.extend(super::super::cache::load_spec_records(
+        root,
+        "data/weapons/proj",
+        "proj",
+        "id",
+        ResourceSource::Mod,
+    )?);
     Ok(())
 }
 
@@ -49,15 +52,18 @@ mod tests {
         write_utf8_no_bom(&core_proj.join("same.proj"), r#"{"id":"same","damage":1}"#).unwrap();
         write_utf8_no_bom(&core_proj.join("core_only.proj"), r#"{"id":"core_only"}"#).unwrap();
 
-        let mut core_projectiles = BTreeMap::new();
-        for value in load_json_dir(&core_proj, "proj").unwrap() {
-            let id = value["id"].as_str().unwrap().to_string();
-            core_projectiles.insert(id, value);
-        }
+        let core_projectiles = super::super::super::cache::load_spec_records(
+            &root.join("core/starsector-core"),
+            "data/weapons/proj",
+            "proj",
+            "id",
+            ResourceSource::Core,
+        )
+        .unwrap();
         let loaded = load_projectile_specs(&root.join("mod"), Some(&core_projectiles)).unwrap();
 
         let _ = fs::remove_dir_all(root);
-        assert_eq!(loaded["same"]["damage"], 2);
-        assert!(loaded["core_only"].is_object());
+        assert_eq!(loaded["same"].data["damage"], 2);
+        assert!(loaded["core_only"].data.is_object());
     }
 }

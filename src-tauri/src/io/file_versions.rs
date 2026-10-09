@@ -65,7 +65,7 @@ pub fn version_after_change(change: &crate::models::FileChangeRecord) -> AppResu
         })
     };
     Ok(FileVersion {
-        path: change.path.clone(),
+        path: change.after_path.clone(),
         fingerprint: content,
     })
 }

@@ -1,5 +1,5 @@
-import { configVariantListTitle } from '@/domain/config/config-entities';
-import type { RowData } from '@/shared/types';
+import { trimmedConfigStringField } from '@/domain/config/config-entities';
+import type { ConfigFamilyFile } from '@/shared/types';
 
 /**
  * Parameterized definition of the config entity families: the Skin/Variant families
@@ -24,26 +24,26 @@ export interface ConfigEntityFamilyDefinition {
   usesHullNames: boolean;
 }
 
-export interface ConfigFamilyFile {
-  baseVersions: import('@/shared/types').FileVersion[];
-  data: RowData;
-  relPath: string;
-}
+export type { ConfigFamilyFile } from '@/shared/types';
 
-export function familyFileId(family: ConfigEntityFamilyDefinition, file: ConfigFamilyFile): string {
-  const raw = (file.data as Record<string, unknown>)[family.idField];
-  return String(raw ?? '');
-}
-
-export function familyFileTitle(family: ConfigEntityFamilyDefinition, file: ConfigFamilyFile, hullNames: Record<string, string>): string {
-  if (family.usesHullNames) {
-    return configVariantListTitle(file as unknown as Parameters<typeof configVariantListTitle>[0], hullNames);
-  }
-  return String((file as unknown as Record<string, unknown>)[family.idField] ?? '');
+export function familyFileId(file: ConfigFamilyFile): string {
+  return file.id;
 }
 
 export function familyFileCompanion(family: ConfigEntityFamilyDefinition, file: ConfigFamilyFile): string {
-  return String((file as unknown as Record<string, unknown>)[family.companionField] ?? '');
+  return trimmedConfigStringField(file.data, family.companionField);
+}
+
+export function familyFileTitle(family: ConfigEntityFamilyDefinition, file: ConfigFamilyFile, hullNames: Record<string, string>): string {
+  if (!family.usesHullNames) return file.id;
+  const hullId = familyFileCompanion(family, file);
+  const hullName = hullNames[hullId]?.trim() || hullId;
+  const displayName = trimmedConfigStringField(file.data, 'displayName');
+  return displayName ? `${hullName} · ${displayName}` : hullName;
+}
+
+export function compareFamilyFiles(family: ConfigEntityFamilyDefinition, left: ConfigFamilyFile, right: ConfigFamilyFile): number {
+  return familyFileCompanion(family, left).localeCompare(familyFileCompanion(family, right)) || left.id.localeCompare(right.id);
 }
 
 export const variantFamily: ConfigEntityFamilyDefinition = {

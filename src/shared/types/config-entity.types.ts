@@ -12,6 +12,13 @@ export interface ConfigSaveIdentity {
   baseVersions: import('@/shared/types/write.types').FileVersion[];
 }
 
+export interface ConfigIdentityHandoff<T> {
+  sourceId: string;
+  record: T;
+  preserveDraft: boolean;
+  commitId: number;
+}
+
 export interface ConfigEditTarget {
   sessionId: string;
   modRoot: string;
@@ -41,7 +48,6 @@ export interface IndexedConfigEntityWrite {
   nextId: string;
   indexRow: RowData;
   entityData: RowData;
-  deletePreviousTarget: boolean;
 }
 
 export interface DeleteIndexedConfigEntityWrite {
@@ -90,29 +96,11 @@ export interface ConfigMissionEditorData {
   iconSrc: string;
 }
 
-export interface VariantFile {
+export interface ConfigFamilyFile {
+  target: import('@/shared/types/entity-target.types').EntityEditTarget;
+  id: string;
   baseVersions: import('@/shared/types/write.types').FileVersion[];
-  variantId: string;
-  hullId: string;
   path: string;
   relPath: string;
   data: RowData;
-  weaponGroupCount: number;
-  hullModCount: number;
-  permaModCount: number;
-  wingCount: number;
-}
-
-export interface SkinFile {
-  baseVersions: import('@/shared/types/write.types').FileVersion[];
-  skinHullId: string;
-  baseHullId: string;
-  path: string;
-  relPath: string;
-  data: RowData;
-  builtInModCount: number;
-  builtInWeaponCount: number;
-  builtInWingCount: number;
-  weaponSlotChangeCount: number;
-  engineSlotChangeCount: number;
 }

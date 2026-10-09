@@ -11,5 +11,6 @@ pub mod mod_creation;
 pub mod project;
 pub mod schema;
 pub mod system_open;
+pub mod windows;
 pub mod workspace_persistence;
 pub mod write_transactions;

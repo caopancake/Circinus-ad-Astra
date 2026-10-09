@@ -2,6 +2,9 @@ import { getCurrentWindow, type CloseRequestedEvent } from '@tauri-apps/api/wind
 import type { UnlistenFn } from '@tauri-apps/api/event';
 
 const appWindow = getCurrentWindow();
+export function currentWindowLabel(): string {
+  return appWindow.label;
+}
 
 export async function closeCurrentWindow(): Promise<void> {
   await appWindow.close();

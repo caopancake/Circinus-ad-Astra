@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { savedWriteFixture } from '@/test/write-result';
+import { entityTargetFixture } from '@/test/entity-target';
 
 beforeEach(() => setActivePinia(createPinia()));
 
 vi.mock('@/orchestrators/project-session-refresh.orchestrator', () => ({ applyCommittedWriteCacheInvalid: vi.fn() }));
 
 const mocks = vi.hoisted(() => ({
+  identityHandler: null as null | ((event: import('@/windows/window.events').EntityIdentityAppliedEvent) => Promise<void>),
+  followIdentity: vi.fn(),
   loadEditableFileData: vi.fn(),
   writeEditableFileText: vi.fn(),
   emitFileEditorSaved: vi.fn(async () => {}),
@@ -29,13 +32,31 @@ const mocks = vi.hoisted(() => ({
     error: vi.fn(),
     confirmDanger: vi.fn(),
     confirmWarning: vi.fn(),
-    choose: vi.fn(async () => null),
+    choose: vi.fn(async () => null as string | null),
   },
 }));
 
 vi.mock('@/services/files.service', () => ({
+  followFileTextIdentity: mocks.followIdentity,
   loadEditableFileData: mocks.loadEditableFileData,
   writeEditableFileText: mocks.writeEditableFileText,
+}));
+vi.mock('@/orchestrators/entity-identity.orchestrator', () => ({
+  createEntitySavePreparation: async () => ({
+    withPreparation: (_session: string, _root: string, _source: unknown, submit: (info: null) => Promise<unknown>) => submit(null),
+    finish: vi.fn(async () => {}),
+    dispose: vi.fn(),
+  }),
+  reserveFileIdentityIntent: vi.fn(async () => {}),
+  releaseCommittedIdentityTargets: vi.fn(async () => {}),
+  retargetFileWindow: vi.fn(async () => {}),
+}));
+vi.mock('@/orchestrators/entity-events.orchestrator', () => ({
+  emitEntityIdentityApplied: vi.fn(async () => {}),
+  listenEntityIdentityApplied: vi.fn(async (handler) => {
+    mocks.identityHandler = handler;
+    return () => {};
+  }),
 }));
 
 vi.mock('@/orchestrators/file-editor-window.orchestrator', () => ({
@@ -142,6 +163,7 @@ describe('useFileEditorViewModel editing', () => {
       history: { revision: 1, undoStack: [], redoStack: [] },
       changes: [],
       invalidation: {},
+      identityChanges: [],
       keyMap: [],
       refreshedEntity: null,
     };
@@ -165,6 +187,7 @@ describe('useFileEditorViewModel editing', () => {
       history: { revision: 1, undoStack: [], redoStack: [] },
       changes: [],
       invalidation: {},
+      identityChanges: [],
       keyMap: [],
       refreshedEntity: null,
     });
@@ -213,6 +236,42 @@ describe('useFileEditorViewModel editing', () => {
 });
 
 describe('useFileEditorViewModel external text', () => {
+  it('keeps unfinished text and follows its new identity after parsing becomes possible', async () => {
+    const before = entityTargetFixture('ship', 'old');
+    const after = entityTargetFixture('ship', 'new');
+    mocks.loadEditableFileData.mockResolvedValueOnce({
+      path: before.write.path,
+      text: "{hullId:'old'}",
+      baseVersions: [],
+      entity: { target: before, baseVersions: [] },
+    });
+    const vm = await initializeViewModel(paramsFixture({ modRoot: 'M:/mod', filePath: before.write.path }));
+    vm.updateText('{hullId:');
+    mocks.feedback.choose.mockResolvedValueOnce('follow');
+    mocks.followIdentity.mockRejectedValueOnce(new Error('parse error at line 1 column 9'));
+    const result = savedWriteFixture();
+    result.identityChanges = [{ before, after }];
+    result.commitId = 10;
+    await mocks.identityHandler!({ sessionId: 's1', modRoot: 'm:/MOD/', result });
+    expect(vm.text.value).toBe('{hullId:');
+    expect(vm.filePath.value).toBe(before.write.path);
+    expect(vm.externalTextNotice.value).toContain('修正文本');
+    expect(vm.targetColumn.value).toBe(9);
+    mocks.followIdentity.mockResolvedValueOnce('{hullId:"new", extra: 2}');
+    mocks.loadEditableFileData.mockResolvedValueOnce({
+      path: after.write.path,
+      text: '{hullId:"new"}',
+      entity: { target: after, baseVersions: [] },
+      baseVersions: [],
+    });
+    vm.updateText("{hullId:'old', extra: 2}");
+    await vi.waitFor(() => expect(vm.filePath.value).toBe(after.write.path));
+    expect(vm.text.value).toBe('{hullId:"new", extra: 2}');
+    expect(vm.dirty.value).toBe(true);
+    expect(vm.externalTextNotice.value).toBe('');
+    expect(vm.canUndo.value).toBe(false);
+    vm.dispose();
+  });
   it('discards an external read superseded by the local save', async () => {
     mocks.loadEditableFileData.mockResolvedValueOnce({ path: 'C:/mods/alpha/notes.txt', text: 'base', baseVersions: [] });
     let invalidated!: (event: ProjectSessionInvalidatedEvent) => Promise<void>;
@@ -233,7 +292,7 @@ describe('useFileEditorViewModel external text', () => {
       invalidation: { paths: ['notes.txt'] },
     } as ProjectSessionInvalidatedEvent);
     vm.updateText('saved B');
-    mocks.writeEditableFileText.mockResolvedValueOnce({ changes: [], baseVersions: [] });
+    mocks.writeEditableFileText.mockResolvedValueOnce({ ...savedWriteFixture({ text: 'saved B' }), changes: [], baseVersions: [] });
     await vm.saveFile();
     release({ text: 'older A', baseVersions: [] });
     await reading;

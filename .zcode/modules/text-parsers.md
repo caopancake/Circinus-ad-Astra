@@ -13,6 +13,7 @@
 `src-tauri/src/parsers/alex_csv.rs`：CSV-like 解析与渲染 owner，字符级行状态机对齐游戏 CSVParser（列数容忍、空行/`#` 行保留），并按最小引号规则渲染。
 `src-tauri/src/parsers/alex_json.rs`：JSON-like 字符级 tokener owner，逐项对齐游戏内置魔改 org.json（json.jar 2010 + LoadingUtils，经反编译核验）。
 `src-tauri/src/parsers/preserve_json.rs`：结构化 JSON 原文更新 owner，定位字段文本范围并核验写回语义。
+`src-tauri/src/parsers/faction_index.rs`：索引列、行位置、ID 列与引用列的格式解析 owner。
 `src-tauri/src/parsers/tool_json.rs`：工具私有 JSON 数据的 serde 读取入口。
 `src-tauri/src/services/editor_config/`：配置与 spec 保存入口，规范化模式使用 serde JSON pretty 序列化。
 
@@ -75,6 +76,8 @@
 - 解析器必须可独立测试，严禁依赖 Tauri state 或全局配置。
 - 除 UTF-8 BOM 剥离与已知 CP1252 智能引号修复外，读取口径保持严格 UTF-8 校验；严禁引入编码自动探测或全量 CP1252/GBK 读取解码，非 UTF-8 文件经用户显式选择源编码的转码动作修复。
 - 需要整体重排的结构化 JSON 写入必须在 changeset 应用前取得确认；确认后必须按源内容指纹复核。
+- 文本身份替换必须在完成 JSON-like 解析后定位根成员的值范围；嵌套字段、数组对象、注释与其它原文必须完整保留。
+- 势力索引解析必须提供正式引用及行位置，磁盘授权必须归 IO；规格加载身份必须消费所属业务 ID 字段。
 
 ## 陷阱
 

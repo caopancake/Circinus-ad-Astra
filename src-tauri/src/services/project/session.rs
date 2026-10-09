@@ -12,7 +12,7 @@ use super::{
 };
 use crate::{
     errors::{AppError, AppResult},
-    io::{FsRootBoundary, load_json_dir_by_id},
+    io::FsRootBoundary,
     models::{EntitySummaries, ProjectManifest, TableSummary},
     models::{FileChangeRecord, ProjectInvalidation, ProjectSessionInvalidationResult},
 };
@@ -109,7 +109,6 @@ pub(super) fn build_project_session(
     let mod_root = mod_root_boundary.root();
     let _lease = crate::io::acquire_root_write_lock(mod_root)?;
     let source_versions = super::versions::capture_versions(mod_root)?;
-    let source_entities = super::versions::capture_entities(mod_root, &source_versions)?;
     let session_id = new_session_id();
     let starsector_root = starsector_root_override.map(Path::to_path_buf);
     let starsector_root = starsector_root
@@ -206,7 +205,6 @@ pub(super) fn build_project_session(
         warnings: spec_bundle.warnings.clone(),
     };
     Ok(ProjectSession {
-        source_entities,
         source_versions,
         manifest,
         faction_files,
@@ -328,14 +326,26 @@ pub(super) fn load_spec_bundle(
 ) -> AppResult<SpecBundle> {
     let total_timer = trace.timer();
     let timer = trace.timer();
-    let ship_files = load_json_dir_by_id(&mod_root.join("data/hulls"), "ship", "hullId")?;
+    let ship_files = cache::load_spec_records(
+        mod_root,
+        "data/hulls",
+        "ship",
+        "hullId",
+        crate::models::ResourceSource::Mod,
+    )?;
     trace.record_stage(
         "spec.ship_files",
         timer,
         [("files", ship_files.len().to_string())],
     );
     let timer = trace.timer();
-    let weapon_specs = load_json_dir_by_id(&mod_root.join("data/weapons"), "wpn", "id")?;
+    let weapon_specs = cache::load_spec_records(
+        mod_root,
+        "data/weapons",
+        "wpn",
+        "id",
+        crate::models::ResourceSource::Mod,
+    )?;
     trace.record_stage(
         "spec.weapon_specs",
         timer,
@@ -374,14 +384,26 @@ pub(super) fn load_spec_bundle(
         [("files", projectile_specs.len().to_string())],
     );
     let timer = trace.timer();
-    let system_files = load_json_dir_by_id(&mod_root.join("data/shipsystems"), "system", "id")?;
+    let system_files = cache::load_spec_records(
+        mod_root,
+        "data/shipsystems",
+        "system",
+        "id",
+        crate::models::ResourceSource::Mod,
+    )?;
     trace.record_stage(
         "spec.system_files",
         timer,
         [("files", system_files.len().to_string())],
     );
     let timer = trace.timer();
-    let skill_files = load_json_dir_by_id(&mod_root.join("data/characters/skills"), "skill", "id")?;
+    let skill_files = cache::load_spec_records(
+        mod_root,
+        "data/characters/skills",
+        "skill",
+        "id",
+        crate::models::ResourceSource::Mod,
+    )?;
     trace.record_stage(
         "spec.skill_files",
         timer,

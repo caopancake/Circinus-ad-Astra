@@ -6,6 +6,7 @@ import { useTablesStore } from '@/stores/tables.store';
 
 export async function dispatchMainUndoCommand(feedback: AppFeedback) {
   const tables = useTablesStore();
+  if (tables.currentTableLocked) return;
   const currentTableCsvHistory = useTablesEditHistoryStore();
   const project = useProjectStore();
   const modRoot = project.activeModRoot;
@@ -23,6 +24,7 @@ export async function dispatchMainUndoCommand(feedback: AppFeedback) {
 
 export async function dispatchMainRedoCommand(feedback: AppFeedback) {
   const tables = useTablesStore();
+  if (tables.currentTableLocked) return;
   const currentTableCsvHistory = useTablesEditHistoryStore();
   const project = useProjectStore();
   const modRoot = project.activeModRoot;

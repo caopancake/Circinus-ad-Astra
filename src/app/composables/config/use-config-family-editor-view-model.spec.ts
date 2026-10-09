@@ -1,3 +1,4 @@
+import { entityTargetFixture } from '@/test/entity-target';
 vi.mock('@/orchestrators/config-save.orchestrator', () => ({ completeConfigSave: vi.fn(async () => {}) }));
 import { savedWriteFixture } from '@/test/write-result';
 import { mount } from '@vue/test-utils';
@@ -45,6 +46,9 @@ const SETTINGS = {
 
 function fileFixture(variantId: string): ConfigFamilyFile {
   return {
+    target: entityTargetFixture('variant', variantId),
+    id: variantId,
+    path: `M:/mod/data/variants/${variantId}.variant`,
     baseVersions: [],
     data: { variantId, hullId: 'h1' },
     relPath: `data/variants/${variantId}.variant`,
@@ -63,6 +67,9 @@ function mountEditor(family = variantFamily) {
     family.id === 'skin'
       ? [
           {
+            target: entityTargetFixture('skin', 'v1'),
+            id: 'v1',
+            path: 'M:/mod/data/hulls/skins/v1.skin',
             baseVersions: [],
             data: { skinHullId: 'v1', baseHullId: 'h1' },
             relPath: 'data/hulls/skins/v1.skin',
@@ -79,6 +86,9 @@ function mountEditor(family = variantFamily) {
       data: RowData,
     ): Promise<import('@/shared/types').SavedConfig<ConfigFamilyFile> | null> => ({
       entity: {
+        target: current.target,
+        id: current.id,
+        path: current.path,
         baseVersions: [],
         data,
         relPath: current.relPath,

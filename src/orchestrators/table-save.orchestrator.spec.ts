@@ -1,4 +1,6 @@
 import { csvDraftRow } from '@/test/csv-row';
+import { entityTargetFixture } from '@/test/entity-target';
+import { flushPromises } from '@vue/test-utils';
 import { deepClone } from '@/shared/lib/starsector';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
@@ -7,6 +9,17 @@ const writeCsvPatch = vi.hoisted(() => vi.fn());
 const completeSavedWrite = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
 vi.mock('@/services/write.service', () => ({ writeCsvPatch }));
+vi.mock('@/services/window.service', () => ({
+  reserveNativeWindowTargets: vi.fn(async () => {}),
+  releaseNativeWindowTargets: vi.fn(async () => {}),
+}));
+vi.mock('@/services/csv-table.service', () => ({
+  captureAssociatedSpecTarget: vi.fn(async (_session: string, _table: string, change: AssociatedSpecChange) => {
+    const id = change.action === 'rename' ? change.previousId : change.action === 'delete' ? change.id : change.create.id;
+    const target = entityTargetFixture('ship', id);
+    return { target, nextWrite: target.write, versions: [] };
+  }),
+}));
 vi.mock('@/orchestrators/file-history-write.orchestrator', () => ({ completeSavedWrite }));
 
 import type { ProjectInvalidation, ProjectManifest, WriteResult } from '@/shared/types';
@@ -14,7 +27,7 @@ import { TABLE_KEYS } from '@/shared/types';
 import { useProjectStore } from '@/stores/project.store';
 import { useTablesStore } from '@/stores/tables.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
-import { saveActiveTableChanges } from '@/orchestrators/table-save.orchestrator';
+import { saveTableChanges } from '@/orchestrators/table-save.orchestrator';
 import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
 import { ref } from 'vue';
 import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
@@ -61,7 +74,8 @@ function writeResult(overrides: Partial<WriteResult> = {}): WriteResult {
     history: { revision: 1, undoStack: [], redoStack: [] },
     changes: [
       {
-        path: `${MOD_ROOT}\\ships.csv`,
+        beforePath: `${MOD_ROOT}\\ships.csv`,
+        afterPath: `${MOD_ROOT}\\ships.csv`,
         kind: 'file',
         beforeExists: true,
         beforeText: '',
@@ -74,6 +88,7 @@ function writeResult(overrides: Partial<WriteResult> = {}): WriteResult {
       },
     ],
     invalidation,
+    identityChanges: [],
     keyMap: [],
     refreshedEntity: null,
     ...overrides,
@@ -121,7 +136,7 @@ describe('table-save orchestrator', () => {
     expect(useDraftSessionsStore().hasUnsavedWorkForMod(MOD_ROOT)).toBe(true);
     expect(state.dirty.ships).toEqual({});
     writeCsvPatch.mockResolvedValueOnce(writeResult());
-    await saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] });
+    await saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] });
     expect(writeCsvPatch.mock.calls.at(-1)?.[3]).toEqual([
       { rowKey: 'ships:r1', action: 'upsert', row: { id: 'npc1', hullName: 'typed' } },
     ]);
@@ -140,7 +155,8 @@ describe('table-save orchestrator', () => {
     tables.updateCellValue(cellTarget, 'submitted');
     let release!: (selection: AssociatedSpecChange[]) => void;
     let candidates!: AssociatedSpecCandidate[];
-    const saving = saveActiveTableChanges({
+    const saving = saveTableChanges({
+      table: 'ships',
       manifest,
       selectAssociatedSpecs: (choices) => {
         candidates = choices;
@@ -152,14 +168,15 @@ describe('table-save orchestrator', () => {
     expect(tables.saving).toBe(true);
     tables.updateCellValue(cellTarget, 'later');
     state.baseVersions.ships[0]!.fingerprint = 'later-version';
+    await flushPromises();
     expect(candidates[0]?.change).toMatchObject({ create: { id: 'submitted' } });
-    expect(saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] })).toBe(saving);
+    expect(saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] })).toBe(saving);
     writeCsvPatch.mockResolvedValueOnce(writeResult());
     release(candidates.map((candidate) => candidate.change));
     await saving;
     const call = writeCsvPatch.mock.calls.at(-1)!;
     expect(call[3][0].row.id).toBe('submitted');
-    expect(call[4][0].create.id).toBe('submitted');
+    expect(call[4][0].change.create.id).toBe('submitted');
     expect(call[6]).toEqual([{ path: 'ships.csv', fingerprint: 'base' }]);
     expect(state.tables.ships[0]?.data.id).toBe('later');
     expect(tables.undoCurrentTableEdit()).toBeTruthy();
@@ -182,7 +199,7 @@ describe('table-save orchestrator', () => {
       focus,
       cancel: vi.fn(),
     });
-    await expect(saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] })).rejects.toMatchObject({
+    await expect(saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] })).rejects.toMatchObject({
       action: 'commit-field-inputs',
     });
     expect(focus).toHaveBeenCalledTimes(1);
@@ -198,7 +215,7 @@ describe('table-save orchestrator', () => {
     tables.hydrate(MOD_ROOT, buildManifest());
 
     const manifest = project.getManifest(MOD_ROOT);
-    expect(await saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] })).toBe('noop');
+    expect(await saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] })).toMatchObject({ status: 'noop' });
     expect(writeCsvPatch).not.toHaveBeenCalled();
     expect(completeSavedWrite).not.toHaveBeenCalled();
   });
@@ -215,7 +232,7 @@ describe('table-save orchestrator', () => {
     const result = writeResult({ baseVersions: [{ path: 'ships.csv', fingerprint: 'v2' }] });
     writeCsvPatch.mockResolvedValueOnce(result);
     completeSavedWrite.mockRejectedValueOnce(new Error('sync failed'));
-    await expect(saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] })).rejects.toThrow('sync failed');
+    await expect(saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] })).rejects.toThrow('sync failed');
     expect(state.originalTables.ships[0]?.data.hullName).toBe('Written');
     expect(state.baseVersions.ships).toEqual(result.baseVersions);
     expect(state.dirty.ships).toEqual({});
@@ -240,7 +257,7 @@ describe('table-save orchestrator', () => {
       expect(state.originalTables.ships[0]?.data.hullName).toBe('B');
     });
 
-    expect(await saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] })).toBe('saved');
+    expect(await saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] })).toMatchObject({ status: 'saved' });
     expect(writeCsvPatch).toHaveBeenCalledWith(
       'sess-1',
       MOD_ROOT,
@@ -274,7 +291,7 @@ describe('table-save orchestrator', () => {
     completeSavedWrite.mockResolvedValue(undefined);
     const manifest = project.getManifest(MOD_ROOT);
 
-    expect(await saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] })).toBe('saved');
+    expect(await saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] })).toMatchObject({ status: 'saved' });
     expect(writeCsvPatch).toHaveBeenCalledWith(
       'sess-1',
       MOD_ROOT,
@@ -299,7 +316,7 @@ describe('table-save orchestrator', () => {
     const manifest = project.getManifest(MOD_ROOT);
     project.manifests.set(MOD_ROOT, { ...buildManifest(), sessionId: 'sess-2' });
 
-    expect(await saveActiveTableChanges({ manifest, selectAssociatedSpecs: async () => [] })).toBe('noop');
+    expect(await saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] })).toMatchObject({ status: 'noop' });
     expect(writeCsvPatch).not.toHaveBeenCalled();
     expect(state.dirty.ships['ships:r1']).toBeDefined();
   });
@@ -313,7 +330,7 @@ describe('table-save orchestrator', () => {
     tables.updateCellValue({ sessionId: SESSION_ID, modRoot: MOD_ROOT, table: 'ships', rowKey: 'ships:r1', column: 'hullName' }, 'B');
     let resolveWrite!: (result: WriteResult) => void;
     writeCsvPatch.mockImplementationOnce(() => new Promise<WriteResult>((resolve) => (resolveWrite = resolve)));
-    const pending = saveActiveTableChanges({ manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
+    const pending = saveTableChanges({ table: 'ships', manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
     tables.updateCellValue({ sessionId: SESSION_ID, modRoot: MOD_ROOT, table: 'ships', rowKey: 'ships:r1', column: 'hullName' }, 'C');
     resolveWrite(writeResult());
     await pending;
@@ -337,7 +354,7 @@ describe('table-save orchestrator', () => {
       tables.updateCellValue({ sessionId: SESSION_ID, modRoot: MOD_ROOT, table: 'ships', rowKey: 'ships:r1', column: 'hullName' }, 'A'),
     );
     writeCsvPatch.mockResolvedValueOnce(writeResult());
-    await saveActiveTableChanges({ manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
+    await saveTableChanges({ table: 'ships', manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
     expect(state.originalTables.ships[0]?.data.hullName).toBe('B');
     expect(state.dirty.ships['ships:r1']).toEqual({ action: 'upsert', cells: { hullName: 'A' } });
   });
@@ -351,10 +368,11 @@ describe('table-save orchestrator', () => {
     const created = tables.addNewRow()!;
     let resolveWrite!: (result: WriteResult) => void;
     writeCsvPatch.mockImplementationOnce(() => new Promise<WriteResult>((resolve) => (resolveWrite = resolve)));
-    const pending = saveActiveTableChanges({ manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
+    const pending = saveTableChanges({ table: 'ships', manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
     tables.deleteSelected();
     resolveWrite(
       writeResult({
+        identityChanges: [],
         keyMap: [
           {
             rowIndex: 0,
@@ -379,7 +397,7 @@ describe('table-save orchestrator', () => {
     const tables = useTablesStore();
     tables.updateCellValue({ sessionId: SESSION_ID, modRoot: MOD_ROOT, table: 'ships', rowKey: 'ships:r1', column: 'hullName' }, 'B');
     writeCsvPatch.mockResolvedValueOnce(writeResult({ changes: [] }));
-    await saveActiveTableChanges({ manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
+    await saveTableChanges({ table: 'ships', manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
     expect(state.dirty.ships['ships:r1']).toBeUndefined();
     expect(state.originalTables.ships[0]?.data.hullName).toBe('B');
     expect(useTablesEditHistoryStore().canUndoCsvEdit(MOD_ROOT, 'ships')).toBe(false);
@@ -401,7 +419,7 @@ describe('table-save orchestrator', () => {
           release = resolve;
         }),
     );
-    const saving = saveActiveTableChanges({ manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
+    const saving = saveTableChanges({ table: 'ships', manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
     tables.undoCurrentTableEdit();
     release(writeResult());
     await saving;
@@ -410,7 +428,7 @@ describe('table-save orchestrator', () => {
     expect(state.tables.ships[0]?.insertAt).toBe(0);
     expect(state.dirty.ships[restoredKey]?.action).toBe('upsert');
     writeCsvPatch.mockResolvedValueOnce(writeResult({ keyMap: [{ previousKey: restoredKey, nextKey: 'ships:row:3', rowIndex: 0 }] }));
-    await saveActiveTableChanges({ manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
+    await saveTableChanges({ table: 'ships', manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
     expect(writeCsvPatch.mock.calls.at(-1)?.[3]).toEqual([{ rowKey: restoredKey, action: 'upsert', insertAt: 0, row: { id: 'first' } }]);
     expect(state.tables.ships.map((row) => row?.data.id)).toEqual(['first', 'second']);
     expect(state.tables.ships.map((row) => row?.sourceRowIndex)).toEqual([0, 1]);

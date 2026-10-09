@@ -345,7 +345,7 @@ fn weapon_row_resource(
     Ok(session
         .weapon_specs
         .get(&id)
-        .and_then(weapon_sprite_path)
+        .and_then(|record| weapon_sprite_path(&record.data))
         .map(|path| resource_ref(source, &path, ResourceOwnerKind::Weapon, &id, "sprite")))
 }
 
@@ -402,7 +402,7 @@ fn ship_source_resource(
             core_data
                 .ship_files
                 .get(value)
-                .and_then(|ship| string_field(ship, "spriteName"))
+                .and_then(|ship| string_field(&ship.data, "spriteName"))
         })
         .map(|path| resource_ref(source, &path, ResourceOwnerKind::Ship, value, "sprite")))
 }
@@ -422,7 +422,7 @@ fn ship_source_display_name(
         ResourceSource::Core => core_data.and_then(|data| data.ship_files.get(value)),
         ResourceSource::Mod => session.ship_files.get(value),
     };
-    Ok(ship.and_then(|ship| string_field(ship, "hullName")))
+    Ok(ship.and_then(|ship| string_field(&ship.data, "hullName")))
 }
 
 fn weapon_source_resource(
@@ -438,9 +438,12 @@ fn weapon_source_resource(
             core_data
                 .weapon_specs
                 .get(value)
-                .and_then(weapon_sprite_path)
+                .and_then(|record| weapon_sprite_path(&record.data))
         }),
-        ResourceSource::Mod => session.weapon_specs.get(value).and_then(weapon_sprite_path),
+        ResourceSource::Mod => session
+            .weapon_specs
+            .get(value)
+            .and_then(|record| weapon_sprite_path(&record.data)),
     };
     Ok(sprite_path
         .map(|path| resource_ref(source, &path, ResourceOwnerKind::Weapon, value, "sprite")))
@@ -549,7 +552,7 @@ pub(in crate::services::project) fn hull_resource_ref(
         })?;
         let ships = load_core_ship_files(root)?;
         if let Some(ship) = ships.get(hull_id) {
-            return Ok(string_field(ship, "spriteName").map(|path| {
+            return Ok(string_field(&ship.data, "spriteName").map(|path| {
                 resource_ref(
                     ResourceSource::Core,
                     &path,
@@ -571,7 +574,7 @@ pub(in crate::services::project) fn hull_resource_ref(
 
 fn mod_hull_resource_ref(session: &ProjectSession, hull_id: &str) -> Option<ResourceRef> {
     if let Some(ship) = session.ship_files.get(hull_id) {
-        string_field(ship, "spriteName").map(|path| {
+        string_field(&ship.data, "spriteName").map(|path| {
             resource_ref(
                 ResourceSource::Mod,
                 &path,

@@ -8,7 +8,7 @@
 
 `schemas/spec-defaults.json`：前后端共享的 5 类格式、7 个分支默认模板。
 `scripts/architecture/rules/editor-module-boundary.mjs`：编辑器组件边界规则 owner。
-`src-tauri/src/services/editor_config/spec_entities.rs` 同层的编辑器写链路：武器与弹体保存。
+`src-tauri/src/services/project/write/entity_identity.rs`：武器、弹体及其关联记录的身份保存 owner。
 `src-tauri/src/services/project/query/entities.rs`：草稿武器资源引用 query owner。
 `src/app/components/editors/ProjectileEditor.vue`：弹体编辑器组件 owner，拥有 projectile/missile 分支表单。
 `src/app/components/editors/WeaponEditor.vue`：武器编辑器组件 owner，拥有表单、发射点画布与弹体入口。
@@ -26,7 +26,7 @@
 - dirty 时外部保存暂存，不能覆盖草稿；镜像配对只按坐标对称实时计算。
 - 发射预览是单例只读窗口：只消费已保存 bundle 或一次性草稿快照，严禁写盘、读取编辑器实时草稿或发送保存事件。
 - 弹体窗口按 `projectileSpecId` 打开，弹体保存的变更经失效刷新回到武器 bundle。
-- 武器编辑只允许写 `.wpn`，弹体编辑只允许写对应 `.proj`；严禁写 CSV 或互相改写目标文件。
+- 武器草稿只允许消费 `.wpn` 内容，弹体草稿只允许消费 `.proj` 内容；身份变化必须由所属事务更新实际文件与正式关联记录。
 - 资源与引用只走统一 query/cache，严禁拼路径或构造 fallback 弹体。
 - 预览的发射点与角度读取、贴图 origin 比例与 sprite 层绘制必须与武器编辑器同源。
 
@@ -77,6 +77,8 @@
 - 武器类型入口必须备注“pulse 在原版中无法正常处理，武器类型只允许 projectile 和 beam。”。
 - 画布镜像模式按空格开关，仅作用于当前视图的发射点数组；配对只按坐标对称实时计算，检查器数值输入不参与镜像联动。
 - 草稿资源引用必须由后端 query 返回，只允许通过正式资源缓存解析。
+- 武器与弹体必须分别持有实际编辑目标；Core 弹体首次保存必须在当前 Mod 的领域默认路径创建覆盖。
+- 同 ID 保存必须保留实际文件路径，ID 修改必须保留原目录并完成正式窗口身份交接；只读预览必须跟随所属武器的新身份。
 - 规格分支切换必须先交接活动输入，再保留已有业务内容并补入目标分支缺失必读字段；一次切换必须登记为一次编辑动作。
 - 贴图字段为纯引用：浏览只接受 Mod 根内 png 并原样写入字段，Mod 外拒绝，不复制、不改名。
 - 贴图路径变化或资源重新查询必须清空旧媒体投影；查询失败必须经 AppFeedback 呈现，资源或实体刷新必须支持重新查询当前草稿。

@@ -9,11 +9,19 @@ import { invalidateResourceCacheForSession } from '@/services/resource-cache.ser
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
 import { useWriteSyncStore } from '@/stores/write-sync.store';
+import { closeNativeSessionWindows } from '@/services/window.service';
 
 export interface WorkspaceCloseTarget {
   gameOverviewRoot: string | null;
   modRoots: string[];
   starsectorRoots: string[];
+}
+
+export async function closeWorkspaceWindows(): Promise<boolean> {
+  for (const manifest of useProjectStore().manifests.values()) {
+    if (!(await closeNativeSessionWindows(manifest.sessionId))) return false;
+  }
+  return true;
 }
 
 export function captureWorkspaceCloseTarget(): WorkspaceCloseTarget {
@@ -51,6 +59,7 @@ export function removeModRuntimeState(modRoot: string) {
 export async function removeLoadedModRuntime(modRoot: string) {
   const project = useProjectStore();
   const sessionId = project.getSessionId(modRoot);
+  if (sessionId && !(await closeNativeSessionWindows(sessionId))) return false;
 
   if (sessionId) {
     invalidateQueryCacheForSession(sessionId);
@@ -69,13 +78,14 @@ export async function removeLoadedModRuntime(modRoot: string) {
   });
 
   if (sessionId) await closeProject(sessionId);
+  return true;
 }
 
 export async function closeWorkspaceRuntime(target: WorkspaceCloseTarget) {
   const workspace = useWorkspaceStore();
   workspace.revokeWorkspaceGeneration();
   for (const modRoot of target.modRoots) {
-    await removeLoadedModRuntime(modRoot);
+    if (!(await removeLoadedModRuntime(modRoot))) return false;
   }
   await Promise.all(target.starsectorRoots.map((root) => invalidateCoreCacheForRoot(root)));
   if (workspace.gameOverview?.starsectorRoot === target.gameOverviewRoot) {
@@ -83,4 +93,5 @@ export async function closeWorkspaceRuntime(target: WorkspaceCloseTarget) {
   }
   workspace.clearModOpeningFailures();
   if (!workspace.activeModRoot) workspace.showOverview();
+  return true;
 }

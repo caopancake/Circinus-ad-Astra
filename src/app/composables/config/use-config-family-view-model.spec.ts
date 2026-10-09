@@ -1,7 +1,9 @@
+import { entityTargetFixture } from '@/test/entity-target';
 import { mount } from '@vue/test-utils';
+vi.mock('@/orchestrators/entity-events.orchestrator', () => ({ listenEntityIdentityApplied: vi.fn(async () => () => {}) }));
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SkinFile, VariantFile } from '@/shared/types';
+import type { ConfigFamilyFile } from '@/shared/types';
 
 const mocks = vi.hoisted(() => ({
   saveVariantAction: vi.fn(),
@@ -10,8 +12,8 @@ const mocks = vi.hoisted(() => ({
   saveSkinAction: vi.fn(),
   createSkinAction: vi.fn(),
   deleteSkinAction: vi.fn(),
-  listVariantRecords: vi.fn(async (): Promise<Array<{ variant: VariantFile; spriteRef: null }>> => []),
-  listSkinRecords: vi.fn(async (): Promise<Array<{ skin: SkinFile; spriteRef: null }>> => []),
+  listVariantRecords: vi.fn(async (): Promise<Array<{ file: ConfigFamilyFile; spriteRef: null }>> => []),
+  listSkinRecords: vi.fn(async (): Promise<Array<{ file: ConfigFamilyFile; spriteRef: null }>> => []),
   queryHullPreviewMetadata: vi.fn(async () => ({})),
   queryHullReferenceOptions: vi.fn(async () => []),
   feedback: {
@@ -80,19 +82,15 @@ function freshPinia() {
 import { getActivePinia } from 'pinia';
 
 function variantRecord(variantId: string, hullId: string) {
-  const variant: VariantFile = {
+  const file: ConfigFamilyFile = {
     baseVersions: [],
-    variantId,
-    hullId,
+    target: entityTargetFixture('variant', variantId),
+    id: variantId,
     path: '',
     relPath: `data/variants/${variantId}.variant`,
     data: { variantId, hullId },
-    weaponGroupCount: 0,
-    hullModCount: 0,
-    permaModCount: 0,
-    wingCount: 0,
   };
-  return { variant, spriteRef: null };
+  return { file, spriteRef: null };
 }
 
 function mountViewModel() {
@@ -149,7 +147,7 @@ describe('useConfigFamilyViewModel loading', () => {
     mocks.queryHullPreviewMetadata.mockResolvedValue({ h1: 'Escort' });
     const vm = mountViewModel();
     await vm.loadFiles();
-    expect(vm.files.value.map((file) => (file as VariantFile).variantId)).toEqual(['v1', 'v2']);
+    expect(vm.files.value.map((file) => file.id)).toEqual(['v1', 'v2']);
     expect(vm.hullNames.value).toEqual({ h1: 'Escort' });
     expect(vm.spriteRefs.value).toEqual({ v1: null, v2: null });
   });
@@ -222,6 +220,9 @@ describe('useConfigFamilyViewModel saving', () => {
     const vm = mountViewModel();
     await vm.loadFiles();
     const current = {
+      target: entityTargetFixture('variant', 'v1'),
+      id: 'v1',
+      path: 'M:/mod/data/variants/v1.variant',
       baseVersions: [],
       data: { variantId: 'v1', hullId: 'h1' },
       relPath: 'data/variants/v1.variant',
@@ -237,6 +238,9 @@ describe('useConfigFamilyViewModel saving', () => {
     const vm = mountViewModel();
     await vm.loadFiles();
     const current = {
+      target: entityTargetFixture('variant', 'v1'),
+      id: 'v1',
+      path: 'M:/mod/data/variants/v1.variant',
       baseVersions: [],
       data: { variantId: 'v1', hullId: 'h1' },
       relPath: 'data/variants/v1.variant',
@@ -251,11 +255,14 @@ describe('useConfigFamilyViewModel saving', () => {
     const vm = mountViewModel();
     await vm.loadFiles();
     const current = {
+      target: entityTargetFixture('variant', 'v1'),
+      id: 'v1',
+      path: 'M:/mod/data/variants/v1.variant',
       baseVersions: [],
       data: { variantId: 'v1', hullId: 'h1' },
       relPath: 'data/variants/v1.variant',
     };
-    mocks.saveVariantAction.mockResolvedValue({ entity: variantRecord('v9', 'h1').variant, receipt: {} });
+    mocks.saveVariantAction.mockResolvedValue({ entity: variantRecord('v9', 'h1').file, receipt: {} });
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v9', 'h1')]);
 
     const saved = await vm.saveFamilyEntity('sess-1', 'M:/mod', current, { variantId: 'v9', hullId: 'h1' });
@@ -292,7 +299,7 @@ describe('useConfigFamilyViewModel deletion', () => {
 
     await expect(vm.deleteFamilyEntity('sess-1', 'M:/mod', 'v2', 'data/variants/v2.variant')).resolves.toBe(true);
     expect(mocks.deleteVariantAction).toHaveBeenCalledWith('sess-1', 'M:/mod', 'data/variants/v2.variant', 'v2', []);
-    expect(vm.files.value.map((file) => (file as VariantFile).variantId)).toEqual(['v1']);
+    expect(vm.files.value.map((file) => file.id)).toEqual(['v1']);
     // The reload clears the removed selection before the delete handler picks a fallback.
     expect(vm.selectedId.value).toBeNull();
     expect(mocks.feedback.success).toHaveBeenCalledWith(expect.stringContaining('已删除'));

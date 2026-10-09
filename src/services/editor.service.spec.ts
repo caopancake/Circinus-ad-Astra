@@ -1,3 +1,4 @@
+import { entityTargetFixture } from '@/test/entity-target';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWeaponSpec } from '@/domain/editors/spec-construction';
 import { inferWeaponSpecClass } from '@/domain/tables/associated-spec-creation';
@@ -13,7 +14,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/query.service', () => ({
-  querySessionEntityBaseVersions: vi.fn(async () => []),
+  querySessionEntityEditTarget: vi.fn(async (_session: string, kind: import('@/shared/types').EntityKind, id: string) => ({
+    target: entityTargetFixture(kind, id, 'create'),
+    baseVersions: [],
+  })),
   querySessionEntity: mocks.querySessionEntity,
   querySessionEntityList: mocks.querySessionEntityList,
   querySessionEditorDraftResources: mocks.querySessionEditorDraftResources,
@@ -42,6 +46,7 @@ import {
 
 function entity(data: RowData, refs: Record<string, ResourceRef> = {}): EntityData {
   return {
+    target: entityTargetFixture('ship', 'loaded'),
     baseVersions: [],
     kind: 'ship',
     id: String(data.id ?? ''),
@@ -57,6 +62,7 @@ function writeResultFixture(): WriteResult {
     history: { revision: 1, undoStack: [], redoStack: [] },
     changes: [],
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
+    identityChanges: [],
     keyMap: [],
     refreshedEntity: null,
   };
@@ -231,20 +237,31 @@ describe('saveEditorSpecByKind and import', () => {
 
   it('wraps write failures with the spec save cause', async () => {
     mocks.writeEditorSpec.mockRejectedValue(new Error('disk on fire'));
-    await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', 'ship', 'XY', { hullId: 'XY' })).rejects.toThrow('保存 XY spec 失败');
-    expect(mocks.writeEditorSpec).toHaveBeenCalledWith('s1', 'C:/mods/alpha', 'ship', 'XY', { hullId: 'XY' }, undefined, []);
+    await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', entityTargetFixture('ship', 'XY'), { hullId: 'XY' })).rejects.toThrow(
+      '保存 XY spec 失败',
+    );
+    expect(mocks.writeEditorSpec).toHaveBeenCalledWith(
+      's1',
+      'C:/mods/alpha',
+      entityTargetFixture('ship', 'XY'),
+      { hullId: 'XY' },
+      undefined,
+      [],
+    );
   });
 
   it('passes successful writes through unchanged', async () => {
     const result = writeResultFixture();
     result.refreshedEntity = { id: 'S1' };
     mocks.writeEditorSpec.mockResolvedValue(result);
-    await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', 'system', 'S1', { id: 'S1' })).resolves.toEqual(result);
+    await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', entityTargetFixture('system', 'S1'), { id: 'S1' })).resolves.toEqual(result);
   });
 
   it('rejects saves without a mod root or id before touching the writer', async () => {
-    await expect(saveEditorSpecByKind('s1', '', 'ship', 'XY', {})).rejects.toMatchObject({ action: 'save-spec' });
-    await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', 'ship', '', {})).rejects.toMatchObject({ action: 'save-spec' });
+    await expect(saveEditorSpecByKind('s1', '', entityTargetFixture('ship', 'XY'), {})).rejects.toMatchObject({ action: 'save-spec' });
+    await expect(saveEditorSpecByKind('s1', 'C:/mods/alpha', entityTargetFixture('ship', ''), {})).rejects.toMatchObject({
+      action: 'save-spec',
+    });
     expect(mocks.writeEditorSpec).not.toHaveBeenCalled();
   });
 

@@ -82,12 +82,13 @@ function testOnlyRustFile(text) {
 function rustLayerFromCratePath(path) {
   if (path.startsWith('crate::services::file_history')) return 'file-history';
   if (path.startsWith('crate::commands')) return 'commands';
-  if (path.startsWith('crate::services::project::query')) return 'project-query';
-  if (path.startsWith('crate::services::project::write')) return 'project-write';
-  if (path.startsWith('crate::services::project::resources')) return 'project-resources';
-  if (path.startsWith('crate::services::project::cache')) return 'project-cache';
-  if (path.startsWith('crate::services::project::session')) return 'project-session';
-  if (path.startsWith('crate::services::project::model')) return 'project-model';
+  if (path === 'crate::services::project::query' || path.startsWith('crate::services::project::query::')) return 'project-query';
+  if (path === 'crate::services::project::write' || path.startsWith('crate::services::project::write::')) return 'project-write';
+  if (path === 'crate::services::project::resources' || path.startsWith('crate::services::project::resources::'))
+    return 'project-resources';
+  if (path === 'crate::services::project::cache' || path.startsWith('crate::services::project::cache::')) return 'project-cache';
+  if (path === 'crate::services::project::session' || path.startsWith('crate::services::project::session::')) return 'project-session';
+  if (path === 'crate::services::project::model' || path.startsWith('crate::services::project::model::')) return 'project-model';
   if (path.startsWith('crate::services::project')) return 'project-root';
   if (path.startsWith('crate::services')) return 'services';
   if (path.startsWith('crate::domain')) return 'domain';

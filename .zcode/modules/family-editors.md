@@ -7,6 +7,8 @@
 ## 参考
 
 `src/domain/config/config-entity-families.ts`：族定义 owner，拥有装配与皮肤的标识字段、伴随字段、文案、图标路径与媒体面。
+`src/domain/config/config-records.ts`：统一 ConfigFamilyRecord 与 ConfigFamilyFile 的查询、保存投影 owner。
+`src/app/composables/config/use-config-identity-reception.ts`：配置身份事件的等待、确认与列表接纳 owner。
 `src/app/composables/config/use-config-family-view-model.ts`：族列表 ViewModel owner，拥有加载、新建、删除校验与资源引用。
 `src/app/composables/config/use-config-family-editor-view-model.ts`：族编辑 ViewModel owner，拥有目标 Draft Session 接线与保存。
 `src/app/components/config/ConfigEntityFamilyList.vue`：族列表组件。
@@ -57,6 +59,9 @@
 ## 规范
 
 - 保存期间列表刷新必须服从目标交接；重命名后只允许更新正式目标和已写盘基线，必须保留后续草稿与字段交互状态。
+- 两族记录必须共同表达加载 id、target、data、baseVersions、path 与 relPath；列表与选择必须消费加载 id，字段编辑必须消费 data 中的下一 ID。
+- ID、companion、标题与排序必须消费同一正式记录；字段、标题组合与 Hull 名称 hydration 差异必须归 family 定义。
+- 外部改名期间必须保留当前编辑目标；确认跟随后必须共同接纳新目标、内容与版本，dirty 草稿与活动输入必须保留。
 - 保存 receipt 必须与正式实体共同交给编辑会话；同步失败必须保留写盘基线，卸载后的提交只允许完成捕获目标的同步。
 - 新 session 的族列表必须等待用户选择实体；列表内容、实际路径或基线版本凭据变化时必须通知编辑器接入，严禁只比较实体内容。
 - 舰船名称与创建引用选项查询必须服从捕获 session 和请求代次；切换 session 必须同步清空引用投影。

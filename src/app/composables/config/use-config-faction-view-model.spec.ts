@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils';
+vi.mock('@/orchestrators/entity-events.orchestrator', () => ({ listenEntityIdentityApplied: vi.fn(async () => () => {}) }));
 import { createPinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileSchema } from '@/domain/schema/schema.types';
@@ -28,6 +29,7 @@ vi.mock('@/orchestrators/config-save.orchestrator', () => ({
 
 vi.mock('@/services/config-entity.service', () => ({
   listConfigFactionRecords: mocks.listConfigFactionRecords,
+  getConfigFactionRecord: vi.fn(async () => null),
   queryFactionPreviewImages: mocks.queryFactionPreviewImages,
 }));
 
@@ -89,19 +91,19 @@ describe('useConfigFactionViewModel saveFaction', () => {
     await vm.saveFaction('sess-1', 'M:/mod', 'existing', local, schema, []);
 
     expect(mocks.saveIndexedEntityAction).toHaveBeenCalledWith(
-      expect.objectContaining({ previousId: 'existing', nextId: 'existing', deletePreviousTarget: false }),
+      expect.objectContaining({ previousId: 'existing', nextId: 'existing' }),
       feedbackStub,
     );
   });
 
-  it('passes the old id on renames and keeps the delete-previous flag', async () => {
+  it('passes the loaded and next identity together on renames', async () => {
     const vm = mountViewModel();
     const local = { file: { id: 'renamed', displayName: 'Renamed' } };
 
     await vm.saveFaction('sess-1', 'M:/mod', 'existing', local, schema, []);
 
     expect(mocks.saveIndexedEntityAction).toHaveBeenCalledWith(
-      expect.objectContaining({ previousId: 'existing', nextId: 'renamed', deletePreviousTarget: true }),
+      expect.objectContaining({ previousId: 'existing', nextId: 'renamed' }),
       feedbackStub,
     );
   });

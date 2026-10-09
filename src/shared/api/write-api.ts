@@ -1,12 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   AssociatedFileChange,
-  AssociatedSpecChange,
+  AssociatedSpecWrite,
   CsvRowPatch,
   DeleteIndexedConfigEntityWrite,
   DeleteSkinEntityWrite,
   DeleteVariantEntityWrite,
-  EditorSpecKind,
+  EntityEditTarget,
   FileChangeReplayDirection,
   IndexedConfigEntityWrite,
   JsonWriteOptions,
@@ -23,7 +23,7 @@ export function saveCsvPatch(
   modRoot: string,
   table: TableKey,
   patches: CsvRowPatch[],
-  associatedSpecs: AssociatedSpecChange[],
+  associatedSpecs: AssociatedSpecWrite[],
   jsonWrite?: JsonWriteOptions,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
@@ -55,14 +55,13 @@ export function transcodeFileToUtf8(
 export function saveEditorSpec(
   sessionId: ProjectSessionId,
   modRoot: string,
-  kind: EditorSpecKind,
-  id: string,
+  target: EntityEditTarget,
   data: RowData,
   jsonWrite?: JsonWriteOptions,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
   return invoke('save_editor_spec', {
-    payload: { baseVersions, sessionId, modRoot, kind, id, data, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(data) } : {}) },
+    payload: { baseVersions, sessionId, modRoot, target, data, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(data) } : {}) },
   });
 }
 
@@ -114,7 +113,6 @@ export function saveIndexedConfigEntity(write: IndexedConfigEntityWrite, jsonWri
       nextId: write.nextId,
       indexRow: write.indexRow,
       entityData: write.entityData,
-      deletePreviousTarget: write.deletePreviousTarget,
       ...(jsonWrite
         ? { jsonWrite, orderedJson: JSON.stringify(write.kind === 'faction' ? write.entityData.file : write.entityData.descriptor) }
         : {}),
@@ -133,7 +131,6 @@ export function createIndexedConfigEntity(write: IndexedConfigEntityWrite): Prom
       nextId: write.nextId,
       indexRow: write.indexRow,
       entityData: write.entityData,
-      deletePreviousTarget: write.deletePreviousTarget,
     },
   });
 }

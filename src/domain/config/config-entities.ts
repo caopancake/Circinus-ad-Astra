@@ -1,6 +1,6 @@
 import { cell } from '@/shared/lib/starsector';
 import { AppError } from '@/shared/lib/errors';
-import type { IndexedConfigKind, JsonValue, RowData, VariantFile } from '@/shared/types';
+import type { IndexedConfigKind, JsonValue, RowData } from '@/shared/types';
 import type { FileSchema } from '@/domain/schema/schema.types';
 import { aggregateSchemaSources, splitSchemaSources } from '@/domain/schema/schema-sources';
 
@@ -37,12 +37,6 @@ export function createDefaultVariant(hullId: string, variantId: string): RowData
     weaponGroups: [],
     wings: [],
   };
-}
-
-export function configVariantListTitle(variant: VariantFile, hullNames: Record<string, string>): string {
-  const hullName = hullNames[variant.hullId]?.trim() || variant.hullId;
-  const displayName = trimmedConfigStringField(variant.data, 'displayName');
-  return displayName ? `${hullName} · ${displayName}` : hullName;
 }
 
 export function createDefaultSkin(baseHullId: string, skinHullId: string): RowData {

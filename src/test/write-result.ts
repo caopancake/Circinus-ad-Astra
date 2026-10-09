@@ -7,6 +7,7 @@ export function savedWriteFixture(refreshedEntity: RowData | null = null): Write
     history: { revision: 1, undoStack: [], redoStack: [] },
     changes: [],
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
+    identityChanges: [],
     keyMap: [],
     refreshedEntity,
   };

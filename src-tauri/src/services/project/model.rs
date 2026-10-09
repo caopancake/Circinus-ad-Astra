@@ -1,5 +1,6 @@
 use crate::models::{
-    CsvTableKey, EntitySummaries, GameScanWarning, ProjectManifest, SkinFile, VariantFile,
+    CsvTableKey, EntitySummaries, GameScanWarning, LoadedSpecRecord, ProjectManifest, SkinFile,
+    VariantFile,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -7,6 +8,13 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 pub(super) const MISSION_LIST_TABLE_KEY: &str = "missions";
+
+pub(super) struct EntityProjection {
+    pub kind: crate::models::EntityKind,
+    pub id: String,
+    pub data: Value,
+    pub resource_refs: BTreeMap<String, crate::models::ResourceRef>,
+}
 pub(super) const MISSION_LIST_REL_PATH: &str = "data/missions/mission_list.csv";
 
 /// The missions index table has a single fixed column.
@@ -266,13 +274,13 @@ pub(super) fn csv_table_specs() -> &'static [CsvTableSpec] {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct SpecBundle {
-    pub ship_files: BTreeMap<String, Value>,
+    pub ship_files: BTreeMap<String, LoadedSpecRecord>,
     pub variant_files: Vec<VariantFile>,
     pub skin_files: Vec<SkinFile>,
-    pub weapon_specs: BTreeMap<String, Value>,
-    pub projectile_specs: BTreeMap<String, Value>,
-    pub system_files: BTreeMap<String, Value>,
-    pub skill_files: BTreeMap<String, Value>,
+    pub weapon_specs: BTreeMap<String, LoadedSpecRecord>,
+    pub projectile_specs: BTreeMap<String, LoadedSpecRecord>,
+    pub system_files: BTreeMap<String, LoadedSpecRecord>,
+    pub skill_files: BTreeMap<String, LoadedSpecRecord>,
     pub warnings: Vec<GameScanWarning>,
 }
 
@@ -295,29 +303,28 @@ pub(super) struct SessionCsvRow {
 }
 
 pub(super) struct ProjectSession {
-    pub source_entities: BTreeMap<String, String>,
     pub source_versions: BTreeMap<String, crate::models::FileVersion>,
     pub manifest: ProjectManifest,
-    pub faction_files: BTreeMap<String, Value>,
+    pub faction_files: BTreeMap<String, LoadedSpecRecord>,
     pub tag_map: HashMap<String, String>,
     pub csv_tables: BTreeMap<String, SessionCsvTable>,
-    pub ship_files: BTreeMap<String, Value>,
+    pub ship_files: BTreeMap<String, LoadedSpecRecord>,
     pub variant_files: Vec<VariantFile>,
     pub skin_files: Vec<SkinFile>,
-    pub weapon_specs: BTreeMap<String, Value>,
-    pub projectile_specs: BTreeMap<String, Value>,
-    pub system_files: BTreeMap<String, Value>,
-    pub skill_files: BTreeMap<String, Value>,
+    pub weapon_specs: BTreeMap<String, LoadedSpecRecord>,
+    pub projectile_specs: BTreeMap<String, LoadedSpecRecord>,
+    pub system_files: BTreeMap<String, LoadedSpecRecord>,
+    pub skill_files: BTreeMap<String, LoadedSpecRecord>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(super) struct CoreCache {
     pub csv_tables: BTreeMap<String, Arc<SessionCsvTable>>,
-    pub ship_files: Option<Arc<BTreeMap<String, Value>>>,
+    pub ship_files: Option<Arc<BTreeMap<String, LoadedSpecRecord>>>,
     pub variant_files: Option<Arc<Vec<VariantFile>>>,
     pub skin_files: Option<Arc<Vec<SkinFile>>>,
-    pub weapon_specs: Option<Arc<BTreeMap<String, Value>>>,
-    pub projectile_specs: Option<Arc<BTreeMap<String, Value>>>,
+    pub weapon_specs: Option<Arc<BTreeMap<String, LoadedSpecRecord>>>,
+    pub projectile_specs: Option<Arc<BTreeMap<String, LoadedSpecRecord>>>,
 }
 
 impl CoreCache {
@@ -335,9 +342,9 @@ impl CoreCache {
 
 #[derive(Clone, Default)]
 pub(super) struct CoreSourceData {
-    pub ship_files: Arc<BTreeMap<String, Value>>,
+    pub ship_files: Arc<BTreeMap<String, LoadedSpecRecord>>,
     pub variant_files: Arc<Vec<VariantFile>>,
-    pub weapon_specs: Arc<BTreeMap<String, Value>>,
+    pub weapon_specs: Arc<BTreeMap<String, LoadedSpecRecord>>,
 }
 
 pub(super) fn string_from_row(row: &Map<String, Value>, key: &str) -> Option<String> {

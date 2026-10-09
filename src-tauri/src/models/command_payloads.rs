@@ -6,7 +6,7 @@ use crate::models::{
     required_nullable, required_nullable_non_empty_string,
     workspace_persistence::PersistedWorkspace,
     write::{
-        AssociatedFileChange, AssociatedSpecChange, CsvRowPatch, EditorSpecKind, FileChangeRecord,
+        AssociatedFileChange, CsvRowPatch, EditorSpecKind, FileChangeRecord,
         FileChangeReplayDirection, IndexedConfigKind, JsonWriteOptions,
     },
 };
@@ -21,7 +21,7 @@ pub struct SaveCsvPatchPayload {
     pub mod_root: String,
     pub table: CsvTableKey,
     pub patches: Vec<CsvRowPatch>,
-    pub associated_specs: Vec<AssociatedSpecChange>,
+    pub associated_specs: Vec<crate::models::AssociatedSpecWrite>,
     #[serde(default)]
     pub json_write: JsonWriteOptions,
 }
@@ -176,7 +176,6 @@ pub struct IndexedConfigEntityPayload {
     pub next_id: String,
     pub index_row: Map<String, Value>,
     pub entity_data: Value,
-    pub delete_previous_target: bool,
     #[serde(default)]
     pub json_write: JsonWriteOptions,
     #[serde(default)]
@@ -351,13 +350,35 @@ pub struct SaveEditorSpecPayload {
     pub base_versions: Vec<crate::models::FileVersion>,
     pub session_id: ProjectSessionId,
     pub mod_root: String,
-    pub kind: EditorSpecKind,
-    pub id: String,
+    pub target: crate::models::EntityEditTarget,
     pub data: Value,
     #[serde(default)]
     pub json_write: JsonWriteOptions,
     #[serde(default)]
     pub ordered_json: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityIdentityIntentPayload {
+    pub session_id: ProjectSessionId,
+    pub source: crate::models::EntityEditTarget,
+    pub next_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TextIdentityIntentPayload {
+    pub session_id: ProjectSessionId,
+    pub source: crate::models::EntityEditTarget,
+    pub text: String,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FollowTextIdentityPayload {
+    pub kind: crate::models::EntityKind,
+    pub text: String,
+    pub next_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -392,8 +413,7 @@ mod tests {
             "previousId": null,
             "nextId": "demo",
             "indexRow": {"id": "demo"},
-            "entityData": {"file": {"id": "demo"}},
-            "deletePreviousTarget": false
+            "entityData": {"file": {"id": "demo"}}
         }))
         .unwrap();
 
@@ -516,13 +536,12 @@ mod tests {
     }
 
     #[test]
-    fn indexed_config_entity_payload_requires_explicit_delete_flag() {
+    fn indexed_config_entity_payload_requires_explicit_nullable_source_identity() {
         let result = serde_json::from_value::<IndexedConfigEntityPayload>(json!({
             "baseVersions": [],
             "sessionId": "session-1",
             "modRoot": "D:/mods/demo",
             "kind": "faction",
-            "previousId": null,
             "nextId": "demo",
             "indexRow": {"id": "demo"},
             "entityData": {"file": {"id": "demo"}}

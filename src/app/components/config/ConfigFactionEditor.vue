@@ -41,6 +41,7 @@ import { useConfigFactionEditorViewModel } from '@/app/composables/config/use-co
 import { useSaveCommandStore } from '@/stores/save-command.store';
 
 const props = defineProps<{
+  identityHandoff: import('@/shared/types').ConfigIdentityHandoff<import('@/domain/config/config-records').ConfigFactionRecord> | null;
   factionId: string;
   dataRevision: number;
   previewRevision: number;
@@ -73,6 +74,7 @@ const { crestSrc, displayName, draftData, externalUpdateNotice, hasPendingExtern
     factionId: toRef(props, 'factionId'),
     factions: toRef(props, 'factions'),
     factionVersions: toRef(props, 'factionVersions'),
+    identityHandoff: toRef(props, 'identityHandoff'),
     modRoot: toRef(props, 'modRoot'),
     onSaved: (factionId) => emit('saved', factionId),
     previewRevision: toRef(props, 'previewRevision'),

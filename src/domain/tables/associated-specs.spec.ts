@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EditorWindowKind, TableKey } from '@/shared/types';
-import { associatedSpecEditorKinds, associatedSpecRelPath } from './associated-specs';
+import { associatedSpecEditorKinds, associatedSpecKind } from './associated-specs';
 
 const TABLE_WITHOUT_SPECS: TableKey[] = ['wings', 'hullmods', 'industries', 'skills', 'descriptions'];
 
@@ -30,16 +30,15 @@ describe('associatedSpecEditorKinds', () => {
   });
 });
 
-describe('associatedSpecRelPath', () => {
+describe('associatedSpecKind', () => {
   it('builds the spec rel path per table convention', () => {
-    expect(associatedSpecRelPath('ships', 'toddlership')).toBe('data/hulls/toddlership.ship');
-    expect(associatedSpecRelPath('weapons', 'railgun')).toBe('data/weapons/railgun.wpn');
-    expect(associatedSpecRelPath('shipSystems', 'burn_drive')).toBe('data/shipsystems/burn_drive.system');
-    expect(associatedSpecRelPath('skills', 'helmanship')).toBe('data/characters/skills/helmanship.skill');
+    expect(associatedSpecKind('ships')).toBe('ship');
+    expect(associatedSpecKind('weapons')).toBe('weapon');
+    expect(associatedSpecKind('shipSystems')).toBe('system');
+    expect(associatedSpecKind('skills')).toBe('skill');
   });
 
-  it('returns null for empty ids or tables without specs', () => {
-    expect(associatedSpecRelPath('ships', '')).toBeNull();
-    expect(associatedSpecRelPath('wings', 'wing1')).toBeNull();
+  it('identifies tables without specs', () => {
+    expect(associatedSpecKind('wings')).toBeNull();
   });
 });

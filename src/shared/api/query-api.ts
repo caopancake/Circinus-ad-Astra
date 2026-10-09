@@ -41,12 +41,20 @@ export function queryEntity(sessionId: ProjectSessionId, kind: EntityKind, id: s
   return invoke('query_entity', { payload: { sessionId, kind, id } });
 }
 
-export function queryEntityBaseVersions(
+export function queryEntityEditTarget(
   sessionId: ProjectSessionId,
   kind: EntityKind,
   id: string,
-): Promise<import('@/shared/types').FileVersion[]> {
-  return invoke('query_entity_base_versions', { payload: { sessionId, kind, id } });
+): Promise<import('@/shared/types').EntityEditInfo> {
+  return invoke('query_entity_edit_target', { payload: { sessionId, kind, id } });
+}
+
+export function queryEntityIdentityIntent(
+  sessionId: string,
+  source: import('@/shared/types').EntityEditTarget,
+  nextId: string,
+): Promise<import('@/shared/types').EntityIdentityIntent> {
+  return invoke('query_entity_identity_intent', { payload: { sessionId, source, nextId } });
 }
 
 export function queryEntityList(sessionId: ProjectSessionId, kind: EntityKind): Promise<EntityData[]> {

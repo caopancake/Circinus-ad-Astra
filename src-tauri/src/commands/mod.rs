@@ -8,6 +8,7 @@ mod file_editor;
 mod mod_creation;
 mod project;
 mod tables;
+mod windows;
 mod workspace_persistence;
 
 use crate::{errors::AppResult, models::SessionModScope, services};
@@ -22,6 +23,7 @@ pub use file_editor::*;
 pub use mod_creation::*;
 pub use project::*;
 pub use tables::*;
+pub use windows::*;
 pub use workspace_persistence::*;
 
 /// The single ownership guard for every command payload carrying

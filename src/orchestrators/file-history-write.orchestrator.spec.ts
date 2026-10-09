@@ -28,6 +28,7 @@ function writeResultFixture(changeCount = 1): WriteResult {
     },
     changes: Array.from({ length: changeCount }, (_, index) => changeRecord(`data/hulls/file${index}.ship`)),
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
+    identityChanges: [],
     keyMap: [],
     refreshedEntity: null,
   };
@@ -36,7 +37,8 @@ function writeResultFixture(changeCount = 1): WriteResult {
 function changeRecord(path: string) {
   return {
     kind: 'file' as const,
-    path,
+    beforePath: path,
+    afterPath: path,
     beforeExists: true,
     beforeText: 'before',
     beforeDataBase64: null,

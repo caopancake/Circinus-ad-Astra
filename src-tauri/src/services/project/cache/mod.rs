@@ -3,6 +3,8 @@ pub(super) mod csv;
 pub(super) mod media;
 pub(super) mod persistent;
 pub(super) mod spec_files;
+pub(super) mod spec_records;
+pub(crate) use spec_records::load_spec_records;
 
 use crate::{
     errors::{AppError, AppResult},

@@ -49,7 +49,7 @@ fn build_hull_references(
         .map(|(hull_id, ship)| {
             seen.insert(hull_id.clone());
             let label = hull_reference_label(hull_id, mod_hull_names.get(hull_id), Some(ship));
-            let resource_ref = string_field(ship, "spriteName").map(|sprite| {
+            let resource_ref = string_field(&ship.data, "spriteName").map(|sprite| {
                 resource_ref(
                     ResourceSource::Mod,
                     &sprite,
@@ -121,7 +121,7 @@ fn build_hull_references(
             }
             seen.insert(hull_id.clone());
             let label = hull_reference_label(hull_id, core_hull_names.get(hull_id), Some(ship));
-            let resource_ref = string_field(ship, "spriteName").map(|sprite| {
+            let resource_ref = string_field(&ship.data, "spriteName").map(|sprite| {
                 resource_ref(
                     ResourceSource::Core,
                     &sprite,
@@ -243,7 +243,7 @@ fn resolve_built_in_weapon_slots(
                 .ship_files
                 .get(current)
                 .or_else(|| core_ships.as_ref().and_then(|ships| ships.get(current)))
-                .and_then(|ship| ship.get("builtInWeapons"))
+                .and_then(|ship| ship.data.get("builtInWeapons"))
                 .and_then(serde_json::Value::as_object)
                 .map(|weapons| {
                     weapons
@@ -330,7 +330,7 @@ fn unresolved_hull_ids(
 
 fn extend_ship_hull_name_fallbacks(
     hull_names: &mut BTreeMap<String, String>,
-    ship_files: &BTreeMap<String, serde_json::Value>,
+    ship_files: &BTreeMap<String, crate::models::LoadedSpecRecord>,
     requested_ids: &BTreeSet<String>,
 ) {
     for hull_id in requested_ids {
@@ -339,7 +339,7 @@ fn extend_ship_hull_name_fallbacks(
         }
         if let Some(name) = ship_files
             .get(hull_id)
-            .and_then(|ship| string_field(ship, "hullName"))
+            .and_then(|ship| string_field(&ship.data, "hullName"))
         {
             hull_names.insert(hull_id.clone(), name);
         }
@@ -413,7 +413,7 @@ fn resolve_mod_hull_sprite(
             session
                 .ship_files
                 .get(reference_id)
-                .and_then(|ship| string_field(ship, "spriteName"))
+                .and_then(|ship| string_field(&ship.data, "spriteName"))
                 .map(|sprite| {
                     resource_ref(
                         ResourceSource::Mod,
@@ -427,7 +427,7 @@ fn resolve_mod_hull_sprite(
 }
 
 fn resolve_core_hull_sprite(
-    core_ship_files: &BTreeMap<String, serde_json::Value>,
+    core_ship_files: &BTreeMap<String, crate::models::LoadedSpecRecord>,
     core_skin_files: &[crate::models::SkinFile],
     reference_id: &str,
 ) -> Option<crate::models::ResourceRef> {
@@ -438,7 +438,7 @@ fn resolve_core_hull_sprite(
         .or_else(|| {
             core_ship_files
                 .get(reference_id)
-                .and_then(|ship| string_field(ship, "spriteName"))
+                .and_then(|ship| string_field(&ship.data, "spriteName"))
                 .map(|sprite| {
                     resource_ref(
                         ResourceSource::Core,
@@ -472,9 +472,9 @@ fn push_non_empty_group(
 fn hull_reference_label(
     hull_id: &str,
     csv_name: Option<&String>,
-    ship: Option<&serde_json::Value>,
+    ship: Option<&crate::models::LoadedSpecRecord>,
 ) -> String {
-    let hull_name = ship.and_then(|ship| string_field(ship, "hullName"));
+    let hull_name = ship.and_then(|ship| string_field(&ship.data, "hullName"));
     let name = csv_name
         .map(String::as_str)
         .or(hull_name.as_deref())

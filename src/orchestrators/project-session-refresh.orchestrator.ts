@@ -35,7 +35,9 @@ export async function refreshProjectSessionAfterWrite(modRoot: string, result: W
   if (expectedSessionId && manifest.sessionId !== expectedSessionId) {
     throw new AppError('无法刷新 ProjectSession：ProjectSession 已变化', { action: 'refresh-project-session-after-write' });
   }
-  const scopedChanges = result.changes.filter((change) => pathIsProjectScopedChangedPath(change.path, manifest.modRoot));
+  const scopedChanges = result.changes.filter((change) =>
+    [change.beforePath, change.afterPath].some((path) => pathIsProjectScopedChangedPath(path, manifest.modRoot)),
+  );
   if (scopedChanges.length === 0) {
     throw new AppError('无法刷新 ProjectSession：写入结果没有命中当前 Mod 的文件变更', {
       action: 'refresh-project-session-after-write',
@@ -50,7 +52,9 @@ export async function refreshLoadedSessionsAfterWrite(result: WriteResult, relat
   await Promise.all(
     [...project.manifests.values()].map(async (manifest) => {
       const scopedChanges = result.changes.filter((change) =>
-        isAbsoluteFsPath(change.path) ? pathBelongsToRoot(change.path, manifest.modRoot) : manifest.modRoot === relativePathModRoot,
+        [change.beforePath, change.afterPath].some((path) =>
+          isAbsoluteFsPath(path) ? pathBelongsToRoot(path, manifest.modRoot) : manifest.modRoot === relativePathModRoot,
+        ),
       );
       if (scopedChanges.length === 0) return;
       const event = await refreshProjectSessionByChanges(project, manifest, scopedChanges);

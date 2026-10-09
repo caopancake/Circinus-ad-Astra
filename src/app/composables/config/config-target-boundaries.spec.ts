@@ -1,3 +1,4 @@
+import { entityTargetFixture } from '@/test/entity-target';
 import { createPinia, setActivePinia } from 'pinia';
 import { effectScope, nextTick, ref } from 'vue';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -43,6 +44,9 @@ describe('configuration target boundaries', () => {
       if (kind === 'variant' || kind === 'skin') {
         const family = kind === 'variant' ? variantFamily : skinFamily;
         const file = (name: string): ConfigFamilyFile => ({
+          target: entityTargetFixture(kind, 'same'),
+          id: 'same',
+          path: `M:/mod/data/${kind}/same`,
           baseVersions: [],
           relPath: `data/${kind}/same`,
           data: { [family.idField]: 'same', [family.companionField]: 'hull', displayName: name },
@@ -130,7 +134,14 @@ describe('configuration target boundaries', () => {
     const scope = effectScope();
     const selectedId = ref('old');
     const files = ref<ConfigFamilyFile[]>([
-      { baseVersions: [], relPath: 'old.path', data: { [family.idField]: 'old', [family.companionField]: 'hull', displayName: 'initial' } },
+      {
+        target: entityTargetFixture(family.id, 'old'),
+        id: 'old',
+        path: 'M:/mod/old.path',
+        baseVersions: [],
+        relPath: 'old.path',
+        data: { [family.idField]: 'old', [family.companionField]: 'hull', displayName: 'initial' },
+      },
     ]);
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
@@ -149,7 +160,14 @@ describe('configuration target boundaries', () => {
         },
         saveFile: async (_session, _root, _file, draft) => {
           await gate;
-          const saved = { baseVersions: [], relPath: 'new.path', data: draft };
+          const saved = {
+            target: entityTargetFixture(family.id, 'new'),
+            id: 'new',
+            path: 'M:/mod/new.path',
+            baseVersions: [],
+            relPath: 'new.path',
+            data: draft,
+          };
           files.value = [saved];
           return { entity: saved, receipt: savedWriteFixture() };
         },

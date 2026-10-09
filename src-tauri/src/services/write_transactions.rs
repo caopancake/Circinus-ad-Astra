@@ -46,6 +46,26 @@ fn acquire(root: &str, session_id: Option<&str>) -> AppResult<WriteTransaction> 
 impl WriteTransaction {
     pub fn commit<T>(self, mut result: WriteResult<T>, label: &str) -> AppResult<WriteResult<T>> {
         let mut versions = self.base_versions.clone();
+        for identity in &result.identity_changes {
+            if identity.before.write.path != identity.after.write.path {
+                versions.retain(|version| {
+                    !crate::io::same_physical_path(
+                        Path::new(&version.path),
+                        Path::new(&identity.before.write.path),
+                    )
+                });
+            }
+        }
+        for change in &result.changes {
+            if change.before_path != change.after_path {
+                versions.retain(|version| {
+                    !crate::io::same_physical_path(
+                        Path::new(&version.path),
+                        Path::new(&change.before_path),
+                    )
+                });
+            }
+        }
         for version in versions_for_changes(&result.changes)? {
             versions.retain(|previous| !previous.path.eq_ignore_ascii_case(&version.path));
             versions.push(version);
@@ -55,7 +75,7 @@ impl WriteTransaction {
                 && result
                     .changes
                     .iter()
-                    .any(|change| Path::new(&change.path).starts_with(&version.path))
+                    .any(|change| Path::new(&change.after_path).starts_with(&version.path))
             {
                 match crate::io::file_version(Path::new(&version.path)) {
                     Ok(current) => *version = current,
@@ -65,6 +85,7 @@ impl WriteTransaction {
                 }
             }
         }
+        versions.sort_by(|left, right| left.path.cmp(&right.path));
         result.base_versions = versions;
         if self.session_id.is_some() {
             let mut histories = lock_histories()?;
@@ -72,6 +93,7 @@ impl WriteTransaction {
             if !result.changes.is_empty() {
                 history.revision += 1;
                 history.undo.push(HistoryEntry {
+                    identity_changes: result.identity_changes.clone(),
                     summary: FileHistorySummary {
                         id: history.revision,
                         label: label.to_string(),
@@ -79,7 +101,11 @@ impl WriteTransaction {
                         paths: result
                             .changes
                             .iter()
-                            .map(|change| change.path.clone())
+                            .flat_map(|change| {
+                                [change.before_path.clone(), change.after_path.clone()]
+                            })
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .into_iter()
                             .collect(),
                     },
                     changes: history_changes(&result.changes),
@@ -96,6 +122,27 @@ impl WriteTransaction {
                 super::project::invalidate_project_session(session_id, result.changes.clone())
         {
             crate::diagnostics::record(format!("committed write awaits refresh: {error}"));
+        }
+        if let Some(session_id) = &self.session_id
+            && !result.identity_changes.is_empty()
+        {
+            let mut versions = Vec::new();
+            for identity in &result.identity_changes {
+                match super::project::query_entity_edit_target(
+                    session_id,
+                    identity.after.kind,
+                    &identity.after.id,
+                ) {
+                    Ok(info) => crate::models::push_unique_all(&mut versions, info.base_versions),
+                    Err(error) => crate::diagnostics::record(format!(
+                        "committed target versions await refresh: {error}"
+                    )),
+                }
+            }
+            if !versions.is_empty() {
+                versions.sort_by(|left, right| left.path.cmp(&right.path));
+                result.base_versions = versions;
+            }
         }
         Ok(result)
     }
@@ -149,23 +196,21 @@ pub fn replay(
     let mut changes = entry.changes.clone();
     if matches!(direction, FileChangeReplayDirection::Undo) {
         changes.reverse();
-        for change in &mut changes {
-            std::mem::swap(&mut change.before_exists, &mut change.after_exists);
-            std::mem::swap(&mut change.before_text, &mut change.after_text);
-            std::mem::swap(
-                &mut change.before_data_base64,
-                &mut change.after_data_base64,
-            );
-            std::mem::swap(&mut change.before_files, &mut change.after_files);
-        }
+        changes = changes.iter().map(FileChangeRecord::reversed).collect();
     }
     for change in &changes {
+        if change.before_path != change.after_path {
+            crate::io::require_rename_target(
+                Path::new(&change.before_path),
+                Path::new(&change.after_path),
+            )?;
+        }
         let current = match change.kind {
             crate::models::FileChangeKind::File => {
-                crate::io::build_text_change(Path::new(&change.path), None)?
+                crate::io::build_text_change(Path::new(&change.before_path), None)?
             }
             crate::models::FileChangeKind::Directory => {
-                crate::io::build_directory_delete_change(Path::new(&change.path))?
+                crate::io::build_directory_delete_change(Path::new(&change.before_path))?
             }
         };
         if current.before_exists != change.before_exists
@@ -175,13 +220,24 @@ pub fn replay(
         {
             return Err(AppError::message(
                 "write.version_conflict",
-                format!("回放目标已被修改: {}", change.path),
+                format!("回放目标已被修改: {}", change.after_path),
             ));
         }
     }
     let mut result =
         super::file_changes::apply_file_change_set(root, FileChangeReplayDirection::Redo, changes)?;
     result.base_versions = versions_for_changes(&result.changes)?;
+    result.identity_changes = entry
+        .identity_changes
+        .iter()
+        .map(|identity| match direction {
+            FileChangeReplayDirection::Redo => identity.clone(),
+            FileChangeReplayDirection::Undo => crate::models::EntityIdentityChange {
+                before: identity.after.clone(),
+                after: identity.before.clone(),
+            },
+        })
+        .collect();
     let mut histories = lock_histories()?;
     let history = histories
         .get_mut(&transaction.root)
@@ -206,6 +262,25 @@ pub fn replay(
     {
         crate::diagnostics::record(format!("committed replay awaits refresh: {error}"));
     }
+    if !result.identity_changes.is_empty() {
+        let mut versions = Vec::new();
+        for identity in &result.identity_changes {
+            match super::project::query_entity_edit_target(
+                session_id,
+                identity.after.kind,
+                &identity.after.id,
+            ) {
+                Ok(info) => crate::models::push_unique_all(&mut versions, info.base_versions),
+                Err(error) => crate::diagnostics::record(format!(
+                    "committed replay target versions await refresh: {error}"
+                )),
+            }
+        }
+        versions.sort_by(|left, right| left.path.cmp(&right.path));
+        if !versions.is_empty() {
+            result.base_versions = versions;
+        }
+    }
     Ok(result)
 }
 
@@ -218,8 +293,8 @@ fn history_changes(changes: &[FileChangeRecord]) -> Vec<FileChangeRecord> {
     for change in changes {
         if changes.iter().any(|parent| {
             matches!(parent.kind, crate::models::FileChangeKind::Directory)
-                && parent.path != change.path
-                && Path::new(&change.path).starts_with(&parent.path)
+                && parent.after_path != change.after_path
+                && Path::new(&change.after_path).starts_with(&parent.after_path)
         }) {
             continue;
         }
@@ -229,7 +304,8 @@ fn history_changes(changes: &[FileChangeRecord]) -> Vec<FileChangeRecord> {
         {
             for child in changes {
                 if matches!(child.kind, crate::models::FileChangeKind::File)
-                    && let Ok(relative) = Path::new(&child.path).strip_prefix(&combined.path)
+                    && let Ok(relative) =
+                        Path::new(&child.after_path).strip_prefix(&combined.after_path)
                 {
                     let relative = crate::io::forward_slash_path(relative);
                     combined
@@ -265,11 +341,20 @@ mod tests {
 
     #[test]
     fn mission_rename_history_combines_directory_and_nested_writes() {
+        assert_mission_rename_replay("new");
+    }
+
+    #[test]
+    fn mission_case_only_rename_replays_actual_directory_names() {
+        assert_mission_rename_replay("Old");
+    }
+
+    fn assert_mission_rename_replay(next_id: &str) {
         let root = temp_dir("transaction_mission_rename");
         std::fs::create_dir_all(root.join("data/missions/old")).unwrap();
         std::fs::write(
             root.join("data/missions/mission_list.csv"),
-            "mission\nold\n",
+            "mission,custom\nold,keep\n",
         )
         .unwrap();
         std::fs::write(
@@ -278,15 +363,17 @@ mod tests {
         )
         .unwrap();
         std::fs::write(root.join("data/missions/old/mission_text.txt"), "old text").unwrap();
+        std::fs::write(root.join("data/missions/old/extra.bin"), [0, 255, 128]).unwrap();
         let mut trace = super::super::project::PerformanceTrace::new("project.openSession");
         let manifest =
             super::super::project::open_project_session_traced(&root, None, &mut trace).unwrap();
-        let base = super::super::project::query_entity_base_versions(
+        let base = super::super::project::query_entity_edit_target(
             &manifest.session_id,
             crate::models::EntityKind::Mission,
             "old",
         )
-        .unwrap();
+        .unwrap()
+        .base_versions;
         let saved = crate::commands::save_indexed_config_entity(
             crate::models::command_payloads::IndexedConfigEntityPayload {
                 session_id: manifest.session_id.clone(),
@@ -294,15 +381,39 @@ mod tests {
                 base_versions: base,
                 kind: crate::models::IndexedConfigKind::Mission,
                 previous_id: Some("old".to_string()),
-                next_id: "new".to_string(),
-                index_row: serde_json::from_value(serde_json::json!({"mission":"new"})).unwrap(),
+                next_id: next_id.to_string(),
+                index_row: serde_json::from_value(serde_json::json!({"mission":next_id})).unwrap(),
                 entity_data: serde_json::json!({"descriptor":{"title":"New"},"text":"new text"}),
-                delete_previous_target: true,
                 json_write: Default::default(),
                 ordered_json: None,
             },
         )
         .unwrap();
+        let directory_name = || {
+            std::fs::read_dir(root.join("data/missions"))
+                .unwrap()
+                .map(|entry| entry.unwrap())
+                .find(|entry| entry.file_type().unwrap().is_dir())
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .to_string()
+        };
+        assert_eq!(directory_name(), next_id);
+        let info = super::super::project::query_entity_edit_target(
+            &manifest.session_id,
+            crate::models::EntityKind::Mission,
+            next_id,
+        )
+        .unwrap();
+        assert_eq!(saved.base_versions, info.base_versions);
+        assert_eq!(saved.identity_changes[0].after.id, next_id);
+        assert_eq!(
+            crate::io::read_csv_data(&root.join("data/missions/mission_list.csv"))
+                .unwrap()
+                .rows[0]["custom"],
+            "keep"
+        );
         let undone = replay(
             &manifest.session_id,
             &manifest.mod_root,
@@ -315,7 +426,11 @@ mod tests {
             std::fs::read_to_string(root.join("data/missions/old/mission_text.txt")).unwrap(),
             "old text"
         );
-        assert!(!root.join("data/missions/new").exists());
+        assert_eq!(directory_name(), "old");
+        assert_eq!(
+            std::fs::read(root.join("data/missions/old/extra.bin")).unwrap(),
+            [0, 255, 128]
+        );
         replay(
             &manifest.session_id,
             &manifest.mod_root,
@@ -325,10 +440,15 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            std::fs::read_to_string(root.join("data/missions/new/mission_text.txt")).unwrap(),
+            std::fs::read_to_string(root.join(format!("data/missions/{next_id}/mission_text.txt")))
+                .unwrap(),
             "new text"
         );
-        assert!(!root.join("data/missions/old").exists());
+        assert_eq!(directory_name(), next_id);
+        assert_eq!(
+            std::fs::read(root.join(format!("data/missions/{next_id}/extra.bin"))).unwrap(),
+            [0, 255, 128]
+        );
         super::super::project::close_project_session(manifest.session_id).unwrap();
         std::fs::remove_dir_all(root).unwrap();
     }

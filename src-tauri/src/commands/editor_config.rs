@@ -27,11 +27,7 @@ fn spec_save_context(
                     format!("会话索引中找不到源实体: {source_id}"),
                 )
             })?;
-        let indexed_rel_path = entity
-            .data
-            .get("relPath")
-            .and_then(Value::as_str)
-            .ok_or_else(|| AppError::message("spec.path_id_mismatch", "会话索引缺少实体路径"))?;
+        let indexed_rel_path = entity.target.write.rel_path;
         if indexed_rel_path != source_rel_path {
             return Err(AppError::message(
                 "spec.path_id_mismatch",
@@ -52,10 +48,15 @@ pub fn load_imported_editor_spec_file(
 #[tauri::command(async)]
 pub fn save_editor_spec(payload: SaveEditorSpecPayload) -> Result<WriteResult<Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
-    let result = services::editor_config::save_editor_spec_with_json_options(
-        &payload.mod_root,
-        payload.kind,
-        &payload.id,
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        payload.target.kind,
+        &payload.target.id,
+        &payload.base_versions,
+    )?;
+    let result = services::project::save_entity_spec(
+        &payload.session_id,
+        &payload.target,
         payload.data,
         payload.json_write,
         payload.ordered_json.as_deref(),
@@ -68,15 +69,30 @@ pub fn save_indexed_config_entity(
     payload: IndexedConfigEntityPayload,
 ) -> Result<WriteResult<Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
-    let result = services::editor_config::save_indexed_config_with_json(
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        payload.kind.into(),
+        payload.previous_id.as_deref().unwrap_or(&payload.next_id),
+        &payload.base_versions,
+    )?;
+    if payload.kind == crate::models::IndexedConfigKind::Faction {
+        let result = services::project::save_faction_entity(
+            &payload.session_id,
+            payload.previous_id.as_deref(),
+            &payload.next_id,
+            payload.entity_data,
+            payload.json_write,
+            payload.ordered_json.as_deref(),
+        )?;
+        return transaction.commit(result, "保存势力");
+    }
+    let result = services::editor_config::save_mission_with_json(
         &payload.mod_root,
-        payload.kind,
         payload.previous_id.as_deref(),
         &payload.next_id,
-        services::editor_config::IndexedSaveInput {
+        services::editor_config::MissionSaveInput {
             index_row: payload.index_row,
             entity_data: payload.entity_data,
-            delete_previous_target: payload.delete_previous_target,
             json_write: payload.json_write,
             ordered_json: payload.ordered_json.as_deref(),
         },
@@ -89,9 +105,25 @@ pub fn create_indexed_config_entity(
     payload: IndexedConfigEntityPayload,
 ) -> Result<WriteResult<Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
-    let result = services::editor_config::create_indexed_config_entity(
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        payload.kind.into(),
+        &payload.next_id,
+        &payload.base_versions,
+    )?;
+    if payload.kind == crate::models::IndexedConfigKind::Faction {
+        let result = services::project::save_faction_entity(
+            &payload.session_id,
+            None,
+            &payload.next_id,
+            payload.entity_data,
+            Default::default(),
+            None,
+        )?;
+        return transaction.commit(result, "创建势力");
+    }
+    let result = services::editor_config::create_mission_entity(
         &payload.mod_root,
-        payload.kind,
         &payload.next_id,
         payload.index_row,
         payload.entity_data,
@@ -104,9 +136,22 @@ pub fn delete_indexed_config_entity(
     payload: DeleteIndexedConfigEntityPayload,
 ) -> Result<WriteResult<Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
-    let result = services::editor_config::delete_indexed_config_entity(
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        payload.kind.into(),
+        &payload.id,
+        &payload.base_versions,
+    )?;
+    if payload.kind == crate::models::IndexedConfigKind::Faction {
+        let result = services::project::delete_faction_entity(
+            &payload.session_id,
+            &payload.id,
+            payload.delete_target,
+        )?;
+        return transaction.commit(result, "删除势力");
+    }
+    let result = services::editor_config::delete_mission_entity(
         &payload.mod_root,
-        payload.kind,
         &payload.id,
         payload.delete_target,
     )?;
@@ -116,6 +161,12 @@ pub fn delete_indexed_config_entity(
 #[tauri::command(async)]
 pub fn save_variant_entity(payload: VariantEntityPayload) -> Result<WriteResult<Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        EntityKind::Variant,
+        payload.previous_id.as_deref().unwrap_or(&payload.next_id),
+        &payload.base_versions,
+    )?;
     let target_exists = spec_save_context(
         &payload.session_id,
         EntityKind::Variant,
@@ -144,6 +195,12 @@ pub fn create_variant_entity(
     payload: VariantEntityPayload,
 ) -> Result<WriteResult<Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        EntityKind::Variant,
+        &payload.next_id,
+        &payload.base_versions,
+    )?;
     let target_exists = services::project::query_entity(
         &payload.session_id,
         EntityKind::Variant,
@@ -163,6 +220,12 @@ pub fn create_variant_entity(
 #[tauri::command(async)]
 pub fn delete_variant_entity(payload: DeleteVariantEntityPayload) -> Result<WriteResult, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        EntityKind::Variant,
+        &payload.entity_id,
+        &payload.base_versions,
+    )?;
     spec_save_context(
         &payload.session_id,
         EntityKind::Variant,
@@ -182,6 +245,12 @@ pub fn delete_variant_entity(payload: DeleteVariantEntityPayload) -> Result<Writ
 #[tauri::command(async)]
 pub fn save_skin_entity(payload: SkinEntityPayload) -> Result<WriteResult<Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        EntityKind::Skin,
+        payload.previous_id.as_deref().unwrap_or(&payload.next_id),
+        &payload.base_versions,
+    )?;
     let target_exists = spec_save_context(
         &payload.session_id,
         EntityKind::Skin,
@@ -208,6 +277,12 @@ pub fn save_skin_entity(payload: SkinEntityPayload) -> Result<WriteResult<Value>
 #[tauri::command(async)]
 pub fn create_skin_entity(payload: SkinEntityPayload) -> Result<WriteResult<Value>, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        EntityKind::Skin,
+        &payload.next_id,
+        &payload.base_versions,
+    )?;
     let target_exists =
         services::project::query_entity(&payload.session_id, EntityKind::Skin, &payload.next_id)?
             .is_some();
@@ -224,6 +299,12 @@ pub fn create_skin_entity(payload: SkinEntityPayload) -> Result<WriteResult<Valu
 #[tauri::command(async)]
 pub fn delete_skin_entity(payload: DeleteSkinEntityPayload) -> Result<WriteResult, AppError> {
     let transaction = services::write_transactions::begin(&payload, &payload.base_versions)?;
+    services::project::require_entity_version_scope(
+        &payload.session_id,
+        EntityKind::Skin,
+        &payload.entity_id,
+        &payload.base_versions,
+    )?;
     spec_save_context(
         &payload.session_id,
         EntityKind::Skin,

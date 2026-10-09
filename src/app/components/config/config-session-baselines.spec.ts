@@ -1,3 +1,5 @@
+import { entityTargetFixture } from '@/test/entity-target';
+import { savedWriteFixture } from '@/test/write-result';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,11 +13,12 @@ import { invalidateQueryCacheByProject } from '@/services/query-cache.service';
 import { editorUiStubs } from '@/test/ui-stubs';
 import { ref } from 'vue';
 import type { AppFeedback, FileVersion, ProjectManifest, RowData } from '@/shared/types';
-import type { ConfigFactionRecord, ConfigSkinRecord, ConfigVariantRecord } from '@/domain/config/config-records';
+import type { ConfigFactionRecord, ConfigFamilyRecord } from '@/domain/config/config-records';
 
 const mocks = vi.hoisted(() => ({
-  variants: vi.fn<() => Promise<ConfigVariantRecord[]>>(),
-  skins: vi.fn<() => Promise<ConfigSkinRecord[]>>(),
+  identityHandler: null as null | ((event: import('@/windows/window.events').EntityIdentityAppliedEvent) => Promise<void>),
+  variants: vi.fn<() => Promise<ConfigFamilyRecord[]>>(),
+  skins: vi.fn<() => Promise<ConfigFamilyRecord[]>>(),
   factions: vi.fn<() => Promise<ConfigFactionRecord[]>>(),
   saveVariant: vi.fn(async () => null),
   saveSkin: vi.fn(async () => null),
@@ -33,10 +36,19 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => mocks.feedback }));
 vi.mock('@/services/config-entity.service', () => ({
+  getConfigFactionRecord: async () => (await mocks.factions())[0] ?? null,
+  getConfigFamilyRecord: async (_session: string, kind: string) =>
+    (await (kind === 'variant' ? mocks.variants() : mocks.skins()))[0] ?? null,
   listVariantRecords: mocks.variants,
   listSkinRecords: mocks.skins,
   listConfigFactionRecords: mocks.factions,
   queryFactionPreviewImages: async () => ({ crestSrc: '', logoSrc: '' }),
+}));
+vi.mock('@/orchestrators/entity-events.orchestrator', () => ({
+  listenEntityIdentityApplied: vi.fn(async (handler) => {
+    mocks.identityHandler = handler;
+    return () => {};
+  }),
 }));
 vi.mock('@/orchestrators/config-save.orchestrator', () => ({
   completeConfigSave: vi.fn(async () => {}),
@@ -92,39 +104,30 @@ function versions(root: string, fingerprint = 'v1'): FileVersion[] {
   return [{ path: `${root}/same.file`, fingerprint }];
 }
 
-function variant(root: string, name: string, fingerprint = 'v1'): ConfigVariantRecord {
+function variant(root: string, name: string, fingerprint = 'v1'): ConfigFamilyRecord {
   return {
     spriteRef: null,
-    variant: {
-      variantId: 'same',
-      hullId: 'hull',
+    file: {
+      target: entityTargetFixture('variant', 'same'),
+      id: 'same',
       path: `${root}/same.file`,
       relPath: 'same.file',
       baseVersions: versions(root, fingerprint),
       data: { variantId: 'same', hullId: 'hull', displayName: name },
-      weaponGroupCount: 0,
-      hullModCount: 0,
-      permaModCount: 0,
-      wingCount: 0,
     },
   };
 }
 
-function skin(root: string, name: string, fingerprint = 'v1'): ConfigSkinRecord {
+function skin(root: string, name: string, fingerprint = 'v1'): ConfigFamilyRecord {
   return {
     spriteRef: null,
-    skin: {
-      skinHullId: 'same',
-      baseHullId: 'hull',
+    file: {
+      target: entityTargetFixture('skin', 'same'),
+      id: 'same',
       path: `${root}/same.file`,
       relPath: 'same.file',
       baseVersions: versions(root, fingerprint),
       data: { skinHullId: 'same', baseHullId: 'hull', displayName: name },
-      builtInModCount: 0,
-      builtInWeaponCount: 0,
-      builtInWingCount: 0,
-      weaponSlotChangeCount: 0,
-      engineSlotChangeCount: 0,
     },
   };
 }
@@ -244,6 +247,35 @@ afterEach(() => {
 });
 
 describe('configuration page session baselines', () => {
+  it.each(['variant', 'skin', 'faction'] as const)('%s accepts an external rename while retaining the mounted raw field', async (kind) => {
+    await mountPage(kind);
+    await input().setValue('local typing');
+    const id = 'next';
+    const nextTarget = entityTargetFixture(kind, id);
+    if (kind === 'faction')
+      mocks.factions.mockResolvedValue([
+        { id, data: { id, displayName: 'External' }, crestRef: null, baseVersions: versions('M:/A', 'v2') },
+      ]);
+    else {
+      const record = kind === 'variant' ? variant('M:/A', 'External', 'v2') : skin('M:/A', 'External', 'v2');
+      record.file = {
+        ...record.file,
+        id,
+        target: nextTarget,
+        data: { ...record.file.data, [kind === 'variant' ? 'variantId' : 'skinHullId']: id },
+      };
+      (kind === 'variant' ? mocks.variants : mocks.skins).mockResolvedValue([record]);
+    }
+    mocks.feedback.choose.mockResolvedValueOnce('follow');
+    const receipt = savedWriteFixture();
+    receipt.commitId = 10;
+    receipt.identityChanges = [{ before: entityTargetFixture(kind, 'same'), after: nextTarget }];
+    await mocks.identityHandler!({ sessionId: 'sA', modRoot: 'm:/a/', result: receipt });
+    await flushPromises();
+    expect((input().element as HTMLTextAreaElement).value).toBe('local typing');
+    expect((await save(kind)).base).toEqual(versions('M:/A', 'v2'));
+    expect(mocks.feedback.choose).toHaveBeenCalledOnce();
+  });
   it.each(['variant', 'skin', 'faction'] as const)('%s waits for its new session after confirming discard', async (kind) => {
     await mountPage(kind);
     await input().setValue('A dirty');

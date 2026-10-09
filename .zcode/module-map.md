@@ -52,13 +52,13 @@
 ## 模块索引
 
 - [应用启动与窗口挂载](modules/app-runtime.md)：说明 URL 窗口类型、settings 初始化、唯一窗口壳、窗口根装配和应用启动失败呈现。
-- [多窗口机制](modules/app-windowing.md)：说明 managed window、singleton identity、跨窗口事件、关闭守卫与主窗口 refresh 协调。
+- [多窗口机制](modules/app-windowing.md)：说明类型化 identity、Rust 原生实例登记、目标占用、跨窗口事件与会话关闭守卫。
 - [应用设置与主题](modules/app-settings.md)：说明 settings store、主题令牌、editMode、日志目录、persistence/mirror 与子窗口 snapshot。
 - [应用反馈与日志](modules/app-feedback-log.md)：说明 AppFeedback 工厂与 hook、确认框、业务消息、应用日志、错误文件入口与工具私有配置清理。
 - [目录打开](modules/directory-opening.md)：说明目录选择、游戏或 Mod 识别、canonical root、ProjectSession 建立与打开 outcome。
 - [新建 Mod](modules/mod-creation.md)：说明 Mod 父目录、最小目录骨架、`mod_info.json` renderer 与创建后的受信 session 打开。
 - [工作区运行态与持久化](modules/workspace.md)：说明多 Mod 页签、导航上下文、workspace 快照、启动恢复、移除 Mod 与活动 Mod 同步。
-- [项目会话与清单缓存](modules/project-session.md)：说明 `sessionId + modRoot`、manifest、按需 query、派生索引、cache 和写后 invalidation。
+- [项目会话与清单缓存](modules/project-session.md)：说明 `sessionId + modRoot`、LoadedSpecRecord、EntityEditTarget、版本范围、按需 query 与写后 invalidation。
 - [文本与格式解析器](modules/text-parsers.md)：说明 CSV-like 与 JSON-like 解析、UTF-8 无 BOM、CP1252 规范化和格式错误上下文。
 - [表格编辑](modules/csv-tables.md)：说明窗口化表格 query、tables store、行身份、选择、列 schema 渲染与 dirty。
 - [表格草稿历史](modules/csv-edit-history.md)：说明按 Mod/表隔离的内存 operation、CSV undo/redo、rowKey 映射和 history limit。

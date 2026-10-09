@@ -59,8 +59,10 @@ export function openModOpeningFailureFileEditor(failure: ModOpeningFailure, sett
 
 export function openFileEditorWindow(request: OpenFileEditorWindowRequest): Promise<void> {
   return openManagedWindow({
-    labelPrefix: 'file-editor',
-    singletonKey: JSON.stringify([request.sessionId, request.modRoot, request.path]),
+    identity:
+      request.mode === 'recovery'
+        ? { type: 'recovery', modRoot: request.modRoot, path: request.path }
+        : { type: 'file', sessionId: request.sessionId!, modRoot: request.modRoot!, path: request.path },
     title: request.title ?? '文件编辑器',
     urlParams: {
       window: 'file-editor',

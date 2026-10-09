@@ -19,6 +19,7 @@ export function useConfigFamilyEditorViewModel(params: {
   sessionId: Ref<string | null>;
   selectedId: Ref<string>;
   files: Ref<ConfigFamilyFile[]>;
+  identityHandoff?: Readonly<Ref<import('@/shared/types').ConfigIdentityHandoff<ConfigFamilyFile> | null>>;
 }) {
   const feedback = useAppFeedback();
   function editTarget(id: string): ConfigEditTarget {
@@ -27,13 +28,13 @@ export function useConfigFamilyEditorViewModel(params: {
       modRoot: params.modRoot.value!,
       kind: family.id,
       id,
-      relPath: params.files.value.find((file) => familyFileId(family, file) === id)?.relPath ?? null,
+      relPath: params.files.value.find((file) => familyFileId(file) === id)?.relPath ?? null,
     };
   }
 
   const family = params.family;
 
-  const selectedFile = computed(() => params.files.value.find((file) => familyFileId(family, file) === params.selectedId.value) ?? null);
+  const selectedFile = computed(() => params.files.value.find((file) => familyFileId(file) === params.selectedId.value) ?? null);
 
   const draftSession = useConfigEditorDraftSession<
     RowData,
@@ -44,7 +45,7 @@ export function useConfigFamilyEditorViewModel(params: {
     modRoot: params.modRoot,
     load: (target) => {
       const id = target.id;
-      const file = params.files.value.find((candidate) => familyFileId(family, candidate) === id) ?? null;
+      const file = params.files.value.find((candidate) => familyFileId(candidate) === id) ?? null;
       return { target, meta: { file, receipt: null }, value: file ? file.data : {}, baseVersions: file?.baseVersions ?? [] };
     },
     save: async (target, data, baseVersions) => {
@@ -55,7 +56,7 @@ export function useConfigFamilyEditorViewModel(params: {
       const saved = await params.saveFile(saveSessionId, saveModRoot, { ...current, baseVersions }, data);
       if (!saved) return;
       return {
-        target: { ...target, id: familyFileId(family, saved.entity), relPath: saved.entity.relPath },
+        target: { ...target, id: familyFileId(saved.entity), relPath: saved.entity.relPath },
         meta: { file: saved.entity, receipt: saved.receipt },
         value: saved.entity.data,
         baseVersions: saved.entity.baseVersions,
@@ -79,6 +80,21 @@ export function useConfigFamilyEditorViewModel(params: {
     ([selectedId]) => {
       const file = selectedFile.value;
       const data = file ? file.data : {};
+      const handoff = params.identityHandoff?.value;
+      if (handoff && file && handoff.sourceId === draftSession.currentTarget.value?.id && file.id === handoff.record.id) {
+        draftSession.adoptIdentity(
+          draftSession.currentTarget.value,
+          {
+            target: editTarget(file.id),
+            value: file.data,
+            baseVersions: file.baseVersions,
+            meta: { file, receipt: null },
+            commitId: handoff.commitId,
+          },
+          (draft) => (handoff.preserveDraft ? { ...draft, [family.idField]: file.id } : file.data),
+        );
+        return;
+      }
       if (!draftSession.isTargetCurrent(editTarget(selectedId))) void loadFamilyEditorData(selectedId);
       else
         draftSession.applyExternalForTarget({

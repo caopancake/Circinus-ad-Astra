@@ -41,6 +41,60 @@ const wireWrites = [
 /** @type {CapabilityRule[]} */
 export const frontendCapabilities = [
   {
+    role: 'api',
+    domain: 'window',
+    names: [
+      'openManagedWindow',
+      'updateManagedWindowStatus',
+      'reserveWindowTargets',
+      'releaseWindowTargets',
+      'retargetManagedWindow',
+      'requestSessionWindowClose',
+      'cancelWindowCloseRequest',
+    ],
+    capability: 'window-wire',
+    owners: [{ layer: 'services', domain: 'window' }],
+  },
+  {
+    role: 'service',
+    domain: 'window',
+    names: ['openNativeManagedWindow'],
+    capability: 'window-open',
+    owners: [{ layer: 'windows', domain: 'managed' }],
+  },
+  {
+    role: 'service',
+    domain: 'window',
+    names: ['updateNativeWindowStatus', 'cancelNativeWindowClose'],
+    capability: 'window-lifecycle-guard',
+    owners: [{ layer: 'app', role: 'composable', domain: 'dirty-window-close-guard' }],
+  },
+  {
+    role: 'service',
+    domain: 'window',
+    names: ['closeNativeSessionWindows'],
+    capability: 'session-window-close',
+    owners: [{ layer: 'orchestrators', domain: 'workspace-lifecycle' }],
+  },
+  {
+    role: 'service',
+    domain: 'window',
+    names: ['reserveNativeWindowTargets', 'releaseNativeWindowTargets'],
+    capability: 'entity-window-identity',
+    owners: [
+      { layer: 'orchestrators', domain: 'entity-identity' },
+      { layer: 'orchestrators', domain: 'table-save' },
+      { layer: 'orchestrators', domain: 'config-save' },
+    ],
+  },
+  {
+    role: 'service',
+    domain: 'window',
+    names: ['retargetNativeWindow'],
+    capability: 'window-identity-handoff',
+    owners: [{ layer: 'orchestrators', domain: 'entity-identity' }],
+  },
+  {
     layer: 'app',
     role: 'module',
     domain: 'app-feedback',
@@ -71,7 +125,8 @@ export const frontendCapabilities = [
       'querySessionCsvRowPreview',
       'querySessionHullReferences',
       'querySessionEntity',
-      'querySessionEntityBaseVersions',
+      'querySessionEntityEditTarget',
+      'querySessionEntityIdentityIntent',
       'querySessionEntityList',
       'querySessionEditorDraftResources',
     ],
@@ -86,7 +141,8 @@ export const frontendCapabilities = [
       'queryCsvSourceOptions',
       'queryCsvTableWindow',
       'queryEntity',
-      'queryEntityBaseVersions',
+      'queryEntityEditTarget',
+      'queryEntityIdentityIntent',
       'queryEntityList',
       'queryHullReferences',
       'queryEditorDraftResources',
@@ -357,6 +413,8 @@ export function allowedServiceEdge(from, to) {
 
 /** @param {import('./classify.mjs').FrontendLayer} from @param {import('./classify.mjs').FrontendLayer} to @returns {boolean} */
 export function validFrontendDependency(from, to) {
+  if (from === 'test') return true;
+  if (to === 'test') return false;
   /** @type {Record<string, string[]>} */
   const layers = {
     shared: ['shared'],

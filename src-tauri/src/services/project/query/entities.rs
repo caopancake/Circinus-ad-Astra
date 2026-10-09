@@ -20,8 +20,10 @@ pub fn query_entity(session_id: &str, kind: EntityKind, id: &str) -> AppResult<O
         return Ok(None);
     };
     let resource_refs = (definition.resources)(&session, id, &data);
+    let info = super::entity_targets::describe_entity_target(&mut session, kind, id)?;
     Ok(Some(EntityData {
-        base_versions: super::super::versions::target_versions(&session, kind, id, &data),
+        target: info.target,
+        base_versions: info.base_versions,
         resource_refs,
         kind: definition.kind,
         id: id.to_string(),
@@ -34,27 +36,22 @@ pub fn query_entity_list(session_id: &str, kind: EntityKind) -> AppResult<Vec<En
     let mut session = lock_session(&handle)?;
     let definition = entity_definition(kind)?;
     (definition.prepare)(&mut session)?;
-    let mut entities = (definition.list)(&mut session)?;
-    for entity in &mut entities {
-        entity.base_versions =
-            super::super::versions::target_versions(&session, kind, &entity.id, &entity.data);
-    }
-    Ok(entities)
-}
-
-pub fn query_entity_base_versions(
-    session_id: &str,
-    kind: EntityKind,
-    id: &str,
-) -> AppResult<Vec<crate::models::FileVersion>> {
-    let handle = session_handle(session_id)?;
-    let session = lock_session(&handle)?;
-    Ok(super::super::versions::target_versions(
-        &session,
-        kind,
-        id,
-        &serde_json::Value::Null,
-    ))
+    let projections = (definition.list)(&mut session)?;
+    projections
+        .into_iter()
+        .map(|projection| {
+            let info =
+                super::entity_targets::describe_entity_target(&mut session, kind, &projection.id)?;
+            Ok(EntityData {
+                target: info.target,
+                base_versions: info.base_versions,
+                kind: projection.kind,
+                id: projection.id,
+                data: projection.data,
+                resource_refs: projection.resource_refs,
+            })
+        })
+        .collect()
 }
 
 pub fn query_editor_draft_resources(
@@ -243,7 +240,6 @@ mod tests {
             },
         );
         let session = super::super::super::model::ProjectSession {
-            source_entities: BTreeMap::new(),
             source_versions: BTreeMap::new(),
             manifest: crate::models::ProjectManifest {
                 base_versions: Vec::new(),

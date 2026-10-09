@@ -14,12 +14,18 @@ import {
   isConfigEntityId,
   trimmedConfigStringField,
 } from '@/domain/config/config-entities';
-import { familyFileId, type ConfigEntityFamilyDefinition, type ConfigFamilyFile } from '@/domain/config/config-entity-families';
-import { listSkinRecords, listVariantRecords } from '@/services/config-entity.service';
+import {
+  familyFileId,
+  familyFileCompanion,
+  type ConfigEntityFamilyDefinition,
+  type ConfigFamilyFile,
+} from '@/domain/config/config-entity-families';
+import { listSkinRecords, listVariantRecords, getConfigFamilyRecord } from '@/services/config-entity.service';
+import { useConfigIdentityReception } from '@/app/composables/config/use-config-identity-reception';
 import { queryHullPreviewMetadata, queryHullReferenceOptions } from '@/services/config-resource.service';
 import { useProjectStore } from '@/stores/project.store';
 import { useSettingsStore } from '@/stores/settings.store';
-import type { ResourceRef, RowData, SavedConfig, SkinFile, VariantFile } from '@/shared/types';
+import type { ResourceRef, RowData, SavedConfig } from '@/shared/types';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import type { SelectOption } from '@/domain/schema/schema-options';
 import { hasEntityInvalidation, hasQueryInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
@@ -27,7 +33,7 @@ import { stableDeepEqual } from '@/shared/lib/stable-compare';
 
 export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   const selectedId = ref<string | null>(null);
-  const files = ref<(VariantFile | SkinFile)[]>([]);
+  const files = ref<ConfigFamilyFile[]>([]);
   const spriteRefs = ref<Record<string, ResourceRef | null>>({});
   const hullNames = ref<Record<string, string>>({});
   const hullOptions = ref<SelectOption[]>([]);
@@ -45,17 +51,26 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   const hullOptionsLoaded = ref(false);
   let listSessionKey: string | null = null;
   let disposed = false;
+  const identity = useConfigIdentityReception({
+    target: () =>
+      sessionId.value && modRoot.value && selectedId.value
+        ? { sessionId: sessionId.value, modRoot: modRoot.value, kind: family.id, id: selectedId.value }
+        : null,
+    read: (session, id) => getConfigFamilyRecord(session, family.id, id),
+    accept: (record, id) => {
+      filesRequestId++;
+      files.value = [...files.value.filter((file) => file.id !== identity.handoff.value!.sourceId && file.id !== id), record.file];
+      selectedId.value = id;
+      dataRevision.value++;
+    },
+  });
 
   function sessionKey() {
     return JSON.stringify([sessionId.value, modRoot.value]);
   }
 
-  function idOf(file: VariantFile | SkinFile): string {
-    return family.id === 'variant' ? (file as VariantFile).variantId : (file as SkinFile).skinHullId;
-  }
-
-  function idOfFamilyFile(file: ConfigFamilyFile): string {
-    return familyFileId(family, file);
+  function idOf(file: ConfigFamilyFile): string {
+    return file.id;
   }
 
   async function loadFiles() {
@@ -80,15 +95,10 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       const records = family.id === 'variant' ? await listVariantRecords(activeSessionId) : await listSkinRecords(activeSessionId);
       if (disposed || requestId !== filesRequestId || key !== sessionKey()) return;
       const previousSelected = files.value.find((file) => idOf(file) === selectedId.value);
-      files.value = records.map((record) =>
-        family.id === 'variant' ? (record as { variant: VariantFile }).variant : (record as { skin: SkinFile }).skin,
-      );
-      spriteRefs.value = Object.fromEntries(
-        records.map((record) => [
-          family.id === 'variant' ? (record as { variant: VariantFile }).variant.variantId : (record as { skin: SkinFile }).skin.skinHullId,
-          record.spriteRef,
-        ]),
-      );
+      files.value = records.map((record) => record.file);
+      if (identity.receiving.value && previousSelected && !files.value.some((file) => file.id === previousSelected.id))
+        files.value.push(previousSelected);
+      spriteRefs.value = Object.fromEntries(records.map((record) => [record.file.id, record.spriteRef]));
       const nextSelected = files.value.find((file) => idOf(file) === selectedId.value);
       if (selectedEntityDataChanged(previousSelected, nextSelected)) dataRevision.value += 1;
       if (selectedId.value && !files.value.some((file) => idOf(file) === selectedId.value)) selectedId.value = null;
@@ -101,13 +111,13 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     }
   }
 
-  async function loadFamilyHullNames(activeSessionId: string, requestId: number, sourceFiles: (VariantFile | SkinFile)[]): Promise<void> {
+  async function loadFamilyHullNames(activeSessionId: string, requestId: number, sourceFiles: ConfigFamilyFile[]): Promise<void> {
     if (sourceFiles.length === 0) {
       hullNames.value = {};
       return;
     }
     try {
-      const hullIds = sourceFiles.map((file) => (file as VariantFile).hullId);
+      const hullIds = sourceFiles.map((file) => familyFileCompanion(family, file));
       const result = await queryHullPreviewMetadata(activeSessionId, hullIds);
       if (disposed || requestId !== hullNamesRequestId || activeSessionId !== project.activeSessionId) return;
       hullNames.value = result;
@@ -146,7 +156,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       feedback.warning(configEntityIdInvalidMessage(family.idField, id), 'config.id_invalid');
       return false;
     }
-    if (hasConfigEntityIdConflict(files.value as VariantFile[], id, null, idOf)) {
+    if (hasConfigEntityIdConflict(files.value, id, null, idOf)) {
       feedback.warning(`${family.displayName} "${id}" 已存在`);
       return false;
     }
@@ -207,7 +217,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   ): Promise<SavedConfig<ConfigFamilyFile> | null> {
     const manifest = project.activeManifest;
     if (disposed || !manifest || manifest.modRoot !== saveModRoot || manifest.sessionId !== saveSessionId) return null;
-    const currentId = idOfFamilyFile(current);
+    const currentId = familyFileId(current);
     const nextId = trimmedConfigStringField(data, family.idField);
     const nextCompanionId = trimmedConfigStringField(data, family.companionField);
     if (!nextId || !nextCompanionId) {
@@ -218,7 +228,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       feedback.warning(configEntityIdInvalidMessage(family.idField, nextId), 'config.id_invalid');
       return null;
     }
-    if (hasConfigEntityIdConflict(files.value as VariantFile[], nextId, currentId, idOf)) {
+    if (hasConfigEntityIdConflict(files.value, nextId, currentId, idOf)) {
       feedback.warning(`${family.displayName} "${nextId}" 已存在`);
       return null;
     }
@@ -255,7 +265,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     }
     if (!saved) return null;
     if (disposed || project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId) return saved;
-    files.value = files.value.map((file) => (idOf(file) === currentId ? (saved.entity as VariantFile | SkinFile) : file));
+    files.value = files.value.map((file) => (idOf(file) === currentId ? saved.entity : file));
     feedback.success(`${family.displayName} "${nextId}" 已保存`);
     return saved;
   }
@@ -298,6 +308,9 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   });
 
   return {
+    identityHandoff: computed(() =>
+      identity.handoff.value ? { ...identity.handoff.value, record: identity.handoff.value.record.file } : null,
+    ),
     selectedId,
     modRoot,
     sessionId,

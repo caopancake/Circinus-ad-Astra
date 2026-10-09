@@ -6,8 +6,7 @@ import type {
   IndexedConfigEntityData,
   ResourceRef,
   RowData,
-  SkinFile,
-  VariantFile,
+  ConfigFamilyFile,
   WriteResult,
 } from '@/shared/types';
 
@@ -30,13 +29,8 @@ export interface ConfigMissionRecord {
   list: RowData;
 }
 
-export interface ConfigVariantRecord {
-  variant: VariantFile;
-  spriteRef: ResourceRef | null;
-}
-
-export interface ConfigSkinRecord {
-  skin: SkinFile;
+export interface ConfigFamilyRecord {
+  file: ConfigFamilyFile;
   spriteRef: ResourceRef | null;
 }
 
@@ -55,20 +49,13 @@ export function toConfigMissionRecord(entity: EntityData): ConfigMissionRecord {
     baseVersions: entity.baseVersions,
     iconRef: entity.resourceRefs.icon ?? null,
     id: entity.id,
-    list: { ...requireRowData(data.list, `战役 ${entity.id} 列表数据无效`), id: entity.id },
+    list: requireRowData(data.list, `战役 ${entity.id} 列表数据无效`),
   };
 }
 
-export function toConfigVariantRecord(entity: EntityData): ConfigVariantRecord {
+export function toConfigFamilyRecord(entity: EntityData): ConfigFamilyRecord {
   return {
-    variant: variantFileFromEntityData(entity.data, entity.baseVersions),
-    spriteRef: entity.resourceRefs.sprite ?? null,
-  };
-}
-
-export function toConfigSkinRecord(entity: EntityData): ConfigSkinRecord {
-  return {
-    skin: skinFileFromEntityData(entity.data, entity.baseVersions),
+    file: familyFile(entity.target, entity.baseVersions, requireRowData(entity.data, '实体族文件内容无效')),
     spriteRef: entity.resourceRefs.sprite ?? null,
   };
 }
@@ -96,56 +83,22 @@ export function indexedConfigEntityData(result: WriteResult): IndexedConfigEntit
   };
 }
 
-export function variantEntityData(result: WriteResult): VariantFile {
-  return variantFileFromEntityData(result.refreshedEntity, result.baseVersions);
+export function configFamilyEntityData(result: WriteResult): ConfigFamilyFile {
+  const record = requireRowData(result.refreshedEntity, '实体族保存数据无效');
+  return familyFile(result.identityChanges[0]!.after, result.baseVersions, requireRowData(record.data, '实体族文件内容无效'));
 }
 
-export function skinEntityData(result: WriteResult): SkinFile {
-  return skinFileFromEntityData(result.refreshedEntity, result.baseVersions);
-}
-
-function variantFileFromEntityData(value: unknown, baseVersions: import('@/shared/types').FileVersion[]): VariantFile {
-  const row = requireRowData(value, '装配数据无效');
-  return {
-    baseVersions,
-    variantId: stringField(row, 'variantId', '装配 variantId 无效'),
-    hullId: stringField(row, 'hullId', '装配 hullId 无效'),
-    path: stringField(row, 'path', '装配 path 无效'),
-    relPath: stringField(row, 'relPath', '装配 relPath 无效'),
-    data: requireRowData(row.data, '装配文件内容无效'),
-    weaponGroupCount: numberField(row, 'weaponGroupCount', '装配 weaponGroupCount 无效'),
-    hullModCount: numberField(row, 'hullModCount', '装配 hullModCount 无效'),
-    permaModCount: numberField(row, 'permaModCount', '装配 permaModCount 无效'),
-    wingCount: numberField(row, 'wingCount', '装配 wingCount 无效'),
-  };
-}
-
-function skinFileFromEntityData(value: unknown, baseVersions: import('@/shared/types').FileVersion[]): SkinFile {
-  const row = requireRowData(value, '舰船皮肤数据无效');
-  return {
-    baseVersions,
-    skinHullId: stringField(row, 'skinHullId', '舰船皮肤 skinHullId 无效'),
-    baseHullId: stringField(row, 'baseHullId', '舰船皮肤 baseHullId 无效'),
-    path: stringField(row, 'path', '舰船皮肤 path 无效'),
-    relPath: stringField(row, 'relPath', '舰船皮肤 relPath 无效'),
-    data: requireRowData(row.data, '舰船皮肤文件内容无效'),
-    builtInModCount: numberField(row, 'builtInModCount', '舰船皮肤 builtInModCount 无效'),
-    builtInWeaponCount: numberField(row, 'builtInWeaponCount', '舰船皮肤 builtInWeaponCount 无效'),
-    builtInWingCount: numberField(row, 'builtInWingCount', '舰船皮肤 builtInWingCount 无效'),
-    weaponSlotChangeCount: numberField(row, 'weaponSlotChangeCount', '舰船皮肤 weaponSlotChangeCount 无效'),
-    engineSlotChangeCount: numberField(row, 'engineSlotChangeCount', '舰船皮肤 engineSlotChangeCount 无效'),
-  };
+function familyFile(
+  target: import('@/shared/types').EntityEditTarget,
+  baseVersions: import('@/shared/types').FileVersion[],
+  data: RowData,
+): ConfigFamilyFile {
+  return { target, baseVersions, id: target.id, path: target.write.path, relPath: target.write.relPath, data };
 }
 
 function stringField(row: RowData, key: string, message: string): string {
   const value = row[key];
   if (typeof value === 'string') return value;
-  throw new AppError(message, { action: 'read-config-entity' });
-}
-
-function numberField(row: RowData, key: string, message: string): number {
-  const value = row[key];
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
   throw new AppError(message, { action: 'read-config-entity' });
 }
 

@@ -9,6 +9,7 @@
         <div class="top-action-group">
           <n-input
             :value="tables.searchText"
+            :disabled="tables.currentTableLocked"
             class="top-search-input"
             clearable
             placeholder="搜索 ID / 名称"
@@ -16,6 +17,7 @@
           />
           <n-select
             :value="tables.currentFactionOptionValue"
+            :disabled="tables.currentTableLocked"
             @update:value="csvTable.setFactionFilter"
             class="top-faction-select"
             :options="factionOptions"
@@ -23,16 +25,22 @@
           />
         </div>
         <div class="top-action-group">
-          <n-button :disabled="!project.activeManifest" @click="actions.addNewRow">新建</n-button>
-          <n-button type="error" ghost :disabled="!tables.selectedRowKey" @click="actions.deleteSelectedRow">删除</n-button>
+          <n-button :disabled="tables.currentTableLocked || !project.activeManifest" @click="actions.addNewRow">新建</n-button>
+          <n-button type="error" ghost :disabled="tables.currentTableLocked || !tables.selectedRowKey" @click="actions.deleteSelectedRow"
+            >删除</n-button
+          >
         </div>
         <div class="top-action-group">
-          <n-button :disabled="!tables.canUndoCurrentTableEdit" @click="actions.undoCurrentTableEdit">撤销</n-button>
-          <n-button :disabled="!tables.canRedoCurrentTableEdit" @click="actions.redoCurrentTableEdit">重做</n-button>
+          <n-button :disabled="tables.currentTableLocked || !tables.canUndoCurrentTableEdit" @click="actions.undoCurrentTableEdit"
+            >撤销</n-button
+          >
+          <n-button :disabled="tables.currentTableLocked || !tables.canRedoCurrentTableEdit" @click="actions.redoCurrentTableEdit"
+            >重做</n-button
+          >
           <n-button
             type="primary"
             :loading="tables.saving"
-            :disabled="!tables.hasCurrentTableChanges"
+            :disabled="tables.currentTableLocked || !tables.hasCurrentTableChanges"
             @pointerdown.prevent="actions.saveChanges()"
             @click.prevent
           >

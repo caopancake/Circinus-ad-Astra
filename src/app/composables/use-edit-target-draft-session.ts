@@ -23,6 +23,10 @@ export interface EditTargetDraftSessionOptions<TValue, TTarget, TMeta = unknown>
   save?: (target: TTarget, draft: TValue, baseVersions: FileVersion[]) => MaybePromise<EditTargetSnapshot<TValue, TTarget, TMeta> | void>;
   targetKey: (target: TTarget) => string;
   afterSaved?: (snapshot: EditTargetSnapshot<TValue, TTarget, TMeta>) => MaybePromise<void>;
+  withSavePreparation?: (
+    target: TTarget,
+    submit: (prepared: TTarget) => Promise<EditTargetSnapshot<TValue, TTarget, TMeta> | null>,
+  ) => Promise<EditTargetSnapshot<TValue, TTarget, TMeta> | null>;
 }
 
 export interface EditTargetDraftSession<TValue, TTarget, TMeta = unknown> {
@@ -31,6 +35,7 @@ export interface EditTargetDraftSession<TValue, TTarget, TMeta = unknown> {
   baselineSnapshot: Readonly<Ref<EditTargetSnapshot<TValue, TTarget, TMeta> | null>>;
   pendingSnapshot: Readonly<Ref<EditTargetSnapshot<TValue, TTarget, TMeta> | null>>;
   savedSnapshot: Readonly<Ref<EditTargetSnapshot<TValue, TTarget, TMeta> | null>>;
+  hasPendingSynchronization: Readonly<Ref<boolean>>;
   context: Readonly<Ref<EditContext | null>>;
   dirty: Readonly<Ref<boolean>>;
   draftValue: Ref<TValue>;
@@ -42,6 +47,12 @@ export interface EditTargetDraftSession<TValue, TTarget, TMeta = unknown> {
   saving: Ref<boolean>;
   inputs: FieldInputs;
   applyExternalForTarget: (snapshot: EditTargetSnapshot<TValue, TTarget, TMeta>) => SnapshotAcceptance;
+  adoptIdentity: (
+    expected: TTarget,
+    snapshot: EditTargetSnapshot<TValue, TTarget, TMeta>,
+    mapDraft: (draft: TValue) => TValue,
+    handoff?: 'external' | 'save',
+  ) => boolean;
   loadBaseForTarget: (snapshot: EditTargetSnapshot<TValue, TTarget, TMeta>) => void;
   clearTarget: () => void;
   dispose: () => void;
@@ -71,6 +82,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
   const inputs = provideFieldInputs(createFieldInputs(currentTargetKey));
   const context = shallowRef<EditContext | null>(null);
   const savedSnapshot = shallowRef<Snapshot | null>(null);
+  const pendingSynchronization = shallowRef<Snapshot | null>(null);
   const loading = ref(false);
   const saving = ref(false);
   const baselineSnapshot = computed(() => session.baseValue.value);
@@ -118,6 +130,24 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
     session.loadBase(copy(snapshot));
     inputs.cancel();
     publishContext('load');
+  }
+
+  function adoptIdentity(
+    expected: TTarget,
+    snapshot: Snapshot,
+    mapDraft: (draft: TValue) => TValue,
+    handoff: 'external' | 'save' = 'external',
+  ): boolean {
+    if (disposed || !sameTarget(expected)) return false;
+    const draft = mapDraft(clone(draftValue.value));
+    revokeReads();
+    lastCommitId = Math.max(lastCommitId, snapshot.commitId ?? -1);
+    currentTarget.value = snapshot.target;
+    currentTargetKey.value = options.targetKey(snapshot.target);
+    session.commitSavedBaseline(copy(snapshot));
+    session.setDraft({ ...copy(snapshot), value: draft });
+    publishContext(handoff);
+    return true;
   }
 
   function applyExternalForTarget(snapshot: Snapshot, fromSaveRefresh = false): SnapshotAcceptance {
@@ -214,7 +244,13 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
     const target = deepClone(currentTarget.value!);
     const key = currentTargetKey.value;
     const life = lifetime;
-    const task = submit(target, key, life).finally(() => {
+    const execute = (prepared: TTarget) => submit(prepared, options.targetKey(prepared), life);
+    const operation = pendingSynchronization.value
+      ? synchronizeSaved(pendingSynchronization.value, life)
+      : options.withSavePreparation
+        ? options.withSavePreparation(target, execute)
+        : submit(target, key, life);
+    const task = operation.finally(() => {
       saving.value = false;
       pendingSave = null;
       refreshQueued = false;
@@ -243,8 +279,14 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
       currentTargetKey.value = options.targetKey(result.target);
       publishContext('save');
     }
+    pendingSynchronization.value = copy(result);
+    return synchronizeSaved(result, life);
+  }
+
+  async function synchronizeSaved(result: Snapshot, life: number): Promise<Snapshot> {
     try {
       await options.afterSaved?.(copy(result));
+      pendingSynchronization.value = null;
       if (refreshQueued && !disposed && life === lifetime) {
         refreshQueued = false;
         await readTarget(currentTarget.value!, 'external', true);
@@ -272,6 +314,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
     publishContext('reset');
   }
   function clearTarget() {
+    pendingSynchronization.value = null;
     lastCommitId = -1;
     lifetime++;
     revokeReads();
@@ -294,6 +337,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
     baselineSnapshot,
     pendingSnapshot,
     savedSnapshot,
+    hasPendingSynchronization: computed(() => pendingSynchronization.value !== null),
     context,
     dirty,
     draftValue,
@@ -307,6 +351,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
       pendingSnapshot.value ? (options.externalNotice ?? '外部版本已更新，当前未保存草稿已保留。') : '',
     ),
     applyExternalForTarget,
+    adoptIdentity,
     loadBaseForTarget,
     clearTarget,
     dispose,

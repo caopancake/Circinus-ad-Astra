@@ -13,6 +13,9 @@ export function useConfigFactionEditorViewModel(params: {
   factionId: Ref<string>;
   factions: Ref<Record<string, RowData>>;
   factionVersions: Ref<Record<string, import('@/shared/types').FileVersion[]>>;
+  identityHandoff?: Readonly<
+    Ref<import('@/shared/types').ConfigIdentityHandoff<import('@/domain/config/config-records').ConfigFactionRecord> | null>
+  >;
   modRoot: Ref<string | null>;
   onSaved: (factionId: string | null) => void | Promise<void>;
   previewRevision: Ref<number>;
@@ -87,6 +90,23 @@ export function useConfigFactionEditorViewModel(params: {
   watch(
     () => [params.factionId.value, params.dataRevision.value, params.sessionId.value, params.modRoot.value] as const,
     ([id]) => {
+      const handoff = params.identityHandoff?.value;
+      if (handoff && handoff.sourceId === draftSession.currentTarget.value?.id && handoff.record.id === id) {
+        const record = handoff.record;
+        draftSession.adoptIdentity(
+          draftSession.currentTarget.value,
+          {
+            target: editTarget(id),
+            value: configFactionEditorModel(record.data),
+            baseVersions: record.baseVersions,
+            meta: { id, receipt: null },
+            commitId: handoff.commitId,
+          },
+          (draft) =>
+            handoff.preserveDraft ? { ...draft, file: { ...(draft.file as RowData), id } } : configFactionEditorModel(record.data),
+        );
+        return;
+      }
       const data = params.factions.value[id]
         ? configFactionEditorModel(deepClone(params.factions.value[id]))
         : configFactionEditorModel({ id });

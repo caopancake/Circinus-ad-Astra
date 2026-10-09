@@ -5,8 +5,8 @@ use super::super::{
         spec_files::{load_skin_files, load_variant_files},
     },
     model::{
-        MISSION_LIST_REL_PATH, MISSION_LIST_TABLE_KEY, ProjectSession, SessionCsvRow,
-        is_comment_row, string_from_row,
+        EntityProjection, MISSION_LIST_REL_PATH, MISSION_LIST_TABLE_KEY, ProjectSession,
+        SessionCsvRow, is_comment_row, string_from_row,
     },
     resources::resource_ref,
     root,
@@ -30,17 +30,17 @@ use crate::{
         associated_spec_tables as domain_associated_spec_tables,
     },
     errors::{AppError, AppResult},
-    io::{load_json_dir_by_id, read_json_file},
+    io::read_json_file,
     models::{
-        CsvTableKey, EntityData, EntityKind, InvalidatedQueryKind, ResourceOwnerKind, ResourceRef,
+        CsvTableKey, EntityKind, InvalidatedQueryKind, ResourceOwnerKind, ResourceRef,
         ResourceSource, SkinFile, VariantFile,
     },
 };
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, path::Path};
 
-type EntityListLoader = fn(&mut ProjectSession) -> AppResult<Vec<EntityData>>;
-type EntityCoreListLoader = fn(&ProjectSession) -> AppResult<Vec<EntityData>>;
+type EntityListLoader = fn(&mut ProjectSession) -> AppResult<Vec<EntityProjection>>;
+type EntityCoreListLoader = fn(&ProjectSession) -> AppResult<Vec<EntityProjection>>;
 
 pub(in crate::services::project) struct ProjectEntityDefinition {
     pub kind: EntityKind,
@@ -220,7 +220,7 @@ fn spec_path_matches(definition: &ProjectEntityDefinition, path: &str) -> bool {
 }
 
 fn faction_path_matches(_definition: &ProjectEntityDefinition, path: &str) -> bool {
-    path_is_or_in_dir(path, "data/world/factions")
+    path_is_or_in_dir(path, "data/world/factions") || path.ends_with(".faction")
 }
 
 fn mission_path_matches(_definition: &ProjectEntityDefinition, path: &str) -> bool {
@@ -240,7 +240,7 @@ fn prepare_mission(session: &mut ProjectSession) -> AppResult<()> {
 }
 
 fn ship_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Value>> {
-    Ok(session.ship_files.get(id).cloned())
+    Ok(session.ship_files.get(id).map(|record| record.data.clone()))
 }
 
 fn weapon_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Value>> {
@@ -248,11 +248,17 @@ fn weapon_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Val
 }
 
 fn projectile_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Value>> {
-    Ok(session.projectile_specs.get(id).cloned())
+    Ok(session
+        .projectile_specs
+        .get(id)
+        .map(|record| record.data.clone()))
 }
 
 fn system_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Value>> {
-    Ok(session.system_files.get(id).cloned())
+    Ok(session
+        .system_files
+        .get(id)
+        .map(|record| record.data.clone()))
 }
 
 fn skill_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Value>> {
@@ -260,7 +266,10 @@ fn skill_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Valu
 }
 
 fn faction_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Value>> {
-    Ok(session.faction_files.get(id).cloned())
+    Ok(session
+        .faction_files
+        .get(id)
+        .map(|record| record.data.clone()))
 }
 
 fn mission_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Value>> {
@@ -285,73 +294,73 @@ fn skin_detail(session: &mut ProjectSession, id: &str) -> AppResult<Option<Value
         .transpose()
 }
 
-fn ship_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
+fn ship_list(session: &mut ProjectSession) -> AppResult<Vec<EntityProjection>> {
     session
         .ship_files
         .iter()
-        .map(|(id, data)| plain_entity(session, EntityKind::Ship, id, data.clone()))
+        .map(|(id, data)| plain_entity(session, EntityKind::Ship, id, data.data.clone()))
         .collect()
 }
 
-fn weapon_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
+fn weapon_list(session: &mut ProjectSession) -> AppResult<Vec<EntityProjection>> {
     registered_weapon_rows(session)?
         .into_iter()
         .map(|entry| build_weapon_list_entity(session, EntityKind::Weapon, &entry.id, entry.data))
         .collect()
 }
 
-fn projectile_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
+fn projectile_list(session: &mut ProjectSession) -> AppResult<Vec<EntityProjection>> {
     session
         .projectile_specs
         .iter()
-        .map(|(id, data)| plain_entity(session, EntityKind::Projectile, id, data.clone()))
+        .map(|(id, data)| plain_entity(session, EntityKind::Projectile, id, data.data.clone()))
         .collect()
 }
 
-fn system_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
+fn system_list(session: &mut ProjectSession) -> AppResult<Vec<EntityProjection>> {
     session
         .system_files
         .iter()
-        .map(|(id, data)| plain_entity(session, EntityKind::System, id, data.clone()))
+        .map(|(id, data)| plain_entity(session, EntityKind::System, id, data.data.clone()))
         .collect()
 }
 
-fn skill_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
+fn skill_list(session: &mut ProjectSession) -> AppResult<Vec<EntityProjection>> {
     registered_skill_rows(session)?
         .into_iter()
         .map(|entry| build_skill_list_entity(session, EntityKind::Skill, &entry.id, entry.data))
         .collect()
 }
 
-fn faction_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
+fn faction_list(session: &mut ProjectSession) -> AppResult<Vec<EntityProjection>> {
     session
         .faction_files
         .iter()
-        .map(|(id, data)| plain_entity(session, EntityKind::Faction, id, data.clone()))
+        .map(|(id, data)| plain_entity(session, EntityKind::Faction, id, data.data.clone()))
         .collect()
 }
 
-fn mission_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
+fn mission_list(session: &mut ProjectSession) -> AppResult<Vec<EntityProjection>> {
     registered_mission_rows(session)?
         .into_iter()
         .map(|entry| build_mission_list_entity(session, EntityKind::Mission, &entry.id, entry.data))
         .collect()
 }
 
-fn variant_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
+fn variant_list(session: &mut ProjectSession) -> AppResult<Vec<EntityProjection>> {
     variant_entities(session, ResourceSource::Mod)
 }
 
 /// Core-only variant entities: the complement a variant reference domain
 /// offers on top of the Mod's own list when a Starsector root is configured.
-fn variant_core_list(session: &ProjectSession) -> AppResult<Vec<EntityData>> {
+fn variant_core_list(session: &ProjectSession) -> AppResult<Vec<EntityProjection>> {
     variant_entities(session, ResourceSource::Core)
 }
 
 fn variant_entities(
     session: &ProjectSession,
     origin: ResourceSource,
-) -> AppResult<Vec<EntityData>> {
+) -> AppResult<Vec<EntityProjection>> {
     match origin {
         ResourceSource::Mod => session
             .variant_files
@@ -374,10 +383,9 @@ fn variant_entity(
     session: &ProjectSession,
     origin: ResourceSource,
     item: &VariantFile,
-) -> AppResult<EntityData> {
+) -> AppResult<EntityProjection> {
     let data = variant_file_data(item)?;
-    Ok(EntityData {
-        base_versions: Vec::new(),
+    Ok(EntityProjection {
         kind: EntityKind::Variant,
         id: item.variant_id.clone(),
         resource_refs: variant_resource_refs(session, origin, &data),
@@ -385,7 +393,7 @@ fn variant_entity(
     })
 }
 
-fn skin_list(session: &mut ProjectSession) -> AppResult<Vec<EntityData>> {
+fn skin_list(session: &mut ProjectSession) -> AppResult<Vec<EntityProjection>> {
     session
         .skin_files
         .iter()
@@ -398,10 +406,9 @@ fn plain_entity(
     kind: EntityKind,
     id: &str,
     data: Value,
-) -> AppResult<EntityData> {
+) -> AppResult<EntityProjection> {
     let definition = entity_definition(kind)?;
-    Ok(EntityData {
-        base_versions: Vec::new(),
+    Ok(EntityProjection {
         kind,
         id: id.to_string(),
         resource_refs: (definition.resources)(session, id, &data),
@@ -496,10 +503,9 @@ fn build_skin_entity(
     session: &ProjectSession,
     kind: EntityKind,
     item: &SkinFile,
-) -> AppResult<EntityData> {
+) -> AppResult<EntityProjection> {
     let data = skin_file_data(item)?;
-    Ok(EntityData {
-        base_versions: Vec::new(),
+    Ok(EntityProjection {
         kind,
         id: item.skin_hull_id.clone(),
         resource_refs: skin_entity_resource_refs(session, item),
@@ -508,21 +514,11 @@ fn build_skin_entity(
 }
 
 fn variant_file_data(item: &VariantFile) -> AppResult<Value> {
-    serde_json::to_value(item).map_err(|error| {
-        AppError::context(
-            format!("serialize variant entity: {}", item.variant_id),
-            AppError::from(error),
-        )
-    })
+    Ok(item.data.clone())
 }
 
 fn skin_file_data(item: &SkinFile) -> AppResult<Value> {
-    serde_json::to_value(item).map_err(|error| {
-        AppError::context(
-            format!("serialize skin entity: {}", item.skin_hull_id),
-            AppError::from(error),
-        )
-    })
+    Ok(item.data.clone())
 }
 
 #[derive(Debug)]
@@ -581,17 +577,16 @@ fn build_weapon_list_entity(
     kind: EntityKind,
     id: &str,
     row: Map<String, Value>,
-) -> AppResult<EntityData> {
+) -> AppResult<EntityProjection> {
     let spec = session
         .weapon_specs
         .get(id)
-        .cloned()
+        .map(|record| record.data.clone())
         .unwrap_or_else(|| Value::Object(Map::new()));
     let mut data = Map::new();
     data.insert("spec".to_string(), spec.clone());
     data.insert("csvRow".to_string(), Value::Object(row));
-    Ok(EntityData {
-        base_versions: Vec::new(),
+    Ok(EntityProjection {
         kind,
         id: id.to_string(),
         resource_refs: weapon_resource_refs(id, &spec),
@@ -611,7 +606,7 @@ fn build_weapon_entity_data(session: &mut ProjectSession, id: &str) -> AppResult
     let spec = session
         .weapon_specs
         .get(id)
-        .cloned()
+        .map(|record| record.data.clone())
         .unwrap_or_else(|| Value::Object(Map::new()));
     let mut data = Map::new();
     data.insert("spec".to_string(), spec);
@@ -624,18 +619,17 @@ fn build_skill_list_entity(
     kind: EntityKind,
     id: &str,
     row: Map<String, Value>,
-) -> AppResult<EntityData> {
+) -> AppResult<EntityProjection> {
     let spec = session
         .skill_files
         .get(id)
-        .cloned()
+        .map(|record| record.data.clone())
         .unwrap_or_else(|| Value::Object(Map::new()));
     let mut data = Map::new();
     data.insert("spec".to_string(), spec);
     data.insert("csvRow".to_string(), Value::Object(row));
     let data = Value::Object(data);
-    Ok(EntityData {
-        base_versions: Vec::new(),
+    Ok(EntityProjection {
         kind,
         id: id.to_string(),
         resource_refs: skill_resources(session, id, &data),
@@ -655,7 +649,7 @@ fn build_skill_entity_data(session: &mut ProjectSession, id: &str) -> AppResult<
     let spec = session
         .skill_files
         .get(id)
-        .cloned()
+        .map(|record| record.data.clone())
         .unwrap_or_else(|| Value::Object(Map::new()));
     let mut data = Map::new();
     data.insert("spec".to_string(), spec);
@@ -668,14 +662,13 @@ fn build_mission_list_entity(
     kind: EntityKind,
     id: &str,
     row: Map<String, Value>,
-) -> AppResult<EntityData> {
+) -> AppResult<EntityProjection> {
     let mut data = Map::new();
     data.insert("list".to_string(), Value::Object(row));
     let resource_refs = mission_icon_resource_ref(session, id)?
         .map(|resource| BTreeMap::from([("icon".to_string(), resource)]))
         .unwrap_or_default();
-    Ok(EntityData {
-        base_versions: Vec::new(),
+    Ok(EntityProjection {
         kind,
         id: id.to_string(),
         resource_refs,
@@ -742,37 +735,66 @@ fn mission_icon_resource_ref(session: &ProjectSession, id: &str) -> AppResult<Op
 
 fn refresh_ship(session: &mut ProjectSession) -> AppResult<()> {
     let mod_root = Path::new(&session.manifest.mod_root);
-    session.ship_files = load_json_dir_by_id(&mod_root.join("data/hulls"), "ship", "hullId")?;
+    session.ship_files = super::super::cache::load_spec_records(
+        mod_root,
+        "data/hulls",
+        "ship",
+        "hullId",
+        ResourceSource::Mod,
+    )?;
     session.manifest.entity_summaries.ships = session.ship_files.len();
     Ok(())
 }
 
 fn refresh_weapon(session: &mut ProjectSession) -> AppResult<()> {
     let mod_root = Path::new(&session.manifest.mod_root);
-    session.weapon_specs = load_json_dir_by_id(&mod_root.join("data/weapons"), "wpn", "id")?;
+    session.weapon_specs = super::super::cache::load_spec_records(
+        mod_root,
+        "data/weapons",
+        "wpn",
+        "id",
+        ResourceSource::Mod,
+    )?;
     session.manifest.entity_summaries.weapons = session.weapon_specs.len();
     Ok(())
 }
 
 fn refresh_projectile(session: &mut ProjectSession) -> AppResult<()> {
     let mod_root = Path::new(&session.manifest.mod_root);
+    let core = session
+        .manifest
+        .starsector_root
+        .as_deref()
+        .map(super::super::cache::load_core_projectile_specs)
+        .transpose()?;
     session.projectile_specs =
-        load_json_dir_by_id(&mod_root.join("data/weapons/proj"), "proj", "id")?;
+        super::projectiles::load_projectile_specs(mod_root, core.as_deref())?;
     session.manifest.entity_summaries.projectiles = session.projectile_specs.len();
     Ok(())
 }
 
 fn refresh_system(session: &mut ProjectSession) -> AppResult<()> {
     let mod_root = Path::new(&session.manifest.mod_root);
-    session.system_files = load_json_dir_by_id(&mod_root.join("data/shipsystems"), "system", "id")?;
+    session.system_files = super::super::cache::load_spec_records(
+        mod_root,
+        "data/shipsystems",
+        "system",
+        "id",
+        ResourceSource::Mod,
+    )?;
     session.manifest.entity_summaries.systems = session.system_files.len();
     Ok(())
 }
 
 fn refresh_skill(session: &mut ProjectSession) -> AppResult<()> {
     let mod_root = Path::new(&session.manifest.mod_root);
-    session.skill_files =
-        load_json_dir_by_id(&mod_root.join("data/characters/skills"), "skill", "id")?;
+    session.skill_files = super::super::cache::load_spec_records(
+        mod_root,
+        "data/characters/skills",
+        "skill",
+        "id",
+        ResourceSource::Mod,
+    )?;
     session.manifest.entity_summaries.skills = session.skill_files.len();
     Ok(())
 }

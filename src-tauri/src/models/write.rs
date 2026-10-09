@@ -127,6 +127,13 @@ pub enum AssociatedSpecChange {
     },
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssociatedSpecWrite {
+    pub change: AssociatedSpecChange,
+    pub target: crate::models::EntityEditTarget,
+}
+
 impl AssociatedSpecChange {
     pub fn id(&self) -> &str {
         match self {
@@ -139,6 +146,7 @@ impl AssociatedSpecChange {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EditableFileData {
+    pub entity: Option<crate::models::EntityEditInfo>,
     pub path: String,
     pub text: String,
     pub base_versions: Vec<FileVersion>,
@@ -172,7 +180,8 @@ pub struct FileHistorySnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct FileChangeRecord {
     pub kind: FileChangeKind,
-    pub path: String,
+    pub before_path: String,
+    pub after_path: String,
     pub before_exists: bool,
     #[serde(deserialize_with = "required_nullable")]
     pub before_text: Option<String>,
@@ -185,6 +194,24 @@ pub struct FileChangeRecord {
     #[serde(deserialize_with = "required_nullable")]
     pub after_data_base64: Option<String>,
     pub after_files: Vec<FileSnapshot>,
+}
+
+impl FileChangeRecord {
+    pub fn reversed(&self) -> Self {
+        Self {
+            kind: self.kind,
+            before_path: self.after_path.clone(),
+            after_path: self.before_path.clone(),
+            before_exists: self.after_exists,
+            after_exists: self.before_exists,
+            before_text: self.after_text.clone(),
+            after_text: self.before_text.clone(),
+            before_data_base64: self.after_data_base64.clone(),
+            after_data_base64: self.before_data_base64.clone(),
+            before_files: self.after_files.clone(),
+            after_files: self.before_files.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -216,6 +243,14 @@ pub enum IndexedConfigKind {
     Faction,
     Mission,
 }
+impl From<IndexedConfigKind> for crate::models::EntityKind {
+    fn from(kind: IndexedConfigKind) -> Self {
+        match kind {
+            IndexedConfigKind::Faction => Self::Faction,
+            IndexedConfigKind::Mission => Self::Mission,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -230,6 +265,7 @@ pub struct FileSnapshot {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteResult<T = ()> {
+    pub identity_changes: Vec<crate::models::EntityIdentityChange>,
     pub changes: Vec<FileChangeRecord>,
     pub invalidation: ProjectInvalidation,
     pub key_map: Vec<CsvRowKeyMapping>,
@@ -253,6 +289,18 @@ pub struct IndexedEntityRefresh {
 }
 
 impl<T> WriteResult<T> {
+    pub fn with_refreshed_entity<U>(self, entity: U) -> WriteResult<U> {
+        WriteResult {
+            identity_changes: self.identity_changes,
+            changes: self.changes,
+            invalidation: self.invalidation,
+            key_map: self.key_map,
+            refreshed_entity: Some(entity),
+            commit_id: self.commit_id,
+            base_versions: self.base_versions,
+            history: self.history,
+        }
+    }
     pub fn new(
         changes: Vec<FileChangeRecord>,
         key_map: Vec<CsvRowKeyMapping>,
@@ -263,6 +311,7 @@ impl<T> WriteResult<T> {
             ..ProjectInvalidation::default()
         };
         Self {
+            identity_changes: Vec::new(),
             changes,
             invalidation,
             key_map,
@@ -293,17 +342,25 @@ impl<T> WriteResult<T> {
 fn changed_paths_for_changes(changes: &[FileChangeRecord]) -> Vec<String> {
     let mut paths = Vec::new();
     for change in changes {
-        push_unique_all(&mut paths, vec![change.path.clone()]);
-        for file in change.before_files.iter().chain(change.after_files.iter()) {
-            push_unique_all(
-                &mut paths,
-                vec![
-                    Path::new(&change.path)
-                        .join(&file.rel_path)
-                        .to_string_lossy()
-                        .to_string(),
-                ],
-            );
+        push_unique_all(
+            &mut paths,
+            vec![change.before_path.clone(), change.after_path.clone()],
+        );
+        for (path, files) in [
+            (&change.before_path, &change.before_files),
+            (&change.after_path, &change.after_files),
+        ] {
+            for file in files {
+                push_unique_all(
+                    &mut paths,
+                    vec![
+                        Path::new(path)
+                            .join(&file.rel_path)
+                            .to_string_lossy()
+                            .to_string(),
+                    ],
+                );
+            }
         }
     }
     paths
@@ -388,6 +445,7 @@ mod tests {
                 "changes",
                 "commitId",
                 "history",
+                "identityChanges",
                 "invalidation",
                 "keyMap",
                 "refreshedEntity"

@@ -3,7 +3,8 @@ import {
   queryCsvSourceOptions,
   queryCsvTableWindow,
   queryEntity,
-  queryEntityBaseVersions,
+  queryEntityEditTarget,
+  queryEntityIdentityIntent,
   queryEntityList,
   queryHullReferences,
   queryEditorDraftResources,
@@ -52,7 +53,8 @@ export function querySessionEntity(sessionId: ProjectSessionId, kind: EntityKind
   return queryCached(sessionId, 'entity-detail', { kind, id }, () => queryEntity(sessionId, kind, id));
 }
 
-export const querySessionEntityBaseVersions = queryEntityBaseVersions;
+export const querySessionEntityEditTarget = queryEntityEditTarget;
+export const querySessionEntityIdentityIntent = queryEntityIdentityIntent;
 
 export function querySessionEntityList(sessionId: ProjectSessionId, kind: EntityKind): Promise<EntityData[]> {
   return queryCached(sessionId, 'entity-list', { kind }, () => queryEntityList(sessionId, kind));

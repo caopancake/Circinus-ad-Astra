@@ -13,6 +13,7 @@ import { useSaveCommandStore } from '@/stores/save-command.store';
 import { deepClone } from '@/shared/lib/starsector';
 import { formatError } from '@/shared/lib/errors';
 import { normalizeFsPath } from '@/shared/lib/paths';
+import { captureIdentityVersions, handoffTableVersions } from '@/domain/editors/entity-identity';
 import { emitEditorSpecSaved, listenEditorPreviewDraftUpdated, listenEditorSpecSaved } from '@/orchestrators/editor-window.orchestrator';
 import {
   applyCommittedWriteCacheInvalid,
@@ -20,13 +21,21 @@ import {
   listenProjectSessionInvalidated,
 } from '@/orchestrators/project-session-refresh.orchestrator';
 import { saveEditorSpecByKind } from '@/services/editor.service';
+import {
+  createEntitySavePreparation,
+  reserveEntityIntent,
+  retargetEntityWindow,
+  releaseCommittedIdentityTargets,
+} from '@/orchestrators/entity-identity.orchestrator';
+import { emitEntityIdentityApplied, listenEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
+import type { EntityIdentityAppliedEvent } from '@/windows/window.events';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { hasEntityInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/services/resource-cache.service';
 import { editorMissingTargetText } from '@/domain/editors/editor-definitions';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { WEAPON_SPRITE_FIELDS } from '@/domain/editors/lib/weapon-sprite-fields';
-import { useEditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
+import { useEditTargetDraftSession, type EditTargetDraftSession } from '@/app/composables/use-edit-target-draft-session';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 import { pickEditorSpecFile } from '@/shared/runtime/dialog.runtime';
 import { closeCurrentWindow } from '@/windows/current.window';
@@ -52,53 +61,101 @@ export function useEditorWindowViewModel(params: {
   draftSnapshot?: RowData | null;
 }) {
   let previewDraftSnapshot = params.draftSnapshot ?? null;
+  const currentId = ref(params.id);
   const editorData = ref<EditorEntityBundle | null>(null);
   const feedback = useAppFeedback();
-  const draftSession = useEditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }>({
-    emptyValue: {},
-    load: async (target) => {
-      const data = await queryEditorEntityBundle(target.sessionId, target.kind, target.id, previewDraftSnapshot ?? undefined);
-      return {
-        target,
-        meta: { bundle: data, receipt: null },
-        baseVersions: data.baseVersions,
-        value: isEditableWindowKind(target.kind) ? primarySpecForBundle(data, target.kind) : {},
-      };
-    },
-    save: async (target, draft, baseVersions) => {
-      if (!isEditableWindowKind(target.kind)) return;
-      const kind = target.kind as EditorSpecKind;
-      const submittedBundle = deepClone(editorData.value!);
-      const result = await runConfirmedJsonWrite(feedback, (options) =>
-        saveEditorSpecByKind(target.sessionId, target.modRoot, kind, target.id, draft, options, baseVersions),
-      );
-      if (!result) return;
-      const value = result.refreshedEntity!;
-      return {
-        target,
-        value,
-        baseVersions: result.baseVersions,
-        commitId: result.commitId,
-        meta: {
-          bundle: { ...applySavedSpecToBundle(submittedBundle, kind, target.id, value), isNew: false, baseVersions: result.baseVersions },
-          receipt: result,
-        },
-      };
-    },
-    targetKey: editorWindowTargetKey,
-    afterSaved: async (snapshot) => {
-      const result = snapshot.meta.receipt!;
-      applyCommittedWriteCacheInvalid(snapshot.target.sessionId, result);
-      await emitEditorSpecSaved({
-        kind: snapshot.target.kind as EditorSpecKind,
-        sessionId: snapshot.target.sessionId,
-        modRoot: snapshot.target.modRoot,
-        id: snapshot.target.id,
-        spec: snapshot.value,
-        writeResult: result,
-      });
-    },
-  });
+  let identityPreparation: Awaited<ReturnType<typeof createEntitySavePreparation>> | null = null;
+  const draftSession: EditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }> =
+    useEditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }>({
+      emptyValue: {},
+      load: async (target) => {
+        const data = await queryEditorEntityBundle(target.sessionId, target.kind, target.id, previewDraftSnapshot ?? undefined);
+        return {
+          target,
+          meta: { bundle: data, receipt: null },
+          baseVersions: data.baseVersions,
+          value: isEditableWindowKind(target.kind) ? primarySpecForBundle(data, target.kind) : {},
+        };
+      },
+      save: async (target, draft, baseVersions) => {
+        if (!isEditableWindowKind(target.kind)) return;
+        const kind = target.kind as EditorSpecKind;
+        const submittedBundle = deepClone(editorData.value!);
+        const intent = await reserveEntityIntent(target.sessionId, target.modRoot, submittedBundle.target, draft);
+        const versions = captureIdentityVersions(baseVersions, intent.destinationVersion);
+        const result = await runConfirmedJsonWrite(feedback, (options) =>
+          saveEditorSpecByKind(target.sessionId, target.modRoot, submittedBundle.target, draft, options, versions),
+        );
+        if (!result) return;
+        const value = result.refreshedEntity!;
+        const savedTarget = result.identityChanges[0]!.after;
+        return {
+          target: { ...target, id: savedTarget.id },
+          value,
+          baseVersions: result.baseVersions,
+          commitId: result.commitId,
+          meta: {
+            bundle: {
+              ...applySavedSpecToBundle(submittedBundle, kind, savedTarget.id, value),
+              target: savedTarget,
+              isNew: false,
+              baseVersions: result.baseVersions,
+            },
+            receipt: result,
+          },
+        };
+      },
+      targetKey: editorWindowTargetKey,
+      withSavePreparation: async (target, submit) =>
+        identityPreparation!.withPreparation(target.sessionId, target.modRoot, editorData.value!.target, async (info) => {
+          if (info) {
+            const nextTarget = { ...target, id: info.target.id };
+            const previousId = target.id;
+            const baseline = draftSession.baselineSnapshot.value!;
+            const renamed = previousId !== nextTarget.id;
+            const fresh = renamed ? await queryEditorEntityBundle(target.sessionId, target.kind, nextTarget.id) : editorData.value!;
+            const value = renamed ? primarySpecForBundle(fresh, target.kind as EditableEditorKind) : baseline.value;
+            const versions = renamed ? fresh.baseVersions : handoffTableVersions(baseline.baseVersions, info);
+            draftSession.adoptIdentity(
+              target,
+              {
+                target: nextTarget,
+                value,
+                baseVersions: versions,
+                meta: { bundle: { ...fresh, target: info.target, baseVersions: versions }, receipt: null },
+              },
+              (draft) =>
+                previousId !== nextTarget.id && draft[params.kind === 'ship' ? 'hullId' : 'id'] === previousId
+                  ? { ...draft, [params.kind === 'ship' ? 'hullId' : 'id']: nextTarget.id }
+                  : draft,
+              previousId === nextTarget.id ? 'save' : 'external',
+            );
+            return submit(nextTarget);
+          }
+          return submit(target);
+        }),
+      afterSaved: async (snapshot) => {
+        const result = snapshot.meta.receipt!;
+        await identityPreparation!.finish(result);
+        await retargetEntityWindow(
+          snapshot.target.sessionId,
+          snapshot.target.modRoot,
+          snapshot.target.kind as EditorSpecKind,
+          snapshot.target.id,
+        );
+        await releaseCommittedIdentityTargets();
+        await emitEntityIdentityApplied({ sessionId: snapshot.target.sessionId, modRoot: snapshot.target.modRoot, result });
+        applyCommittedWriteCacheInvalid(snapshot.target.sessionId, result);
+        await emitEditorSpecSaved({
+          kind: snapshot.target.kind as EditorSpecKind,
+          sessionId: snapshot.target.sessionId,
+          modRoot: snapshot.target.modRoot,
+          id: snapshot.target.id,
+          spec: snapshot.value,
+          writeResult: result,
+        });
+      },
+    });
   const unregisterSave = useSaveCommandStore().registerSaveSession({
     targetKey: draftSession.currentTargetKey,
     modRoot: computed(() => params.modRoot),
@@ -110,6 +167,8 @@ export function useEditorWindowViewModel(params: {
   const errorText = ref('');
   let unlistenEditorSpecSaved: UnlistenFn | null = null;
   let unlistenPreviewDraftUpdated: UnlistenFn | null = null;
+  let unlistenIdentity: UnlistenFn | null = null;
+  let identityCommitId = -1;
   let stopSessionInvalidated: UnlistenFn | null = null;
   let stopQueryInvalidation: (() => void) | null = null;
   let stopResourceInvalidation: (() => void) | null = null;
@@ -132,6 +191,7 @@ export function useEditorWindowViewModel(params: {
   watch(
     draftSession.baselineSnapshot,
     (snapshot) => {
+      if (snapshot) currentId.value = snapshot.target.id;
       if (snapshot && !disposed) applyLoadedEditorData(snapshot.meta.bundle, snapshot.meta.receipt !== null);
     },
     { flush: 'sync' },
@@ -196,7 +256,10 @@ export function useEditorWindowViewModel(params: {
   const draftSaving = draftSession.saving;
   const externalUpdateNotice = draftSession.externalUpdateNotice;
   const canSaveSpec = computed(
-    () => draftSession.ready.value && isEditableWindowKind(params.kind) && (draftDirty.value || Boolean(editorData.value?.isNew)),
+    () =>
+      draftSession.ready.value &&
+      isEditableWindowKind(params.kind) &&
+      (draftSession.hasPendingSynchronization.value || draftDirty.value || Boolean(editorData.value?.isNew)),
   );
 
   const missingEditorText = computed(() => {
@@ -327,6 +390,17 @@ export function useEditorWindowViewModel(params: {
   }
 
   async function initializeEditorWindow() {
+    identityPreparation = await createEntitySavePreparation();
+    if (disposed) {
+      identityPreparation.dispose();
+      return;
+    }
+    unlistenIdentity = await listenEntityIdentityApplied(handleIdentityApplied);
+    if (disposed) {
+      unlistenIdentity();
+      unlistenIdentity = null;
+      return;
+    }
     unlistenPreviewDraftUpdated = await listenEditorPreviewDraftUpdated(handlePreviewDraftUpdated);
     if (disposed) {
       unlistenPreviewDraftUpdated();
@@ -352,6 +426,9 @@ export function useEditorWindowViewModel(params: {
 
   function disposeEditorWindow() {
     disposed = true;
+    identityPreparation?.dispose();
+    unlistenIdentity?.();
+    unlistenIdentity = null;
     unregisterSave();
     imageRequestId++;
     editorDataRequestId++;
@@ -375,7 +452,7 @@ export function useEditorWindowViewModel(params: {
       !target ||
       params.kind !== 'weapon-preview' ||
       event.sessionId !== target.sessionId ||
-      event.modRoot !== target.modRoot ||
+      normalizeFsPath(event.modRoot) !== normalizeFsPath(target.modRoot) ||
       event.id !== target.id
     )
       return;
@@ -383,9 +460,70 @@ export function useEditorWindowViewModel(params: {
     void queryEditorData({ promptForMissing: false, showLoading: false });
   }
 
+  async function handleIdentityApplied(event: EntityIdentityAppliedEvent) {
+    const target = editorWindowTarget();
+    if (
+      !target ||
+      event.sessionId !== target.sessionId ||
+      normalizeFsPath(event.modRoot) !== normalizeFsPath(target.modRoot) ||
+      event.result.commitId <= identityCommitId
+    )
+      return;
+    const change = event.result.identityChanges.find(
+      (change) =>
+        change.before.kind === editorWindowEntityKind(target.kind) && change.before.id === target.id && change.after.id !== target.id,
+    );
+    if (!change) return;
+    if (draftSession.saving.value && !(await draftSession.waitForSave())) return;
+    if (disposed || !sameEditorWindowTarget(target, editorWindowTarget())) return;
+    identityCommitId = event.result.commitId;
+    if (target.kind === 'weapon-preview') {
+      const snapshot = previewDraftSnapshot ? { ...previewDraftSnapshot, id: change.after.id } : undefined;
+      const data = await queryEditorEntityBundle(target.sessionId, target.kind, change.after.id, snapshot);
+      if (disposed || !sameEditorWindowTarget(target, editorWindowTarget())) return;
+      await retargetEntityWindow(target.sessionId, target.modRoot, target.kind, change.after.id);
+      currentId.value = change.after.id;
+      previewDraftSnapshot = snapshot ?? null;
+      editorDataRequestId++;
+      derivedDataRequestId++;
+      applyLoadedEditorData(data);
+      return;
+    }
+    if (draftSession.dirty.value) {
+      const choice = await feedback.choose({
+        title: '跟随实体重命名？',
+        content: '保留当前草稿和活动输入，并接纳新的正式身份与文件基线。',
+        choices: [{ label: '保留编辑并跟随', value: 'follow', type: 'primary' }],
+      });
+      if (choice !== 'follow' || disposed || !sameEditorWindowTarget(target, editorWindowTarget())) return;
+    }
+    const data = await queryEditorEntityBundle(target.sessionId, target.kind, change.after.id);
+    if (disposed || !sameEditorWindowTarget(target, editorWindowTarget())) return;
+    const nextTarget = { ...target, id: change.after.id };
+    const next = primarySpecForBundle(data, target.kind);
+    await retargetEntityWindow(target.sessionId, target.modRoot, target.kind, nextTarget.id);
+    draftSession.adoptIdentity(
+      target,
+      {
+        target: nextTarget,
+        value: next,
+        baseVersions: data.baseVersions,
+        meta: { bundle: data, receipt: null },
+        commitId: event.result.commitId,
+      },
+      (draft) => (draftSession.dirty.value ? { ...draft, [target.kind === 'ship' ? 'hullId' : 'id']: nextTarget.id } : next),
+    );
+  }
+
   function handleEditorSpecSaved(event: EditorSpecSavedEvent) {
     const target = editorWindowTarget();
-    if (!target || event.sessionId !== target.sessionId || event.modRoot !== target.modRoot || !editorData.value) return;
+    if (
+      !target ||
+      event.sessionId !== target.sessionId ||
+      normalizeFsPath(event.modRoot) !== normalizeFsPath(target.modRoot) ||
+      !editorData.value
+    )
+      return;
     if (!shouldApplySavedSpec(editorData.value, target, event)) return;
     if (params.kind === 'weapon-preview' && event.kind === 'weapon') {
       if (!previewDraftSnapshot) void queryEditorData({ promptForMissing: false, showLoading: false });
@@ -410,7 +548,12 @@ export function useEditorWindowViewModel(params: {
 
   function onProjectSessionInvalidated(event: ProjectSessionInvalidatedEvent) {
     const target = editorWindowTarget();
-    if (!target || event.manifest.sessionId !== target.sessionId || event.manifest.modRoot !== target.modRoot) return;
+    if (
+      !target ||
+      event.manifest.sessionId !== target.sessionId ||
+      normalizeFsPath(event.manifest.modRoot) !== normalizeFsPath(target.modRoot)
+    )
+      return;
     applyProjectSessionCacheInvalid(event);
   }
 
@@ -503,11 +646,12 @@ export function useEditorWindowViewModel(params: {
   }
 
   function editorWindowTarget(): EditorWindowTarget | null {
-    if (!params.sessionId || !params.modRoot || !params.id) return null;
-    return { sessionId: params.sessionId, modRoot: params.modRoot, kind: params.kind, id: params.id };
+    if (!params.sessionId || !params.modRoot || !currentId.value) return null;
+    return { sessionId: params.sessionId, modRoot: params.modRoot, kind: params.kind, id: currentId.value };
   }
 
   return {
+    currentTarget: computed(editorWindowTarget),
     editorData,
     shipEditorData,
     weaponEditorData,
@@ -577,7 +721,7 @@ function bundleReferenceKey(bundle: EditorEntityBundle | null): string | null {
 }
 
 function editorWindowTargetKey(target: EditorWindowTarget): string {
-  return `${target.sessionId}\n${target.modRoot}\n${target.kind}\n${target.id}`;
+  return JSON.stringify([target.sessionId, normalizeFsPath(target.modRoot), target.kind, target.id]);
 }
 
 function shouldApplySavedSpec(bundle: EditorEntityBundle, target: EditorWindowTarget, event: EditorSpecSavedEvent): boolean {

@@ -6,7 +6,6 @@ use crate::{
 };
 use serde_json::Value;
 use std::{
-    collections::BTreeMap,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
 };
@@ -30,10 +29,6 @@ impl JsonWriteBatch {
             options,
             pending: Vec::new(),
         }
-    }
-
-    pub fn is_preserving(&self) -> bool {
-        self.options.preserve_original_json
     }
 
     pub fn render(
@@ -103,33 +98,18 @@ fn fingerprint(bytes: &[u8]) -> String {
     format!("{:016x}", hasher.finish())
 }
 
-pub fn load_json_dir_by_id(
-    dir: &Path,
-    ext: &str,
-    id_key: &str,
-) -> AppResult<BTreeMap<String, Value>> {
-    let mut result = BTreeMap::new();
-    for (_, value) in walk_json_dir(dir, ext, "JSON")? {
-        if let Some(id) = value.get(id_key).and_then(Value::as_str) {
-            result.insert(id.to_string(), value);
-        }
-    }
-    Ok(result)
-}
-
-pub fn load_json_dir(dir: &Path, ext: &str) -> AppResult<Vec<Value>> {
-    Ok(walk_json_dir(dir, ext, "JSON")?
-        .into_iter()
-        .map(|(_, value)| value)
-        .collect())
-}
-
 /// The single directory-walk entry for loose spec JSON: every JSON directory
 /// scan shares this error context, link validation and exact-match extension
 /// filter (case-sensitive, no dot).
 pub fn walk_json_dir(dir: &Path, ext: &str, label: &str) -> AppResult<Vec<(PathBuf, Value)>> {
     if !dir.exists() {
         return Ok(vec![]);
+    }
+    if !dir.is_dir() {
+        return Err(AppError::message(
+            "json.dir_not_directory",
+            format!("JSON 目录不是目录: {}", dir.display()),
+        ));
     }
     let mut files = Vec::new();
     for entry in WalkDir::new(dir).into_iter() {

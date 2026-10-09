@@ -161,7 +161,7 @@ describe('useConfigMissionViewModel', () => {
 
     await expect(vm.createMission('sess-1', 'M:/mod', 'm5')).resolves.toBe(true);
     expect(mocks.createIndexedEntityAction).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'mission', previousId: null, nextId: 'm5', deletePreviousTarget: false }),
+      expect.objectContaining({ kind: 'mission', previousId: null, nextId: 'm5' }),
     );
     expect(vm.selectedMission.value).toBe('m5');
     expect(mocks.feedback.success).toHaveBeenCalledWith(expect.stringContaining('已创建'));
@@ -198,7 +198,7 @@ describe('useConfigMissionViewModel', () => {
     const nextId = await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, MISSION_SCHEMA, []);
     expect(nextId).toMatchObject({ id: 'm2' });
     expect(mocks.saveIndexedEntityAction).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'mission', previousId: 'm1', nextId: 'm2', deletePreviousTarget: true }),
+      expect.objectContaining({ kind: 'mission', previousId: 'm1', nextId: 'm2' }),
       mocks.feedback,
     );
     expect(mocks.feedback.success).toHaveBeenCalledWith(expect.stringContaining('已保存'));

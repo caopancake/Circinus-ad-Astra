@@ -8,7 +8,8 @@ export type FileChangeKind = 'file' | 'directory';
 
 export interface FileChangeRecord {
   kind: FileChangeKind;
-  path: string;
+  beforePath: string;
+  afterPath: string;
   beforeExists: boolean;
   beforeText: string | null;
   beforeDataBase64: string | null;

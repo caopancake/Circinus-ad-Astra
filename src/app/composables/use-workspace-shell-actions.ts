@@ -8,7 +8,7 @@ import { useSettingsStore } from '@/stores/settings.store';
 import { openEditorWindow } from '@/windows/editor.window';
 import { useProjectStore } from '@/stores/project.store';
 import { pickDirectory, scanDirectoryGameOverview } from '@/services/session.service';
-import { pendingTableSave, saveActiveTableChanges } from '@/orchestrators/table-save.orchestrator';
+import { pendingTableSave, saveTableChanges, type TableSaveResult } from '@/orchestrators/table-save.orchestrator';
 import { useSaveCommandStore } from '@/stores/save-command.store';
 import { useTablesStore } from '@/stores/tables.store';
 import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
@@ -24,12 +24,14 @@ import { openDirectoryTarget, openModFromOverview, type DirectoryOpeningOutcome 
 import {
   captureWorkspaceCloseTarget,
   closeWorkspaceRuntime,
+  closeWorkspaceWindows,
   removeLoadedModRuntime,
   type WorkspaceCloseTarget,
 } from '@/orchestrators/workspace-lifecycle.orchestrator';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
+import { queryEditorEditInfo } from '@/services/editor.service';
 
 export function useWorkspaceShellActions(feedback: AppFeedback) {
   const project = useProjectStore();
@@ -47,7 +49,7 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
     saving: computed(() => tables.saving),
     waitForSave: () =>
       pendingTableSave()?.promise.then(
-        (result) => result !== 'cancelled',
+        (result) => result.status !== 'cancelled',
         () => false,
       ) ?? Promise.resolve(true),
   });
@@ -159,7 +161,12 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   async function saveChanges() {
     if (tables.saving) return;
     try {
-      const result = await saveActiveTableChanges({ manifest: project.activeManifest, selectAssociatedSpecs, feedback });
+      const result = await saveTableChanges({
+        table: tables.currentTab,
+        manifest: project.activeManifest,
+        selectAssociatedSpecs,
+        feedback,
+      });
       showSaveResult(result);
     } catch (err) {
       feedback.error(err, '保存 CSV 失败');
@@ -296,7 +303,16 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
 
   function handleDetailAction(action: TableDetailAction) {
     if (action.type === 'file-editor') {
-      openRequestedFileEditor(action);
+      void queryEditorEditInfo(action.sessionId, action.kind, action.id)
+        .then((info) =>
+          openRequestedFileEditor({
+            modRoot: action.modRoot,
+            sessionId: action.sessionId,
+            title: action.title,
+            path: info.target.write.path,
+          }),
+        )
+        .catch((error) => feedback.error(error, '读取规格文件目标失败'));
     } else {
       openRequestedEditorWindow(action);
     }
@@ -367,7 +383,7 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   }
 
   async function removeMod(modRoot: string, showMessage = true) {
-    await removeLoadedModRuntime(modRoot);
+    if (!(await removeLoadedModRuntime(modRoot))) return;
     recordLogBestEffort({
       level: 'info',
       code: 'mod.removed',
@@ -380,7 +396,7 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   }
 
   async function closeWorkspace(target: WorkspaceCloseTarget) {
-    await closeWorkspaceRuntime(target);
+    if (!(await closeWorkspaceRuntime(target))) return;
     recordLogBestEffort({
       level: 'info',
       code: 'workspace.closed',
@@ -392,10 +408,10 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
     feedback.success('工作区已关闭');
   }
 
-  function showSaveResult(result: 'saved' | 'noop' | 'cancelled') {
-    if (result === 'saved') {
+  function showSaveResult(result: TableSaveResult) {
+    if (result.status === 'saved') {
       feedback.success('当前 CSV 表已保存');
-    } else if (result === 'noop') {
+    } else if (result.status === 'noop') {
       feedback.info('没有需要保存的修改');
     }
   }
@@ -461,6 +477,8 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
   }
 
   return {
+    closeWorkspaceWindows,
+    selectAssociatedSpecs,
     addNewRow,
     confirmCloseWorkspace,
     confirmRemoveMod,

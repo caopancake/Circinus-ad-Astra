@@ -17,7 +17,8 @@ function resultWithChanges(count: number): WriteResult {
     commitId: 1,
     history: { revision: 1, undoStack: [], redoStack: [] },
     changes: Array.from({ length: count }, (_, index) => ({
-      path: `${MOD_ROOT}\\file${index}.csv`,
+      beforePath: `${MOD_ROOT}\\file${index}.csv`,
+      afterPath: `${MOD_ROOT}\\file${index}.csv`,
       kind: 'file' as const,
       beforeExists: true,
       beforeText: '',
@@ -29,6 +30,7 @@ function resultWithChanges(count: number): WriteResult {
       afterFiles: [],
     })),
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
+    identityChanges: [],
     keyMap: [],
     refreshedEntity: null,
   };

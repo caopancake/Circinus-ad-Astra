@@ -1,16 +1,16 @@
 use crate::domain::editor_config_definitions::{EntitySpecDefinition, editor_spec_definition};
+#[cfg(test)]
 use crate::{
     domain::config::validate_config_id,
+    models::{JsonWriteOptions, WriteResult},
+};
+use crate::{
     errors::{AppError, AppResult},
-    io::{
-        JsonWriteBatch, acquire_root_write_lock, build_text_change, read_json_file,
-        validate_safe_absolute_path, validate_walk_entry,
-    },
-    models::{EditorSpecKind, FileChangeReplayDirection, JsonWriteOptions, WriteResult},
-    services::file_changes::apply_file_change_set_with_lock,
+    io::{read_json_file, validate_safe_absolute_path, validate_walk_entry},
+    models::EditorSpecKind,
 };
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[cfg(test)]
 pub fn save_editor_spec(
@@ -22,6 +22,7 @@ pub fn save_editor_spec(
     save_editor_spec_with_json_options(mod_root, kind, id, data, JsonWriteOptions::default(), None)
 }
 
+#[cfg(test)]
 pub fn save_editor_spec_with_json_options(
     mod_root: &str,
     kind: EditorSpecKind,
@@ -30,71 +31,38 @@ pub fn save_editor_spec_with_json_options(
     options: JsonWriteOptions,
     ordered_json: Option<&str>,
 ) -> AppResult<WriteResult<Value>> {
-    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
-    let id = validate_config_id(id, editor_spec_definition(kind)?.invalid_id_message)?;
-    let target = find_editor_spec_target(Path::new(mod_root), kind, id)?;
-    if kind == EditorSpecKind::Weapon {
-        crate::domain::spec_construction::validate_weapon_spec_class(&data, &target)?;
-    }
-    let preserve_original_json = options.preserve_original_json;
-    let mut json = JsonWriteBatch::new(options);
-    let text = json.render(&target, &data, ordered_json)?;
-    json.finish()?;
-    if preserve_original_json && target.exists() && crate::io::read_utf8_no_bom(&target)? == text {
-        return Ok(WriteResult::from_refreshed_entity(Vec::new(), data));
-    }
-    let change = build_text_change(&target, Some(text))?;
-    apply_file_change_set_with_lock(
-        mod_root,
-        FileChangeReplayDirection::Redo,
-        vec![change.clone()],
-        write_lock,
+    let definition = editor_spec_definition(kind)?;
+    validate_config_id(id, definition.invalid_id_message)?;
+    let mut trace = crate::services::project::PerformanceTrace::new("project.openSession");
+    let manifest = crate::services::project::open_project_session_traced(
+        Path::new(mod_root),
+        None,
+        &mut trace,
     )?;
-    Ok(WriteResult::from_refreshed_entity(vec![change], data))
+    let result = (|| {
+        let info = crate::services::project::query_entity_edit_target(
+            &manifest.session_id,
+            definition.entity_kind,
+            id,
+        )?;
+        crate::commands::save_editor_spec(crate::models::command_payloads::SaveEditorSpecPayload {
+            session_id: manifest.session_id.clone(),
+            mod_root: manifest.mod_root.clone(),
+            target: info.target,
+            base_versions: info.base_versions,
+            data,
+            json_write: options,
+            ordered_json: ordered_json.map(str::to_string),
+        })
+    })();
+    crate::services::project::close_project_session(manifest.session_id)?;
+    result
 }
 
 pub fn load_imported_editor_spec_file(kind: EditorSpecKind, path: String) -> AppResult<Value> {
     let path = Path::new(&path);
     validate_imported_editor_spec_path(editor_spec_definition(kind)?, path)?;
     read_json_file(path)
-}
-
-fn find_editor_spec_target(mod_root: &Path, kind: EditorSpecKind, id: &str) -> AppResult<PathBuf> {
-    let definition = editor_spec_definition(kind)?;
-    find_json_target(
-        mod_root,
-        definition.dir,
-        definition.extension_without_dot(),
-        definition.id_field,
-        id,
-    )
-}
-
-fn find_json_target(
-    mod_root: &Path,
-    rel_dir: &str,
-    ext: &str,
-    id_key: &str,
-    id: &str,
-) -> AppResult<PathBuf> {
-    let dir = mod_root.join(rel_dir);
-    if dir.exists() {
-        if !dir.is_dir() {
-            return Err(AppError::message(
-                "spec.dir_not_directory",
-                format!(
-                    "editor spec directory is not a directory: {}",
-                    dir.display()
-                ),
-            ));
-        }
-        for (path, value) in crate::io::walk_json_dir(&dir, ext, "editor spec")? {
-            if value.get(id_key).and_then(Value::as_str) == Some(id) {
-                return Ok(path);
-            }
-        }
-    }
-    Ok(dir.join(format!("{id}.{ext}")))
 }
 
 fn validate_imported_editor_spec_path(
@@ -122,7 +90,7 @@ mod tests {
     use super::*;
     use crate::io::{read_utf8_no_bom, write_utf8_no_bom};
     use crate::testutil::{temp_dir, temp_linked_file};
-    use std::fs;
+    use std::{fs, path::PathBuf};
 
     #[test]
     fn pulse_import_can_be_read_and_corrected_before_structured_save() {
@@ -216,7 +184,10 @@ mod tests {
         )
         .unwrap();
 
-        let target = root.join("data/weapons/nested/demo.wpn");
+        let target = root
+            .join("data/weapons/nested/demo.wpn")
+            .canonicalize()
+            .unwrap();
         let text = read_utf8_no_bom(&target).unwrap();
         let _ = fs::remove_dir_all(root);
         assert_eq!(invalidation_paths(&result), [target]);
@@ -276,7 +247,7 @@ mod tests {
         )
         .unwrap();
 
-        let target = root.join("data/hulls/demo.ship");
+        let target = root.join("data/hulls/demo.ship").canonicalize().unwrap();
         let text = read_utf8_no_bom(&target).unwrap();
         let _ = fs::remove_dir_all(root);
         assert_eq!(invalidation_paths(&result), [target]);
@@ -321,7 +292,7 @@ mod tests {
         let default_target_exists = root.join("data/weapons/demo.wpn").exists();
 
         let _ = fs::remove_dir_all(root);
-        assert!(error.contains("editor spec directory is not a directory"));
+        assert!(error.contains("JSON 目录不是目录"));
         assert!(!default_target_exists);
     }
 

@@ -16,6 +16,7 @@ pub(crate) struct HistoryState {
 
 #[derive(Clone)]
 pub(crate) struct HistoryEntry {
+    pub(crate) identity_changes: Vec<crate::models::EntityIdentityChange>,
     pub(crate) summary: FileHistorySummary,
     pub(crate) changes: Vec<FileChangeRecord>,
 }

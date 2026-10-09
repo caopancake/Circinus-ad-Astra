@@ -16,7 +16,7 @@
       <div class="file-editor-actions">
         <n-button v-if="hasPendingExternalText" secondary type="warning" @click="loadExternalText">载入外部文本</n-button>
         <n-button :disabled="!dirty || saving" @click="cancelFileChanges">取消</n-button>
-        <n-button type="primary" :loading="saving" :disabled="!dirty" @click="saveFile">保存</n-button>
+        <n-button type="primary" :loading="saving" :disabled="!canSave" @click="saveFile">保存</n-button>
       </div>
     </header>
 
@@ -61,15 +61,15 @@ import { pathBasename, pathBelongsToRoot, relativePathFromRoot } from '@/shared/
 
 const params = new window.URLSearchParams(window.location.search);
 const settings = useSettingsStore();
-const filePath = params.get('file');
+const initialFilePath = params.get('file');
 const modRoot = params.get('modRoot');
 const sessionId = params.get('sessionId');
-const filePathText = filePath ?? '缺少文件路径';
-const fileName = computed(() => (filePath ? pathBasename(filePath) : '缺少文件路径'));
+const filePathText = computed(() => filePath.value ?? '缺少文件路径');
+const fileName = computed(() => (filePath.value ? pathBasename(filePath.value) : '缺少文件路径'));
 const displayPath = computed(() => {
-  if (!filePath) return '缺少文件路径';
-  if (modRoot && pathBelongsToRoot(filePath, modRoot)) return relativePathFromRoot(modRoot, filePath);
-  return filePath;
+  if (!filePath.value) return '缺少文件路径';
+  if (modRoot && pathBelongsToRoot(filePath.value, modRoot)) return relativePathFromRoot(modRoot, filePath.value);
+  return filePath.value;
 });
 const fileTypeText = computed(() => {
   const name = fileName.value;
@@ -82,6 +82,7 @@ const lineHeight = 20;
 const textareaRef = useTemplateRef<HTMLTextAreaElement>('textareaRef');
 const lineGutterRef = useTemplateRef<HTMLElement>('lineGutterRef');
 const {
+  filePath,
   contextLabel,
   contextMessage,
   targetLine,
@@ -90,6 +91,7 @@ const {
   loading,
   saving,
   dirty,
+  canSave,
   hasPendingExternalText,
   externalTextNotice,
   lineCount,
@@ -104,7 +106,7 @@ const {
   undoEdit,
   redoEdit,
 } = useFileEditorViewModel({
-  filePath,
+  filePath: initialFilePath,
   mode: params.get('mode') === 'recovery' ? 'recovery' : 'session',
   modRoot,
   sessionId,

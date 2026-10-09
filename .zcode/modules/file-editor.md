@@ -12,6 +12,8 @@
 `src/windows/file-editor.window.ts`：窗口请求 owner，承载常规与错误恢复两种请求形状。
 `src/orchestrators/file-editor-window.orchestrator.ts`：窗口打开编排 owner，处理 warning 与失败目标的窗口化。
 `src-tauri/src/services/file_editor.rs`：后端编辑 service owner，拥有路径校验与文本读写。
+`src-tauri/src/services/project/write/entity_identity.rs`：已识别规格文本与结构化保存的身份事务 owner。
+`src-tauri/src/parsers/preserve_json.rs`：文本 ID 字段范围定位与替换 owner。
 `src-tauri/src/commands/file_editor.rs`：文件编辑 command 边界。
 `src/app/composables/use-dirty-window-close-guard.ts`：dirty 关闭守卫。
 
@@ -22,7 +24,7 @@
 - 前端严禁从错误文本推导授权根目录或直接写盘；Rust 必须校验 `modRoot` 归属、绝对路径、父目录与链接边界。
 - 转码动作以用户显式选择的源编码解码，严禁自动探测编码；已是 UTF-8 的文件严禁再次转码。
 - 错误恢复入口只允许消费 Rust 游戏概览 warning 或目录打开链路携带的结构化编辑目标；无编辑目标的错误严禁显示文件按钮。
-- 保存只允许写当前文件；恢复模式保存只走无 session 文件写入能力，严禁发送依赖 ProjectSession 的保存同步事件。
+- 普通文本保存只允许写当前文件；已识别规格必须由实体身份事务更新实际目标与所属关联记录；恢复保存只允许消费无 session 文件能力。
 - dirty 窗口接收回放文本只能暂存，不能覆盖文本域；外部版本必须经显式载入。
 - dirty 状态关闭必须显式确认放弃文本；标题栏、Escape 与窗口内关闭必须走同一关闭守卫。
 - 文本撤销重做必须在文本域内生效，撤销栈由统一编辑会话原语承载。
@@ -77,6 +79,10 @@
 - Escape 关闭必须与标题栏关闭走同一守卫语义。
 - 错误恢复窗口严禁发送依赖 session 的保存同步事件。
 - 窗口复用必须通过聚焦上下文事件定位到新目标。
+- 已识别规格读取必须共同返回文本、正式 EntityEditInfo 与所属版本范围；文本修改 ID 必须消费结构化保存的同一身份事务。
+- 文本事务必须保留提交原文；身份字段归一与外部跟随只允许修改解析定位的 ID 值范围。
+- 保存解析失败必须保留原文并定位行列；未完成文本跟随改名时必须保持待交接身份，文本可解析后必须接纳新路径、ID 与基线。
+- 文件路径、URL、原生登记、事件过滤与保存句柄必须共同消费当前目标；后续编辑必须按实际写盘文本计算 dirty。
 
 ## 陷阱
 

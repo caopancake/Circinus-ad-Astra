@@ -1,539 +1,378 @@
-use crate::domain::editor_config_definitions::FACTION_SPEC_DEFINITION;
 use crate::{
     domain::config::validate_config_id,
     errors::{AppError, AppResult},
-    io::{FileChangeSetBuilder, JsonWriteBatch, acquire_root_write_lock, read_csv_data},
-    models::{IndexedConfigKind, IndexedEntityRefresh, JsonWriteOptions, WriteResult},
+    io::{
+        FileChangeSetBuilder, FsRootBoundary, JsonWriteBatch, acquire_root_write_lock,
+        read_csv_data,
+    },
+    models::{
+        EntityEditTarget, EntityFileLocation, EntityIdentityChange, EntityKind, EntityLinkedRecord,
+        EntityTargetState, IndexedEntityRefresh, JsonWriteOptions, ResourceSource, WriteResult,
+    },
     parsers::render_csv_text,
 };
 use serde_json::{Map, Value};
 use std::path::Path;
 
-type IndexRows = Vec<Map<String, Value>>;
-type IndexTable = (Vec<String>, IndexRows);
+const MISSION_INDEX: &str = "data/missions/mission_list.csv";
+fn mission_row_id(row: &Map<String, Value>) -> Option<&str> {
+    row.get("mission").and_then(Value::as_str).map(str::trim)
+}
 
-pub struct IndexedSaveInput<'a> {
+pub struct MissionSaveInput<'a> {
     pub index_row: Map<String, Value>,
     pub entity_data: Value,
-    pub delete_previous_target: bool,
     pub json_write: JsonWriteOptions,
     pub ordered_json: Option<&'a str>,
 }
 
-pub fn save_indexed_config_entity(
-    mod_root: &str,
-    kind: IndexedConfigKind,
+pub fn save_mission_with_json(
+    root: &str,
     previous_id: Option<&str>,
     next_id: &str,
-    index_row: Map<String, Value>,
-    entity_data: Value,
-    delete_previous_target: bool,
+    input: MissionSaveInput<'_>,
 ) -> AppResult<WriteResult<Value>> {
-    save_indexed_config_with_json(
-        mod_root,
-        kind,
-        previous_id,
-        next_id,
-        IndexedSaveInput {
-            index_row,
-            entity_data,
-            delete_previous_target,
-            json_write: JsonWriteOptions::default(),
-            ordered_json: None,
-        },
-    )
-}
-
-pub fn save_indexed_config_with_json(
-    mod_root: &str,
-    kind: IndexedConfigKind,
-    previous_id: Option<&str>,
-    next_id: &str,
-    input: IndexedSaveInput<'_>,
-) -> AppResult<WriteResult<Value>> {
-    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
-    let IndexedSaveInput {
-        index_row,
-        entity_data,
-        delete_previous_target,
-        json_write,
-        ordered_json,
-    } = input;
-    let next_id = validate_config_id(next_id, kind.invalid_id_message())?.to_string();
-    let previous_id = previous_id
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| validate_config_id(value, kind.invalid_id_message()).map(str::to_string))
-        .transpose()?;
-    let definition = indexed_config_definition(kind)?;
-    let mod_root = Path::new(mod_root);
-    let index_path = mod_root.join(definition.index_rel_path());
-    let (mut header, mut rows) = read_index_table(&index_path, definition.default_header())?;
-    let existing_next = rows
-        .iter()
-        .position(|row| definition.row_matches(row, &header, &next_id));
-    if existing_next.is_some() && previous_id.as_deref() != Some(next_id.as_str()) {
+    let lease = acquire_root_write_lock(Path::new(root))?;
+    let boundary = FsRootBoundary::new(Path::new(root), "mission root")?;
+    let next_id = validate_config_id(next_id, "无效战役 ID")?;
+    if let Some(previous) = previous_id {
+        validate_config_id(previous, "无效战役 ID")?;
+    }
+    let mut index = read_csv_data(&boundary.resolve_relative(MISSION_INDEX, "mission index")?)?;
+    if index.header.is_empty() {
+        index.header.push("mission".to_string());
+    }
+    let previous_position = previous_id.and_then(|id| {
+        index
+            .rows
+            .iter()
+            .position(|row| mission_row_id(row) == Some(id))
+    });
+    if let Some(previous_id) = previous_id
+        && previous_position.is_none()
+    {
         return Err(AppError::message(
-            "config.entity_exists",
-            format!("{} 已存在: {next_id}", definition.display_name()),
+            "config.index_missing",
+            format!("战役索引不存在: {}", previous_id),
         ));
     }
-    if previous_id.as_deref() != Some(next_id.as_str())
-        && definition.target_exists(mod_root, &next_id)
+    if index
+        .rows
+        .iter()
+        .any(|row| mission_row_id(row) == Some(next_id))
+        && previous_id != Some(next_id)
+    {
+        return Err(AppError::message(
+            "config.entity_exists",
+            format!("战役已存在: {next_id}"),
+        ));
+    }
+    let source_id = previous_id.unwrap_or(next_id);
+    let before_rel = format!("data/missions/{source_id}");
+    let after_rel = format!("data/missions/{next_id}");
+    let source = boundary.resolve_relative(&before_rel, "mission source")?;
+    let target = boundary.resolve_relative(&after_rel, "mission target")?;
+    if target.exists()
+        && previous_id != Some(next_id)
+        && (previous_id.is_none() || !crate::io::same_physical_path(&source, &target))
     {
         return Err(AppError::message(
             "config.target_exists",
-            format!(
-                "{}目标已存在: {}",
-                definition.display_name(),
-                definition.target_rel_path(&next_id)
-            ),
+            format!("战役目标已存在: {after_rel}"),
         ));
     }
-    if let Some(previous_id) = previous_id.as_deref() {
-        require_index_row(&rows, &header, definition, previous_id)?;
-    }
-
-    remove_index_row(&mut rows, &header, definition, previous_id.as_deref());
-    let index_row = definition.normalize_index_row(index_row, &next_id);
-    upsert_index_row(&mut header, &mut rows, definition, index_row, &next_id);
-
-    let mut builder = FileChangeSetBuilder::new_with_lock(mod_root, write_lock)?;
-    if delete_previous_target
-        && definition.rename_strategy == RenameStrategy::CopyDirectoryBeforeWrite
-        && let Some(previous) = previous_id
-            .as_deref()
-            .filter(|previous| *previous != next_id)
-    {
-        builder.copy_directory(
-            definition.target_rel_path(previous),
-            definition.target_rel_path(&next_id),
-        )?;
-    }
-    builder.root_text_file(
-        definition.index_rel_path(),
-        Some(render_csv_text(&header, &rows.iter().collect::<Vec<_>>())?),
-    )?;
-    let source_id = previous_id.as_deref().unwrap_or(&next_id);
-    let mut json = JsonWriteBatch::new(json_write);
-    definition.add_save_changes(
-        &mut builder,
-        source_id,
-        &next_id,
-        &entity_data,
-        &mut json,
-        ordered_json,
-    )?;
-    if delete_previous_target
-        && let Some(previous) = previous_id
-            .as_deref()
-            .filter(|previous| *previous != next_id)
-    {
-        definition.add_delete_target_change(&mut builder, previous)?;
-    }
-    json.finish()?;
-    let changes = builder.apply()?;
-    Ok(WriteResult::from_refreshed_entity(
-        changes,
-        serde_json::to_value(IndexedEntityRefresh {
-            entity_id: next_id,
-            index_path: definition.index_rel_path().to_string(),
-            index_header: header,
-            index_rows: rows,
-            entity_data,
-        })?,
-    ))
-}
-
-pub fn create_indexed_config_entity(
-    mod_root: &str,
-    kind: IndexedConfigKind,
-    next_id: &str,
-    index_row: Map<String, Value>,
-    entity_data: Value,
-) -> AppResult<WriteResult<Value>> {
-    save_indexed_config_entity(mod_root, kind, None, next_id, index_row, entity_data, false)
-}
-
-pub fn delete_indexed_config_entity(
-    mod_root: &str,
-    kind: IndexedConfigKind,
-    id: &str,
-    delete_target: bool,
-) -> AppResult<WriteResult<Value>> {
-    let write_lock = acquire_root_write_lock(Path::new(mod_root))?;
-    let id = validate_config_id(id, kind.invalid_id_message())?.to_string();
-    let definition = indexed_config_definition(kind)?;
-    let mod_root = Path::new(mod_root);
-    let index_path = mod_root.join(definition.index_rel_path());
-    let (header, mut rows) = read_index_table(&index_path, definition.default_header())?;
-    if !remove_index_row(&mut rows, &header, definition, Some(&id)) {
-        return Err(AppError::message(
-            "config.index_missing",
-            format!("{}索引不存在: {id}", definition.display_name()),
-        ));
-    }
-
-    let mut builder = FileChangeSetBuilder::new_with_lock(mod_root, write_lock)?;
-    builder.root_text_file(
-        definition.index_rel_path(),
-        Some(render_csv_text(&header, &rows.iter().collect::<Vec<_>>())?),
-    )?;
-    if delete_target {
-        definition.add_delete_target_change(&mut builder, &id)?;
-    }
-    let changes = builder.apply()?;
-    Ok(WriteResult::from_refreshed_entity(
-        changes,
-        serde_json::to_value(IndexedEntityRefresh {
-            entity_id: id,
-            index_path: definition.index_rel_path().to_string(),
-            index_header: header,
-            index_rows: rows,
-            entity_data: Value::Null,
-        })?,
-    ))
-}
-
-impl IndexedConfigKind {
-    fn invalid_id_message(self) -> &'static str {
-        match self {
-            IndexedConfigKind::Faction => FACTION_SPEC_DEFINITION.invalid_id_message,
-            IndexedConfigKind::Mission => "无效战役 ID",
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum RenameStrategy {
-    DeletePreviousAfterWrite,
-    CopyDirectoryBeforeWrite,
-}
-
-struct IndexedConfigDefinition {
-    kind: IndexedConfigKind,
-    display_name: &'static str,
-    index_rel_path: &'static str,
-    default_header: &'static [&'static str],
-    target_rel_path: fn(&str) -> String,
-    row_matches: fn(&Map<String, Value>, &[String], &str) -> bool,
-    normalize_index_row: fn(Map<String, Value>, &str) -> Map<String, Value>,
-    add_save_changes: AddSaveChanges,
-    add_delete_target_change:
-        fn(&mut FileChangeSetBuilder, &IndexedConfigDefinition, &str) -> AppResult<()>,
-    rename_strategy: RenameStrategy,
-}
-
-type AddSaveChanges = fn(
-    &mut FileChangeSetBuilder,
-    &IndexedConfigDefinition,
-    &str,
-    &str,
-    &Value,
-    &mut JsonWriteBatch,
-    Option<&str>,
-) -> AppResult<()>;
-
-fn indexed_config_definition(
-    kind: IndexedConfigKind,
-) -> AppResult<&'static IndexedConfigDefinition> {
-    INDEXED_CONFIG_DEFINITIONS
-        .iter()
-        .find(|definition| definition.kind == kind)
-        .ok_or_else(|| {
-            AppError::message(
-                "config.kind_unknown",
-                format!("未注册的 indexed config 种类: {kind:?}"),
-            )
-        })
-}
-
-impl IndexedConfigDefinition {
-    fn display_name(&self) -> &'static str {
-        self.display_name
-    }
-
-    fn index_rel_path(&self) -> &'static str {
-        self.index_rel_path
-    }
-
-    fn default_header(&self) -> Vec<String> {
-        self.default_header
-            .iter()
-            .map(|value| value.to_string())
-            .collect()
-    }
-
-    fn target_rel_path(&self, id: &str) -> String {
-        (self.target_rel_path)(id)
-    }
-
-    fn target_exists(&self, mod_root: &Path, id: &str) -> bool {
-        mod_root.join(self.target_rel_path(id)).exists()
-    }
-
-    fn row_matches(&self, row: &Map<String, Value>, header: &[String], id: &str) -> bool {
-        (self.row_matches)(row, header, id)
-    }
-
-    fn normalize_index_row(&self, row: Map<String, Value>, id: &str) -> Map<String, Value> {
-        (self.normalize_index_row)(row, id)
-    }
-
-    fn add_save_changes(
-        &self,
-        builder: &mut FileChangeSetBuilder,
-        source_id: &str,
-        id: &str,
-        entity_data: &Value,
-        json: &mut JsonWriteBatch,
-        ordered_json: Option<&str>,
-    ) -> AppResult<()> {
-        (self.add_save_changes)(
-            builder,
-            self,
-            source_id,
-            id,
-            entity_data,
-            json,
-            ordered_json,
-        )
-    }
-
-    fn add_delete_target_change(
-        &self,
-        builder: &mut FileChangeSetBuilder,
-        id: &str,
-    ) -> AppResult<()> {
-        (self.add_delete_target_change)(builder, self, id)
-    }
-}
-
-const INDEXED_CONFIG_DEFINITIONS: [IndexedConfigDefinition; 2] = [
-    IndexedConfigDefinition {
-        kind: IndexedConfigKind::Faction,
-        display_name: "势力",
-        index_rel_path: "data/world/factions/factions.csv",
-        default_header: &["id", "file"],
-        target_rel_path: faction_target_rel_path,
-        row_matches: faction_row_matches,
-        normalize_index_row: normalize_faction_index_row,
-        add_save_changes: add_faction_save_changes,
-        add_delete_target_change: add_faction_delete_target_change,
-        rename_strategy: RenameStrategy::DeletePreviousAfterWrite,
-    },
-    IndexedConfigDefinition {
-        kind: IndexedConfigKind::Mission,
-        display_name: "战役",
-        index_rel_path: "data/missions/mission_list.csv",
-        default_header: &["mission"],
-        target_rel_path: mission_target_rel_path,
-        row_matches: mission_row_matches,
-        normalize_index_row: normalize_mission_index_row,
-        add_save_changes: add_mission_save_changes,
-        add_delete_target_change: add_mission_delete_target_change,
-        rename_strategy: RenameStrategy::CopyDirectoryBeforeWrite,
-    },
-];
-
-fn read_index_table(path: &Path, default_header: Vec<String>) -> AppResult<IndexTable> {
-    let table = read_csv_data(path)?;
-    if table.header.is_empty() {
-        Ok((default_header, table.rows))
-    } else {
-        Ok((table.header, table.rows))
-    }
-}
-
-fn upsert_index_row(
-    header: &mut Vec<String>,
-    rows: &mut Vec<Map<String, Value>>,
-    definition: &IndexedConfigDefinition,
-    row: Map<String, Value>,
-    id: &str,
-) {
+    let mut row = previous_position
+        .map(|position| index.rows[position].clone())
+        .unwrap_or_default();
+    row.extend(input.index_row);
+    row.insert("mission".to_string(), Value::String(next_id.to_string()));
     for key in row.keys() {
-        if !header.contains(key) {
-            header.push(key.clone());
+        if !index.header.contains(key) {
+            index.header.push(key.clone());
         }
     }
-    if let Some(index) = rows
-        .iter()
-        .position(|existing| definition.row_matches(existing, header, id))
-    {
-        rows[index] = row;
+    let next_position = previous_position.unwrap_or(index.rows.len());
+    if let Some(position) = previous_position {
+        index.rows[position] = row;
     } else {
-        rows.push(row);
+        index.rows.push(row);
     }
-}
-
-fn remove_index_row(
-    rows: &mut Vec<Map<String, Value>>,
-    header: &[String],
-    definition: &IndexedConfigDefinition,
-    id: Option<&str>,
-) -> bool {
-    let Some(id) = id else {
-        return false;
-    };
-    let before = rows.len();
-    rows.retain(|row| !definition.row_matches(row, header, id));
-    before != rows.len()
-}
-
-fn require_index_row(
-    rows: &[Map<String, Value>],
-    header: &[String],
-    definition: &IndexedConfigDefinition,
-    id: &str,
-) -> AppResult<()> {
-    if rows
-        .iter()
-        .any(|row| definition.row_matches(row, header, id))
-    {
-        return Ok(());
-    }
-    Err(AppError::message(
-        "config.index_missing",
-        format!("{}索引不存在: {id}", definition.display_name()),
-    ))
-}
-
-fn file_stem(value: &str) -> String {
-    Path::new(value)
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .unwrap_or(value)
-        .to_string()
-}
-
-fn faction_target_rel_path(id: &str) -> String {
-    FACTION_SPEC_DEFINITION.default_rel_path(id)
-}
-
-fn mission_target_rel_path(id: &str) -> String {
-    format!("data/missions/{id}")
-}
-
-fn faction_row_matches(row: &Map<String, Value>, _header: &[String], id: &str) -> bool {
-    let target = faction_target_rel_path(id);
-    row.values().any(|value| {
-        let Some(value) = value.as_str().map(str::trim) else {
-            return false;
-        };
-        value == id || value == target || file_stem(value) == id
-    })
-}
-
-fn mission_row_matches(row: &Map<String, Value>, _header: &[String], id: &str) -> bool {
-    let Some(value) = row.get("mission").and_then(Value::as_str).map(str::trim) else {
-        return false;
-    };
-    value == id
-}
-
-fn normalize_faction_index_row(_row: Map<String, Value>, id: &str) -> Map<String, Value> {
-    let mut row = Map::new();
-    row.insert(
-        "faction".to_string(),
-        Value::String(faction_target_rel_path(id)),
-    );
-    row
-}
-
-fn normalize_mission_index_row(mut row: Map<String, Value>, id: &str) -> Map<String, Value> {
-    row.insert("mission".to_string(), Value::String(id.to_string()));
-    row
-}
-
-fn add_faction_save_changes(
-    builder: &mut FileChangeSetBuilder,
-    definition: &IndexedConfigDefinition,
-    source_id: &str,
-    id: &str,
-    entity_data: &Value,
-    json: &mut JsonWriteBatch,
-    ordered_json: Option<&str>,
-) -> AppResult<()> {
-    let file = entity_data.get("file").ok_or_else(|| {
-        AppError::message("config.missing_faction_file", "missing faction file data")
-    })?;
-    let source = builder.root().join(definition.target_rel_path(source_id));
-    let rendered = json.render(&source, file, ordered_json)?;
-    if json.is_preserving()
-        && source_id == id
-        && source.exists()
-        && crate::io::read_utf8_no_bom(&source)? == rendered
-    {
-        return Ok(());
-    }
-    builder.text_file(definition.target_rel_path(id), Some(rendered))?;
-    Ok(())
-}
-
-fn add_mission_save_changes(
-    builder: &mut FileChangeSetBuilder,
-    definition: &IndexedConfigDefinition,
-    source_id: &str,
-    id: &str,
-    entity_data: &Value,
-    json: &mut JsonWriteBatch,
-    ordered_json: Option<&str>,
-) -> AppResult<()> {
-    let descriptor = entity_data.get("descriptor").ok_or_else(|| {
+    let descriptor = input.entity_data.get("descriptor").ok_or_else(|| {
         AppError::message(
             "config.missing_mission_descriptor",
             "missing mission descriptor data",
         )
     })?;
-    let text = entity_data
+    let text = input
+        .entity_data
         .get("text")
         .and_then(Value::as_str)
         .ok_or_else(|| {
             AppError::message("config.missing_mission_text", "missing mission text data")
         })?;
-    let source = builder.root().join(format!(
-        "{}/descriptor.json",
-        definition.target_rel_path(source_id)
-    ));
-    let rendered = json.render(&source, descriptor, ordered_json)?;
-    let descriptor_unchanged = json.is_preserving()
-        && source_id == id
-        && source.exists()
-        && crate::io::read_utf8_no_bom(&source)? == rendered;
-    if !descriptor_unchanged {
+    let mut json = JsonWriteBatch::new(input.json_write);
+    let rendered = json.render(
+        &source.join("descriptor.json"),
+        descriptor,
+        input.ordered_json,
+    )?;
+    json.finish()?;
+    let mut builder = FileChangeSetBuilder::new_with_lock(boundary.root(), lease)?;
+    builder.text_file(
+        MISSION_INDEX,
+        Some(render_csv_text(
+            &index.header,
+            &index.rows.iter().collect::<Vec<_>>(),
+        )?),
+    )?;
+    let rename = previous_id.is_some() && source_id != next_id;
+    if rename {
+        let mut files = builder.directory_files(&before_rel)?;
+        for (relative, content) in [
+            ("descriptor.json", rendered),
+            ("mission_text.txt", text.to_string()),
+        ] {
+            files.retain(|file| file.rel_path != relative);
+            files.push(crate::models::FileSnapshot {
+                rel_path: relative.to_string(),
+                text: Some(content),
+                data_base64: None,
+            });
+        }
+        files.sort_by(|left, right| left.rel_path.cmp(&right.rel_path));
+        builder.rename_directory(&before_rel, &after_rel, files)?;
+    } else {
+        builder.text_file(format!("{after_rel}/descriptor.json"), Some(rendered))?;
         builder.text_file(
-            format!("{}/descriptor.json", definition.target_rel_path(id)),
-            Some(rendered),
+            format!("{after_rel}/mission_text.txt"),
+            Some(text.to_string()),
         )?;
     }
+    let changes = builder.apply()?;
+    let root = boundary.root().to_string_lossy().to_string();
+    let location = |rel: &str| EntityFileLocation {
+        source: ResourceSource::Mod,
+        root: root.clone(),
+        rel_path: rel.to_string(),
+        path: boundary.root().join(rel).to_string_lossy().to_string(),
+    };
+    let before_location = location(&before_rel);
+    let after_location = location(&after_rel);
+    let before = EntityEditTarget {
+        kind: EntityKind::Mission,
+        id: source_id.to_string(),
+        source: previous_id.map(|_| before_location.clone()),
+        write: before_location,
+        state: if previous_id.is_some() {
+            EntityTargetState::Existing
+        } else {
+            EntityTargetState::Create
+        },
+        linked_record: previous_position.map(|row_index| EntityLinkedRecord::Index {
+            path: MISSION_INDEX.to_string(),
+            row_index,
+        }),
+    };
+    let after = EntityEditTarget {
+        kind: EntityKind::Mission,
+        id: next_id.to_string(),
+        source: Some(after_location.clone()),
+        write: after_location,
+        state: EntityTargetState::Existing,
+        linked_record: Some(EntityLinkedRecord::Index {
+            path: MISSION_INDEX.to_string(),
+            row_index: next_position,
+        }),
+    };
+    let mut result = WriteResult::from_refreshed_entity(
+        changes,
+        serde_json::to_value(IndexedEntityRefresh {
+            entity_id: next_id.to_string(),
+            index_path: MISSION_INDEX.to_string(),
+            index_header: index.header,
+            index_rows: index.rows,
+            entity_data: input.entity_data,
+        })?,
+    );
+    result
+        .identity_changes
+        .push(EntityIdentityChange { before, after });
+    Ok(result)
+}
+
+pub fn create_mission_entity(
+    root: &str,
+    next_id: &str,
+    index_row: Map<String, Value>,
+    entity_data: Value,
+) -> AppResult<WriteResult<Value>> {
+    save_mission_with_json(
+        root,
+        None,
+        next_id,
+        MissionSaveInput {
+            index_row,
+            entity_data,
+            json_write: Default::default(),
+            ordered_json: None,
+        },
+    )
+}
+
+pub fn delete_mission_entity(
+    root: &str,
+    id: &str,
+    delete_target: bool,
+) -> AppResult<WriteResult<Value>> {
+    let lease = acquire_root_write_lock(Path::new(root))?;
+    validate_config_id(id, "无效战役 ID")?;
+    let boundary = FsRootBoundary::new(Path::new(root), "mission root")?;
+    let mut index = read_csv_data(&boundary.resolve_relative(MISSION_INDEX, "mission index")?)?;
+    let position = index
+        .rows
+        .iter()
+        .position(|row| row.get("mission").and_then(Value::as_str).map(str::trim) == Some(id))
+        .ok_or_else(|| {
+            AppError::message("config.index_missing", format!("战役索引不存在: {id}"))
+        })?;
+    index.rows.remove(position);
+    let mut builder = FileChangeSetBuilder::new_with_lock(boundary.root(), lease)?;
     builder.text_file(
-        format!("{}/mission_text.txt", definition.target_rel_path(id)),
-        Some(text.to_string()),
+        MISSION_INDEX,
+        Some(render_csv_text(
+            &index.header,
+            &index.rows.iter().collect::<Vec<_>>(),
+        )?),
     )?;
-    Ok(())
-}
-
-fn add_faction_delete_target_change(
-    builder: &mut FileChangeSetBuilder,
-    definition: &IndexedConfigDefinition,
-    id: &str,
-) -> AppResult<()> {
-    builder.text_file(definition.target_rel_path(id), None)?;
-    Ok(())
-}
-
-fn add_mission_delete_target_change(
-    builder: &mut FileChangeSetBuilder,
-    definition: &IndexedConfigDefinition,
-    id: &str,
-) -> AppResult<()> {
-    builder.delete_directory(definition.target_rel_path(id))?;
-    Ok(())
+    if delete_target {
+        builder.delete_directory(format!("data/missions/{id}"))?;
+    }
+    Ok(WriteResult::from_refreshed_entity(
+        builder.apply()?,
+        serde_json::to_value(IndexedEntityRefresh {
+            entity_id: id.to_string(),
+            index_path: MISSION_INDEX.to_string(),
+            index_header: index.header,
+            index_rows: index.rows,
+            entity_data: Value::Null,
+        })?,
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::IndexedConfigKind;
+
+    struct IndexedSaveInput<'a> {
+        index_row: Map<String, Value>,
+        entity_data: Value,
+        json_write: JsonWriteOptions,
+        ordered_json: Option<&'a str>,
+    }
+
+    fn with_session<T>(
+        root: &str,
+        action: impl FnOnce(&crate::models::ProjectManifest) -> AppResult<T>,
+    ) -> AppResult<T> {
+        let mut trace = crate::services::project::PerformanceTrace::new("project.openSession");
+        let manifest = crate::services::project::open_project_session_traced(
+            Path::new(root),
+            None,
+            &mut trace,
+        )?;
+        let result = action(&manifest);
+        crate::services::project::close_project_session(manifest.session_id)?;
+        result
+    }
+
+    fn save_indexed_config_with_json(
+        root: &str,
+        kind: IndexedConfigKind,
+        previous: Option<&str>,
+        next: &str,
+        input: IndexedSaveInput<'_>,
+    ) -> AppResult<WriteResult<Value>> {
+        with_session(root, |manifest| {
+            let entity_kind = if kind == IndexedConfigKind::Faction {
+                EntityKind::Faction
+            } else {
+                EntityKind::Mission
+            };
+            let info = crate::services::project::query_entity_edit_target(
+                &manifest.session_id,
+                entity_kind,
+                previous.unwrap_or(next),
+            )?;
+            crate::commands::save_indexed_config_entity(
+                crate::models::command_payloads::IndexedConfigEntityPayload {
+                    session_id: manifest.session_id.clone(),
+                    mod_root: manifest.mod_root.clone(),
+                    base_versions: info.base_versions,
+                    kind,
+                    previous_id: previous.map(str::to_string),
+                    next_id: next.to_string(),
+                    index_row: input.index_row,
+                    entity_data: input.entity_data,
+                    json_write: input.json_write,
+                    ordered_json: input.ordered_json.map(str::to_string),
+                },
+            )
+        })
+    }
+
+    fn save_indexed_config_entity(
+        root: &str,
+        kind: IndexedConfigKind,
+        previous: Option<&str>,
+        next: &str,
+        index_row: Map<String, Value>,
+        entity_data: Value,
+        _delete_previous_target: bool,
+    ) -> AppResult<WriteResult<Value>> {
+        save_indexed_config_with_json(
+            root,
+            kind,
+            previous,
+            next,
+            IndexedSaveInput {
+                index_row,
+                entity_data,
+                json_write: Default::default(),
+                ordered_json: None,
+            },
+        )
+    }
+
+    fn delete_indexed_config_entity(
+        root: &str,
+        kind: IndexedConfigKind,
+        id: &str,
+        delete_target: bool,
+    ) -> AppResult<WriteResult<Value>> {
+        with_session(root, |manifest| {
+            let entity_kind = if kind == IndexedConfigKind::Faction {
+                EntityKind::Faction
+            } else {
+                EntityKind::Mission
+            };
+            let info = crate::services::project::query_entity_edit_target(
+                &manifest.session_id,
+                entity_kind,
+                id,
+            )?;
+            crate::commands::delete_indexed_config_entity(
+                crate::models::command_payloads::DeleteIndexedConfigEntityPayload {
+                    session_id: manifest.session_id.clone(),
+                    mod_root: manifest.mod_root.clone(),
+                    base_versions: info.base_versions,
+                    kind,
+                    id: id.to_string(),
+                    delete_target,
+                },
+            )
+        })
+    }
     use crate::testutil::temp_dir;
     use crate::{
         io::{read_utf8_no_bom, write_utf8_no_bom},
@@ -565,7 +404,6 @@ mod tests {
             IndexedSaveInput {
                 index_row: Map::new(),
                 entity_data: serde_json::json!({"file":{"displayName":"New","id":"demo"}}),
-                delete_previous_target: false,
                 json_write: JsonWriteOptions {
                     preserve_original_json: true,
                     confirmed_sources: Vec::new(),

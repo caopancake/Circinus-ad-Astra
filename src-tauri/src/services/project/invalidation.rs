@@ -176,10 +176,23 @@ fn changed_project_files(
                 push_changed_project_file(
                     &mut files,
                     boundary,
-                    Path::new(&change.path),
-                    change.before_text.clone(),
+                    Path::new(&change.after_path),
+                    if change.before_path == change.after_path {
+                        change.before_text.clone()
+                    } else {
+                        None
+                    },
                     change.after_text.clone(),
                 )?;
+                if change.before_path != change.after_path {
+                    push_changed_project_file(
+                        &mut files,
+                        boundary,
+                        Path::new(&change.before_path),
+                        change.before_text.clone(),
+                        None,
+                    )?;
+                }
             }
             FileChangeKind::Directory => {
                 changed_directory_files(&mut files, boundary, change)?;
@@ -194,6 +207,29 @@ fn changed_directory_files(
     boundary: &FsRootBoundary,
     change: &FileChangeRecord,
 ) -> AppResult<()> {
+    if change.before_path != change.after_path {
+        push_changed_project_file(files, boundary, Path::new(&change.before_path), None, None)?;
+        push_changed_project_file(files, boundary, Path::new(&change.after_path), None, None)?;
+        for snapshot in &change.before_files {
+            push_changed_project_file(
+                files,
+                boundary,
+                &Path::new(&change.before_path).join(&snapshot.rel_path),
+                snapshot.text.clone(),
+                None,
+            )?;
+        }
+        for snapshot in &change.after_files {
+            push_changed_project_file(
+                files,
+                boundary,
+                &Path::new(&change.after_path).join(&snapshot.rel_path),
+                None,
+                snapshot.text.clone(),
+            )?;
+        }
+        return Ok(());
+    }
     let mut before = BTreeMap::new();
     let mut after = BTreeMap::new();
     for snapshot in &change.before_files {
@@ -208,14 +244,14 @@ fn changed_directory_files(
         .cloned()
         .collect::<BTreeSet<_>>();
     if paths.is_empty() {
-        push_changed_project_file(files, boundary, Path::new(&change.path), None, None)?;
+        push_changed_project_file(files, boundary, Path::new(&change.after_path), None, None)?;
         return Ok(());
     }
     for rel_path in paths {
         push_changed_project_file(
             files,
             boundary,
-            &Path::new(&change.path).join(&rel_path),
+            &Path::new(&change.after_path).join(&rel_path),
             before
                 .get(&rel_path)
                 .and_then(|snapshot| snapshot.text.clone()),
@@ -1002,7 +1038,8 @@ mod tests {
     ) -> FileChangeRecord {
         FileChangeRecord {
             kind: FileChangeKind::File,
-            path: path.to_string_lossy().to_string(),
+            before_path: path.to_string_lossy().to_string(),
+            after_path: path.to_string_lossy().to_string(),
             before_exists: before_text.is_some(),
             before_text: before_text.map(ToOwned::to_owned),
             before_data_base64: None,
@@ -1021,7 +1058,8 @@ mod tests {
     ) -> FileChangeRecord {
         FileChangeRecord {
             kind: FileChangeKind::Directory,
-            path: path.to_string_lossy().to_string(),
+            before_path: path.to_string_lossy().to_string(),
+            after_path: path.to_string_lossy().to_string(),
             before_exists: !before_files.is_empty(),
             before_text: None,
             before_data_base64: None,

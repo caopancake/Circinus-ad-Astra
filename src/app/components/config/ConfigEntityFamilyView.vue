@@ -24,6 +24,7 @@
       :mod-root="modRoot"
       :session-id="sessionId"
       :data-revision="dataRevision"
+      :identity-handoff="identityHandoff"
       :save-file="saveFamilyEntity"
       :delete-entity="deleteFamilyEntity"
       @saved="onSaved"
@@ -49,6 +50,7 @@ const familyViewModel = useConfigFamilyViewModel(family.value);
 const { confirmDraftTransition } = useDraftTransitionConfirmation();
 const {
   selectedId,
+  identityHandoff,
   modRoot,
   sessionId,
   files,

@@ -1,5 +1,20 @@
 export type { JsonInputShape, JsonInputValue, JsonValue, RowData } from '@/shared/types/json.types';
 export type { EditContext } from '@/shared/types/edit-context.types';
+export type {
+  EntityEditTarget,
+  EntityEditInfo,
+  EntityFileLocation,
+  EntityLinkedRecord,
+  EntityIdentityChange,
+  EntityIdentityIntent,
+} from '@/shared/types/entity-target.types';
+export type {
+  WindowIdentity,
+  WindowCloseIntent,
+  NativeWindowRequest,
+  ManagedWindowOpened,
+  ManagedWindowStatus,
+} from '@/shared/types/window.types';
 export type { CreatedMod, CreateModRequest, NewModDestination, NewModTemplate } from '@/shared/types/mod-creation.types';
 export type { AccentPreset, AppSettings, AppTheme, EditMode, LogLevel } from '@/shared/types/settings.types';
 export { ACCENT_PRESET_VALUES, APP_THEMES, EDIT_MODES, LOG_LEVELS } from '@/shared/types/settings.types';
@@ -11,6 +26,7 @@ export type { FileHistoryItem, FileSaveHistoryEntry, FileHistorySnapshot } from 
 export type {
   AssociatedFileChange,
   AssociatedSpecChange,
+  AssociatedSpecWrite,
   AssociatedSpecCreateParams,
   AssociatedSpecChangeAction,
   CsvRowKeyMapping,
@@ -23,7 +39,9 @@ export type {
 } from '@/shared/types/write.types';
 export type {
   ConfigFileEntityWrite,
+  ConfigFamilyFile,
   ConfigSaveIdentity,
+  ConfigIdentityHandoff,
   SavedConfig,
   ConfigEditTarget,
   ConfigMissionEditorData,
@@ -34,9 +52,7 @@ export type {
   IndexedConfigKind,
   IndexedConfigEntityWrite,
   SkinEntityWrite,
-  SkinFile,
   VariantEntityWrite,
-  VariantFile,
 } from '@/shared/types/config-entity.types';
 export type {
   CsvDirtyRow,

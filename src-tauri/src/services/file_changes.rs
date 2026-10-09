@@ -74,7 +74,8 @@ fn write_result(changes: Vec<FileChangeRecord>) -> WriteResult {
 fn validate_changeset_paths(mod_root: &str, changes: &[FileChangeRecord]) -> AppResult<()> {
     let boundary = FsRootBoundary::new(Path::new(mod_root), "mod root")?;
     for change in changes {
-        boundary.resolve_absolute(Path::new(&change.path), "changeset path")?;
+        boundary.resolve_absolute(Path::new(&change.before_path), "changeset source")?;
+        boundary.resolve_absolute(Path::new(&change.after_path), "changeset target")?;
         for file in change.before_files.iter().chain(change.after_files.iter()) {
             validate_snapshot_relative_path(&file.rel_path)?;
         }
@@ -452,7 +453,8 @@ mod tests {
         };
         let change = FileChangeRecord {
             kind: FileChangeKind::File,
-            path: linked.join("outside.txt").to_string_lossy().to_string(),
+            before_path: linked.join("outside.txt").to_string_lossy().to_string(),
+            after_path: linked.join("outside.txt").to_string_lossy().to_string(),
             before_exists: false,
             before_text: None,
             before_data_base64: None,
@@ -483,7 +485,8 @@ mod tests {
         };
         let change = FileChangeRecord {
             kind: FileChangeKind::Directory,
-            path: linked.to_string_lossy().to_string(),
+            before_path: linked.to_string_lossy().to_string(),
+            after_path: linked.to_string_lossy().to_string(),
             before_exists: true,
             before_text: None,
             before_data_base64: None,
@@ -513,7 +516,8 @@ mod tests {
         write_utf8_no_bom(&dir.join("mission_text.txt"), "keep").unwrap();
         let change = FileChangeRecord {
             kind: FileChangeKind::Directory,
-            path: dir.to_string_lossy().to_string(),
+            before_path: dir.to_string_lossy().to_string(),
+            after_path: dir.to_string_lossy().to_string(),
             before_exists: true,
             before_text: None,
             before_data_base64: None,
@@ -550,7 +554,8 @@ mod tests {
         for rel_path in ["", ".", "nested/./bad.txt", "C:outside.txt"] {
             let change = FileChangeRecord {
                 kind: FileChangeKind::Directory,
-                path: dir.to_string_lossy().to_string(),
+                before_path: dir.to_string_lossy().to_string(),
+                after_path: dir.to_string_lossy().to_string(),
                 before_exists: true,
                 before_text: None,
                 before_data_base64: None,
@@ -580,7 +585,10 @@ mod tests {
     }
 
     fn change_paths(changes: &[crate::models::FileChangeRecord]) -> Vec<String> {
-        changes.iter().map(|change| change.path.clone()).collect()
+        changes
+            .iter()
+            .map(|change| change.after_path.clone())
+            .collect()
     }
 
     fn path_string(path: impl AsRef<Path>) -> String {

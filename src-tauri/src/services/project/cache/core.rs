@@ -1,9 +1,8 @@
 use crate::{
     errors::AppResult,
-    io::{FsRootBoundary, load_json_dir_by_id, read_csv_data},
-    models::{CsvTableKey, SkinFile, VariantFile},
+    io::{FsRootBoundary, read_csv_data},
+    models::{CsvTableKey, LoadedSpecRecord, ResourceSource, SkinFile, VariantFile},
 };
-use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
@@ -154,34 +153,52 @@ pub(crate) fn load_core_csv_table(
 
 pub(crate) fn load_core_ship_files(
     starsector_root: &str,
-) -> AppResult<Arc<BTreeMap<String, Value>>> {
+) -> AppResult<Arc<BTreeMap<String, LoadedSpecRecord>>> {
     get_or_load_core(
         starsector_root,
         |cache| cache.ship_files.as_ref(),
         |cache, files| cache.ship_files = Some(files),
-        |core_dir| load_json_dir_by_id(&core_dir.join("data/hulls"), "ship", "hullId"),
+        |core_dir| {
+            super::load_spec_records(
+                core_dir,
+                "data/hulls",
+                "ship",
+                "hullId",
+                ResourceSource::Core,
+            )
+        },
     )
 }
 
 pub(crate) fn load_core_weapon_specs(
     starsector_root: &str,
-) -> AppResult<Arc<BTreeMap<String, Value>>> {
+) -> AppResult<Arc<BTreeMap<String, LoadedSpecRecord>>> {
     get_or_load_core(
         starsector_root,
         |cache| cache.weapon_specs.as_ref(),
         |cache, specs| cache.weapon_specs = Some(specs),
-        |core_dir| load_json_dir_by_id(&core_dir.join("data/weapons"), "wpn", "id"),
+        |core_dir| {
+            super::load_spec_records(core_dir, "data/weapons", "wpn", "id", ResourceSource::Core)
+        },
     )
 }
 
 pub(crate) fn load_core_projectile_specs(
     starsector_root: &str,
-) -> AppResult<Arc<BTreeMap<String, Value>>> {
+) -> AppResult<Arc<BTreeMap<String, LoadedSpecRecord>>> {
     get_or_load_core(
         starsector_root,
         |cache| cache.projectile_specs.as_ref(),
         |cache, specs| cache.projectile_specs = Some(specs),
-        |core_dir| load_json_dir_by_id(&core_dir.join("data/weapons/proj"), "proj", "id"),
+        |core_dir| {
+            super::load_spec_records(
+                core_dir,
+                "data/weapons/proj",
+                "proj",
+                "id",
+                ResourceSource::Core,
+            )
+        },
     )
 }
 
@@ -278,8 +295,8 @@ mod tests {
 
         let _ = fs::remove_dir_all(root);
         let _ = fs::remove_dir_all(cache_root);
-        assert_eq!(loaded["demo"]["spriteName"], "before");
+        assert_eq!(loaded["demo"].data["spriteName"], "before");
         assert!(persisted.and_then(|cache| cache.ship_files).is_some());
-        assert_eq!(changed["demo"]["spriteName"], "after");
+        assert_eq!(changed["demo"].data["spriteName"], "after");
     }
 }

@@ -34,6 +34,26 @@ pub(crate) fn temp_linked_dir(name: &str, rel_link: &str) -> Option<(PathBuf, Pa
     Some((root, outside, link))
 }
 
+#[cfg(windows)]
+pub(crate) fn temp_junction_dir(name: &str, rel_link: &str) -> (PathBuf, PathBuf, PathBuf) {
+    let root = temp_dir(&format!("{name}_root"));
+    let outside = temp_dir(&format!("{name}_outside"));
+    let link = root.join(rel_link);
+    std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+    let output = std::process::Command::new("cmd")
+        .args(["/c", "mklink", "/J"])
+        .arg(link.to_string_lossy().replace('/', "\\"))
+        .arg(outside.to_string_lossy().replace('/', "\\"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "junction fixture: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    (root, outside, link)
+}
+
 /// Creates a temp root with a file link at `root.join(rel_link)` pointing to a
 /// temp file path; returns `(root, outside, link)`, or None (after cleanup)
 /// when the platform or environment forbids creating links.

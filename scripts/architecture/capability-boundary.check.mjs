@@ -12,6 +12,26 @@ import { rustServiceEdgeBoundaryRule } from './rules/rust-service-edge-boundary.
 import { rustProjectLayerBoundaryRule } from './rules/rust-project-layer-boundary.mjs';
 
 const cases = [
+  ['window-wire', 'src/services/window.service.ts', 'src/shared/api/window-api.ts', 'openManagedWindow'],
+  ['window-open', 'src/windows/managed.window.ts', 'src/services/window.service.ts', 'openNativeManagedWindow'],
+  ['window-status', 'src/app/composables/use-dirty-window-close-guard.ts', 'src/services/window.service.ts', 'updateNativeWindowStatus'],
+  [
+    'window-close-cancel',
+    'src/app/composables/use-dirty-window-close-guard.ts',
+    'src/services/window.service.ts',
+    'cancelNativeWindowClose',
+  ],
+  [
+    'window-session-close',
+    'src/orchestrators/workspace-lifecycle.orchestrator.ts',
+    'src/services/window.service.ts',
+    'closeNativeSessionWindows',
+  ],
+  ['window-reserve', 'src/orchestrators/entity-identity.orchestrator.ts', 'src/services/window.service.ts', 'reserveNativeWindowTargets'],
+  ['window-release', 'src/orchestrators/table-save.orchestrator.ts', 'src/services/window.service.ts', 'releaseNativeWindowTargets'],
+  ['window-retarget', 'src/orchestrators/entity-identity.orchestrator.ts', 'src/services/window.service.ts', 'retargetNativeWindow'],
+  ['entity-target-query', 'src/services/editor.service.ts', 'src/services/query.service.ts', 'querySessionEntityEditTarget'],
+  ['entity-intent-query', 'src/services/editor.service.ts', 'src/services/query.service.ts', 'querySessionEntityIdentityIntent'],
   ['config-write', 'src/orchestrators/config-save.orchestrator.ts', 'src/services/write.service.ts', 'writeModFiles'],
   ['table-write', 'src/orchestrators/table-save.orchestrator.ts', 'src/services/write.service.ts', 'writeCsvPatch'],
   ['spec-write', 'src/services/editor.service.ts', 'src/services/write.service.ts', 'writeEditorSpec'],
@@ -223,12 +243,44 @@ test('Rust module and layer restrictions report each dependency fact once', () =
   assert.equal(rustProjectLayerBoundaryRule.check(layers).length, 1);
 });
 
+test('Rust public query names retain their facade ownership and internal query modules retain their layer', () => {
+  const facade = architectureFixtures({
+    'src-tauri/src/services/file_editor.rs': 'fn run() { crate::services::project::query_entity_identity_intent(); }',
+  });
+  assert.deepEqual(rustProjectLayerBoundaryRule.check(facade), []);
+  assert.deepEqual(rustServiceEdgeBoundaryRule.check(facade), []);
+  const internal = architectureFixtures({
+    'src-tauri/src/services/file_editor.rs': 'fn run() { crate::services::project::query::identity(); }',
+  });
+  assert.equal(rustProjectLayerBoundaryRule.check(internal).length, 1);
+});
+
 test('runtime and type edges share one layer-violation diagnostic', () => {
   const files = architectureFixtures({
     'src/domain/sample.ts': "import { type Shape, run } from '@/stores/sample.store';",
     'src/stores/sample.store.ts': 'export interface Shape {} export function run() {}',
   });
   assert.equal(frontendLayerBoundaryRule.check(files).length, 1);
+});
+
+test('production fixture consumption has one diagnostic and tests may consume production', () => {
+  for (const source of ["import { fixture } from '@/test/entity-target';", "import type { Fixture } from '@/test/entity-target';"]) {
+    const files = architectureFixtures({
+      'src/domain/example.ts': source,
+      'src/test/entity-target.ts': 'export interface Fixture {} export function fixture() {}',
+    });
+    const failures = rules.flatMap((rule) => rule.check(files)).filter((failure) => failure.includes('src/domain/example.ts'));
+    assert.equal(failures.length, 1);
+    assert.match(failures[0], /domain must not import test/);
+  }
+  const files = architectureFixtures({
+    'src/domain/example.spec.ts': "import { example } from './example';",
+    'src/domain/example.ts': 'export function example() {}',
+  });
+  assert.deepEqual(
+    rules.flatMap((rule) => rule.check(files)).filter((failure) => failure.includes('src/domain/example.spec.ts')),
+    [],
+  );
 });
 
 test('feedback construction has one owner for direct and forwarded runtime imports', () => {

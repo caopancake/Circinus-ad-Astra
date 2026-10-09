@@ -63,7 +63,7 @@ import { useSettingsStore } from '@/stores/settings.store';
 import type { ResourceRef } from '@/shared/types';
 import type { SelectOption } from '@/domain/schema/schema-options';
 import type { ConfigEntityFamilyDefinition, ConfigFamilyFile } from '@/domain/config/config-entity-families';
-import { familyFileCompanion, familyFileId, familyFileTitle } from '@/domain/config/config-entity-families';
+import { compareFamilyFiles, familyFileId, familyFileTitle } from '@/domain/config/config-entity-families';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useVisibleResourceMedia } from '@/app/composables/use-visible-resource-media';
 
@@ -99,25 +99,14 @@ const createModRoot = ref<string | null>(null);
 const createSessionId = ref<string | null>(null);
 
 function fileId(file: ConfigFamilyFile): string {
-  return familyFileId(props.family, file);
+  return familyFileId(file);
 }
 
 function fileTitle(file: ConfigFamilyFile): string {
   return familyFileTitle(props.family, file, props.hullNames);
 }
 
-function fileCompanion(file: ConfigFamilyFile): string {
-  return familyFileCompanion(props.family, file);
-}
-
-const sortedFiles = computed(() =>
-  [...props.files].sort((left, right) => {
-    const leftId = fileId(left);
-    const rightId = fileId(right);
-    const companionCompare = fileCompanion(left).localeCompare(fileCompanion(right));
-    return companionCompare || leftId.localeCompare(rightId);
-  }),
-);
+const sortedFiles = computed(() => [...props.files].sort((left, right) => compareFamilyFiles(props.family, left, right)));
 
 async function openCreateDialog() {
   createModRoot.value = props.modRoot;

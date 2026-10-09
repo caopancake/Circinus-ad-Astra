@@ -1,76 +1,36 @@
+import { entityTargetFixture } from '@/test/entity-target';
 import { describe, expect, it } from 'vitest';
-import type { SkinFile, VariantFile } from '@/shared/types';
+import type { ConfigFamilyFile } from '@/shared/types';
 import { familyFileCompanion, familyFileId, familyFileTitle, skinFamily, variantFamily } from './config-entity-families';
 
-function variantFixture(overrides: Partial<VariantFile> = {}): VariantFile {
+function variantFixture(overrides: Partial<ConfigFamilyFile> = {}): ConfigFamilyFile {
   return {
     baseVersions: [],
-    variantId: 'v1',
-    hullId: 'h1',
+    target: entityTargetFixture('variant', 'v1'),
+    id: 'v1',
     path: '',
     relPath: '',
     data: { variantId: 'v1', hullId: 'h1' },
-    weaponGroupCount: 0,
-    hullModCount: 0,
-    permaModCount: 0,
-    wingCount: overrides.wingCount ?? 0,
     ...overrides,
   };
 }
 
-function skinFixture(overrides: Partial<SkinFile> = {}): SkinFile {
+function skinFixture(overrides: Partial<ConfigFamilyFile> = {}): ConfigFamilyFile {
   return {
     baseVersions: [],
-    skinHullId: 'sk1',
-    baseHullId: 'h1',
+    target: entityTargetFixture('skin', 'sk1'),
+    id: 'sk1',
     path: '',
     relPath: '',
     data: { skinHullId: 'sk1', baseHullId: 'h1' },
-    builtInModCount: 0,
-    builtInWeaponCount: 0,
-    builtInWingCount: 0,
-    weaponSlotChangeCount: 0,
-    engineSlotChangeCount: 0,
     ...overrides,
   };
 }
 
 describe('familyFileId', () => {
-  it('reads the family id field from the file data', () => {
-    expect(
-      familyFileId(variantFamily, {
-        baseVersions: [],
-        data: { variantId: 'v1' },
-        relPath: '',
-      }),
-    ).toBe('v1');
-    expect(
-      familyFileId(skinFamily, {
-        baseVersions: [],
-        data: { skinHullId: 'sk1' },
-        relPath: '',
-      }),
-    ).toBe('sk1');
-  });
-
-  it('falls back to an empty string for missing id fields', () => {
-    expect(
-      familyFileId(variantFamily, {
-        baseVersions: [],
-        data: {},
-        relPath: '',
-      }),
-    ).toBe('');
-  });
-
-  it('stringifies non-string id values', () => {
-    expect(
-      familyFileId(variantFamily, {
-        baseVersions: [],
-        data: { variantId: 42 },
-        relPath: '',
-      }),
-    ).toBe('42');
+  it('keeps loaded identity while the draft ID changes', () => {
+    expect(familyFileId(variantFixture({ data: { variantId: 'next' } }))).toBe('v1');
+    expect(familyFileId(skinFixture({ data: { skinHullId: 'next' } }))).toBe('sk1');
   });
 });
 
@@ -94,8 +54,8 @@ describe('familyFileTitle', () => {
 describe('familyFileCompanion', () => {
   it('reads the companion field with hull id semantics per family', () => {
     expect(familyFileCompanion(variantFamily, variantFixture())).toBe('h1');
-    expect(familyFileCompanion(skinFamily, skinFixture({ baseHullId: 'h9' }))).toBe('h9');
-    expect(familyFileCompanion(skinFamily, skinFixture({ baseHullId: '' }))).toBe('');
+    expect(familyFileCompanion(skinFamily, skinFixture({ data: { baseHullId: 'h9' } }))).toBe('h9');
+    expect(familyFileCompanion(skinFamily, skinFixture({ data: { baseHullId: '' } }))).toBe('');
   });
 });
 

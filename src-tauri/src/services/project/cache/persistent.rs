@@ -4,7 +4,7 @@ use crate::{
         forward_slash_path, read_text_bytes_no_bom, read_utf8_no_bom, validate_walk_entry,
         write_utf8_no_bom,
     },
-    models::CsvTableKey,
+    models::{CsvTableKey, LoadedSpecRecord},
     parsers::parse_persisted_json,
 };
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ use walkdir::WalkDir;
 
 use super::super::model::{CoreCache, SpecBundle, csv_table_specs};
 
-const CACHE_FORMAT_VERSION: u32 = 3;
+const CACHE_FORMAT_VERSION: u32 = 4;
 const CACHE_DIRECTORY: &str = "project-index-cache";
 const MOD_INDEX_DIRECTORY: &str = "mods";
 const CORE_INDEX_DIRECTORY: &str = "core";
@@ -36,7 +36,7 @@ static CORE_FINGERPRINT_CACHE: LazyLock<Mutex<BTreeMap<String, SourceFingerprint
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct ProjectIndex {
     pub mod_info: Option<Value>,
-    pub faction_files: BTreeMap<String, Value>,
+    pub faction_files: BTreeMap<String, LoadedSpecRecord>,
     pub tag_map: HashMap<String, String>,
     pub mission_count: usize,
     pub spec_bundle: SpecBundle,
@@ -238,19 +238,31 @@ fn core_fingerprint(core_dir: &Path) -> AppResult<SourceFingerprint> {
 
 pub(crate) fn session_source_files(root: &Path) -> AppResult<Vec<(String, PathBuf)>> {
     let mut files = Vec::new();
-    collect_exact_file(root, "mod_info.json", &mut files);
-    collect_exact_file(root, "data/world/factions/factions.csv", &mut files);
-    collect_exact_file(root, "data/missions/mission_list.csv", &mut files);
+    collect_exact_file(root, "mod_info.json", &mut files)?;
+    collect_exact_file(root, "data/world/factions/factions.csv", &mut files)?;
+    collect_exact_file(root, "data/missions/mission_list.csv", &mut files)?;
     for spec in csv_table_specs() {
-        collect_exact_file(root, spec.rel_path, &mut files);
+        collect_exact_file(root, spec.rel_path, &mut files)?;
     }
     collect_extension_files(root, "data/world", &["faction"], &mut files)?;
+    let boundary = crate::io::FsRootBoundary::new(root, "project sources")?;
+    for entry in crate::io::read_faction_index(root)? {
+        let relative = forward_slash_path(
+            entry
+                .path
+                .strip_prefix(boundary.root())
+                .expect("faction source belongs to its root"),
+        );
+        collect_exact_file(root, &relative, &mut files)?;
+    }
     collect_extension_files(root, "data/hulls", &["ship", "skin"], &mut files)?;
     collect_extension_files(root, "data/weapons", &["wpn"], &mut files)?;
     collect_extension_files(root, "data/weapons/proj", &["proj"], &mut files)?;
     collect_extension_files(root, "data/variants", &["variant"], &mut files)?;
     collect_extension_files(root, "data/shipsystems", &["system"], &mut files)?;
     collect_extension_files(root, "data/characters/skills", &["skill"], &mut files)?;
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    files.dedup_by(|left, right| left.0 == right.0);
     Ok(files)
 }
 
@@ -260,13 +272,19 @@ fn projectile_source_files(root: &Path) -> AppResult<Vec<(String, PathBuf)>> {
     Ok(files)
 }
 
-fn collect_exact_file(root: &Path, rel_path: &str, files: &mut Vec<(String, PathBuf)>) {
-    let path = root.join(rel_path);
+fn collect_exact_file(
+    root: &Path,
+    rel_path: &str,
+    files: &mut Vec<(String, PathBuf)>,
+) -> AppResult<()> {
+    let boundary = crate::io::FsRootBoundary::new(root, "project source root")?;
+    let path = boundary.resolve_relative(rel_path, "project source file")?;
     if path.exists() {
         files.push((rel_path.to_string(), path));
     } else {
         files.push((format!("{rel_path}:missing"), path));
     }
+    Ok(())
 }
 
 fn collect_extension_files(
@@ -275,7 +293,8 @@ fn collect_extension_files(
     extensions: &[&str],
     files: &mut Vec<(String, PathBuf)>,
 ) -> AppResult<()> {
-    let dir = root.join(rel_dir);
+    let boundary = crate::io::FsRootBoundary::new(root, "project source root")?;
+    let dir = boundary.resolve_relative(rel_dir, "project source directory")?;
     if !dir.exists() {
         return Ok(());
     }
@@ -304,7 +323,7 @@ fn collect_extension_files(
         {
             continue;
         }
-        let rel_path = path.strip_prefix(root).map_err(|error| {
+        let rel_path = path.strip_prefix(boundary.root()).map_err(|error| {
             AppError::message(
                 "path.outside_root",
                 format!(

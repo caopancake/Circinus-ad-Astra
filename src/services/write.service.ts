@@ -18,7 +18,7 @@ import {
 } from '@/shared/api/write-api';
 import type {
   AssociatedFileChange,
-  AssociatedSpecChange,
+  AssociatedSpecWrite,
   CsvRowPatch,
   DeleteIndexedConfigEntityWrite,
   DeleteSkinEntityWrite,
@@ -26,7 +26,7 @@ import type {
   FileChangeReplayDirection,
   IndexedConfigEntityWrite,
   JsonWriteOptions,
-  EditorSpecKind,
+  EntityEditTarget,
   RowData,
   SkinEntityWrite,
   TableKey,
@@ -39,7 +39,7 @@ export async function writeCsvPatch(
   modRoot: string,
   table: TableKey,
   patches: CsvRowPatch[],
-  associatedSpecs: AssociatedSpecChange[],
+  associatedSpecs: AssociatedSpecWrite[],
   jsonWrite?: JsonWriteOptions,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
@@ -69,13 +69,12 @@ export async function writeTranscodedFile(
 export async function writeEditorSpec(
   sessionId: string,
   modRoot: string,
-  kind: EditorSpecKind,
-  id: string,
+  target: EntityEditTarget,
   data: RowData,
   jsonWrite?: JsonWriteOptions,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  return saveEditorSpec(sessionId, modRoot, kind, id, data, jsonWrite, baseVersions);
+  return saveEditorSpec(sessionId, modRoot, target, data, jsonWrite, baseVersions);
 }
 
 export async function writeModInfo(

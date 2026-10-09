@@ -198,7 +198,6 @@ mod tests {
     #[test]
     fn ensure_session_table_rows_rejects_unknown_table() {
         let mut session = ProjectSession {
-            source_entities: BTreeMap::new(),
             source_versions: BTreeMap::new(),
             manifest: ProjectManifest {
                 base_versions: Vec::new(),
@@ -248,7 +247,6 @@ mod tests {
         )
         .unwrap();
         let mut session = ProjectSession {
-            source_entities: BTreeMap::new(),
             source_versions: BTreeMap::new(),
             manifest: ProjectManifest {
                 base_versions: Vec::new(),

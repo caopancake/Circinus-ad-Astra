@@ -82,7 +82,8 @@ function writeResult(changes: { path: string }[]): WriteResult {
     history: { revision: 1, undoStack: [], redoStack: [] },
     changes: changes.map((change) => ({
       kind: 'file' as const,
-      path: change.path,
+      beforePath: change.path,
+      afterPath: change.path,
       beforeExists: true,
       beforeText: null,
       beforeDataBase64: null,
@@ -100,6 +101,7 @@ function writeResult(changes: { path: string }[]): WriteResult {
       queryScopes: [],
       session: false,
     },
+    identityChanges: [],
     keyMap: [],
     refreshedEntity: null,
   };
@@ -160,7 +162,7 @@ describe('refreshProjectSessionAfterWrite', () => {
     mocks.requestProjectSessionRefresh.mockImplementationOnce(() => new Promise((resolve) => (releaseFirst = resolve)));
     mocks.requestProjectSessionRefresh.mockImplementation(async (_session, changes: WriteResult['changes']) => ({
       ...refreshResult('C:/mods/alpha', 's1'),
-      invalidation: { ...refreshResult('C:/mods/alpha', 's1').invalidation, paths: changes.map((change) => change.path) },
+      invalidation: { ...refreshResult('C:/mods/alpha', 's1').invalidation, paths: changes.map((change) => change.afterPath) },
     }));
     const writes = ['first', 'second', 'third'].map((name) =>
       refreshProjectSessionAfterWrite('C:/mods/alpha', writeResult([{ path: `${name}.ship` }]), 's1'),

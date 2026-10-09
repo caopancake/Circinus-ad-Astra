@@ -1,7 +1,27 @@
-import { querySessionCsvRowPreview, querySessionSourceOptions, querySessionTableWindow } from '@/services/query.service';
+import {
+  querySessionCsvRowPreview,
+  querySessionSourceOptions,
+  querySessionTableWindow,
+  querySessionEntityEditTarget,
+  querySessionEntityIdentityIntent,
+} from '@/services/query.service';
 import { queryResourceDataUrls } from '@/services/resource-cache.service';
 import { recordPerformance } from '@/shared/runtime/performance';
-import type { CsvFactionFilter, CsvTableWindow, TableKey } from '@/shared/types';
+import type { AssociatedSpecChange, CsvFactionFilter, CsvTableWindow, TableKey } from '@/shared/types';
+import { associatedSpecKind } from '@/domain/tables/associated-specs';
+
+export async function captureAssociatedSpecTarget(sessionId: string, table: TableKey, change: AssociatedSpecChange) {
+  const kind = associatedSpecKind(table)!;
+  const sourceId = change.action === 'rename' ? change.previousId : change.action === 'delete' ? change.id : change.create.id;
+  const nextId = change.action === 'delete' ? change.id : change.create.id;
+  const info = await querySessionEntityEditTarget(sessionId, kind, sourceId);
+  const intent = change.action === 'delete' ? null : await querySessionEntityIdentityIntent(sessionId, info.target, nextId);
+  return {
+    target: info.target,
+    nextWrite: intent?.nextWrite ?? info.target.write,
+    versions: [...info.baseVersions, ...(intent ? [intent.destinationVersion] : [])],
+  };
+}
 
 export function queryTableWindow(
   sessionId: string,

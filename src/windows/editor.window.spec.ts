@@ -13,10 +13,10 @@ vi.mock('@/windows/managed.window', () => ({
 
 import { openEditorWindow } from './editor.window';
 import type { EditorWindowRequest } from './editor.window';
+import type { WindowIdentity } from '@/shared/types';
 
 interface ManagedWindowCall {
-  labelPrefix: string;
-  singletonKey: string;
+  identity: WindowIdentity;
   title: string;
   urlParams: Record<string, string | undefined>;
   size: { height: number; minHeight: number; minWidth: number; width: number };
@@ -55,8 +55,7 @@ describe('openEditorWindow', () => {
     await openEditorWindow(baseRequest);
     expect(mocks.openManagedWindow).toHaveBeenCalledTimes(1);
     const request = firstWindowCall();
-    expect(request.labelPrefix).toBe('editor-ship');
-    expect(request.singletonKey).toBe(JSON.stringify(['s1', 'ship', 'C:/mods/alpha', 'XY']));
+    expect(request.identity).toEqual({ type: 'spec', sessionId: 's1', kind: 'ship', modRoot: 'C:/mods/alpha', id: 'XY' });
     expect(request.title).toBe('舰船编辑器 - XY');
     expect(request.size).toMatchObject({ width: 1160, height: 760 });
     expect(request.urlParams).toMatchObject({
@@ -75,7 +74,7 @@ describe('openEditorWindow', () => {
     await openEditorWindow(baseRequest);
     await openEditorWindow({ ...baseRequest, sessionId: 's2' });
     const calls = mocks.openManagedWindow.mock.calls as unknown as Array<[ManagedWindowCall]>;
-    expect(calls[0]![0].singletonKey).not.toBe(calls[1]![0].singletonKey);
+    expect(calls[0]![0].identity).not.toEqual(calls[1]![0].identity);
     expect(calls[1]![0].urlParams.sessionId).toBe('s2');
   });
 

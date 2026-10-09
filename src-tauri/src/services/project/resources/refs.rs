@@ -2,8 +2,8 @@ use super::super::cache::{lock_registry, lock_session, media, session_handle};
 use super::super::model::string_field;
 use super::sprites;
 use crate::errors::{AppError, AppResult};
-use crate::models::{ResourceOwnerKind, ResourceRef, ResourceSource, SkinFile};
-use serde_json::{Value, json};
+use crate::models::{LoadedSpecRecord, ResourceOwnerKind, ResourceRef, ResourceSource, SkinFile};
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -94,7 +94,7 @@ pub(in crate::services::project) fn resource_cache_key(resource: &ResourceRef) -
 
 pub(in crate::services::project) fn skin_resource_ref(
     source: ResourceSource,
-    ship_files: &BTreeMap<String, Value>,
+    ship_files: &BTreeMap<String, LoadedSpecRecord>,
     skin: &SkinFile,
 ) -> Option<ResourceRef> {
     string_field(&skin.data, "spriteName")
@@ -110,7 +110,7 @@ pub(in crate::services::project) fn skin_resource_ref(
         .or_else(|| {
             ship_files
                 .get(&skin.base_hull_id)
-                .and_then(|ship| string_field(ship, "spriteName"))
+                .and_then(|ship| string_field(&ship.data, "spriteName"))
                 .map(|sprite| {
                     resource_ref(
                         source,
@@ -143,7 +143,7 @@ pub(in crate::services::project) fn resource_ref(
 mod tests {
     use super::*;
     use crate::services::project::definitions::table_definitions;
-    use serde_json::Map;
+    use serde_json::{Map, Value};
 
     #[test]
     fn resource_cache_key_uses_complete_resource_identity() {

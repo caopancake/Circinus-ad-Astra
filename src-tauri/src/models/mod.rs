@@ -2,9 +2,11 @@ pub mod app_log;
 pub mod app_settings;
 pub mod command_payloads;
 pub mod directory_opening;
+pub mod entity_target;
 pub mod mod_creation;
 pub mod project;
 pub mod text;
+pub mod window;
 pub mod workspace_persistence;
 pub mod write;
 
@@ -13,9 +15,11 @@ use serde::{Deserialize, Deserializer};
 pub use app_log::*;
 pub use app_settings::*;
 pub use directory_opening::*;
+pub use entity_target::*;
 pub use mod_creation::*;
 pub use project::*;
 pub(crate) use text::*;
+pub use window::*;
 pub use workspace_persistence::*;
 pub use write::*;
 

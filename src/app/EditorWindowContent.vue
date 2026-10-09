@@ -92,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import ShipEditor from '@/app/components/editors/ShipEditor.vue';
 import WeaponEditor from '@/app/components/editors/WeaponEditor.vue';
 import ProjectileEditor from '@/app/components/editors/ProjectileEditor.vue';
@@ -120,9 +120,9 @@ const appLog = useAppLog();
 const draftSnapshot = ref<RowData | null>(parseDraftSnapshot(params.get('draftSnapshot'), appLog.record));
 const settings = useSettingsStore();
 const feedback = useAppFeedback();
-const target = computed(() => (sessionId && modRoot && id ? { sessionId, modRoot, id } : null));
 
 const {
+  currentTarget: target,
   shipEditorData,
   weaponEditorData,
   projectileEditorData,

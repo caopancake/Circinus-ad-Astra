@@ -15,7 +15,8 @@ use crate::{
 
 #[tauri::command(async)]
 pub fn close_project_session(payload: CloseProjectSessionPayload) -> Result<(), AppError> {
-    services::project::close_project_session(payload.session_id)
+    services::project::close_project_session(payload.session_id.clone())?;
+    services::windows::release_session(&payload.session_id)
 }
 
 #[tauri::command(async)]
@@ -55,10 +56,21 @@ pub fn query_entity(payload: QueryEntityPayload) -> Result<Option<EntityData>, A
 }
 
 #[tauri::command(async)]
-pub fn query_entity_base_versions(
+pub fn query_entity_edit_target(
     payload: QueryEntityPayload,
-) -> Result<Vec<crate::models::FileVersion>, AppError> {
-    services::project::query_entity_base_versions(&payload.session_id, payload.kind, &payload.id)
+) -> Result<crate::models::EntityEditInfo, AppError> {
+    services::project::query_entity_edit_target(&payload.session_id, payload.kind, &payload.id)
+}
+
+#[tauri::command(async)]
+pub fn query_entity_identity_intent(
+    payload: crate::models::command_payloads::EntityIdentityIntentPayload,
+) -> Result<crate::models::EntityIdentityIntent, AppError> {
+    services::project::query_entity_identity_intent(
+        &payload.session_id,
+        &payload.source,
+        &payload.next_id,
+    )
 }
 
 #[tauri::command(async)]

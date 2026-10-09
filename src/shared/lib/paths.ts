@@ -1,9 +1,12 @@
 export function normalizeFsPath(path: string): string {
-  return path
+  const normalized = path
     .replace(/\\/g, '/')
+    .replace(/^\/\/\?\/UNC\//i, '//')
     .replace(/^\/\/\?\//, '')
     .replace(/\/+$/, '')
     .toLowerCase();
+  const prefix = normalized.startsWith('//') ? '//' : normalized.startsWith('/') ? '/' : '';
+  return prefix + normalized.split('/').filter(Boolean).join('/');
 }
 
 export function normalizeRelPath(path: string): string {

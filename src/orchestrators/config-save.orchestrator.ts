@@ -1,4 +1,4 @@
-import type { AppFeedback, SavedConfig, IndexedConfigKind, SkinFile, VariantFile, WriteResult } from '@/shared/types';
+import type { AppFeedback, SavedConfig, IndexedConfigKind, ConfigFamilyFile, WriteResult } from '@/shared/types';
 import type { RowData } from '@/shared/types';
 import {
   writeCreateIndexedConfigEntity,
@@ -13,10 +13,40 @@ import {
   writeVariantEntity,
 } from '@/services/write.service';
 import { createDefaultSkin, createDefaultVariant, indexedConfigHistoryLabel } from '@/domain/config/config-entities';
-import { indexedConfigEntityData, skinEntityData, variantEntityData } from '@/domain/config/config-records';
+import { indexedConfigEntityData, configFamilyEntityData } from '@/domain/config/config-records';
 import { useProjectStore } from '@/stores/project.store';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
+import { captureConfigIdentityIntent } from '@/services/config-entity.service';
+import { reserveFileIdentityIntent } from '@/orchestrators/entity-identity.orchestrator';
+import { releaseNativeWindowTargets } from '@/services/window.service';
+import { captureIdentityVersions } from '@/domain/editors/entity-identity';
+
+async function capturedVersions(
+  sessionId: string,
+  modRoot: string,
+  kind: import('@/shared/types').EntityKind,
+  sourceId: string,
+  nextId: string,
+  baseVersions: import('@/shared/types').FileVersion[],
+  create = false,
+) {
+  const captured = await captureConfigIdentityIntent(sessionId, kind, sourceId, nextId);
+  await reserveFileIdentityIntent(sessionId, modRoot, captured.intent);
+  const versions = create ? captured.info.baseVersions : baseVersions;
+  return captureIdentityVersions(versions, captured.intent.destinationVersion);
+}
+
+async function retainConfigReservation<T>(write: Promise<T>): Promise<T> {
+  try {
+    const result = await write;
+    if (result === null) await releaseNativeWindowTargets();
+    return result;
+  } catch (error) {
+    await releaseNativeWindowTargets();
+    throw error;
+  }
+}
 
 export async function saveModInfoAction(
   sessionId: string,
@@ -40,11 +70,20 @@ export async function saveIndexedEntityAction(
     nextId: string;
     indexRow: RowData;
     entityData: RowData;
-    deletePreviousTarget: boolean;
   },
   feedback?: AppFeedback,
 ): Promise<SavedConfig<import('@/shared/types').IndexedConfigEntityData> | null> {
-  const result = await runConfirmedJsonWrite(feedback, (options) => writeIndexedConfigEntity(write, options));
+  const versions = await capturedVersions(
+    write.sessionId,
+    write.modRoot,
+    write.kind,
+    write.previousId ?? write.nextId,
+    write.nextId,
+    write.baseVersions,
+  );
+  const result = await retainConfigReservation(
+    runConfirmedJsonWrite(feedback, (options) => writeIndexedConfigEntity({ ...write, baseVersions: versions }, options)),
+  );
   if (!result) return null;
   const entity = indexedConfigEntityData(result);
   return { entity, receipt: result };
@@ -59,9 +98,9 @@ export async function createIndexedEntityAction(write: {
   nextId: string;
   indexRow: RowData;
   entityData: RowData;
-  deletePreviousTarget: false;
 }): Promise<string> {
-  const result = await writeCreateIndexedConfigEntity({ ...write, baseVersions: [] });
+  const baseVersions = await capturedVersions(write.sessionId, write.modRoot, write.kind, write.nextId, write.nextId, [], true);
+  const result = await retainConfigReservation(writeCreateIndexedConfigEntity({ ...write, baseVersions }));
   const entity = indexedConfigEntityData(result);
   await completeConfigSave(write.modRoot, write.sessionId, result, indexedConfigHistoryLabel(write.kind, 'create', entity.entityId));
   return entity.entityId;
@@ -89,7 +128,8 @@ export async function saveVariantAction(
   relPath: string,
   feedback?: AppFeedback,
   baseVersions: import('@/shared/types').FileVersion[] = [],
-): Promise<SavedConfig<VariantFile> | null> {
+): Promise<SavedConfig<ConfigFamilyFile> | null> {
+  baseVersions = await capturedVersions(sessionId, modRoot, 'variant', previousId ?? variantId, variantId, baseVersions);
   const write = {
     baseVersions,
     sessionId,
@@ -99,24 +139,32 @@ export async function saveVariantAction(
     data,
     relPath,
   };
-  const result = await runConfirmedJsonWrite(feedback, (options) => writeVariantEntity(write, options));
+  const result = await retainConfigReservation(runConfirmedJsonWrite(feedback, (options) => writeVariantEntity(write, options)));
   if (!result) return null;
-  const variant = variantEntityData(result);
+  const variant = configFamilyEntityData(result);
   return { entity: variant, receipt: result };
 }
 
-export async function createVariantAction(sessionId: string, modRoot: string, hullId: string, variantId: string): Promise<VariantFile> {
-  const result = await writeCreateVariantEntity({
-    baseVersions: [],
-    sessionId,
-    modRoot,
-    previousId: null,
-    relPath: null,
-    nextId: variantId,
-    data: createDefaultVariant(hullId, variantId),
-  });
-  const variant = variantEntityData(result);
-  await completeConfigSave(modRoot, sessionId, result, `创建装配 ${variant.variantId}`);
+export async function createVariantAction(
+  sessionId: string,
+  modRoot: string,
+  hullId: string,
+  variantId: string,
+): Promise<ConfigFamilyFile> {
+  const baseVersions = await capturedVersions(sessionId, modRoot, 'variant', variantId, variantId, [], true);
+  const result = await retainConfigReservation(
+    writeCreateVariantEntity({
+      baseVersions,
+      sessionId,
+      modRoot,
+      previousId: null,
+      relPath: null,
+      nextId: variantId,
+      data: createDefaultVariant(hullId, variantId),
+    }),
+  );
+  const variant = configFamilyEntityData(result);
+  await completeConfigSave(modRoot, sessionId, result, `创建装配 ${variant.id}`);
   return variant;
 }
 
@@ -141,7 +189,8 @@ export async function saveSkinAction(
   relPath: string,
   feedback?: AppFeedback,
   baseVersions: import('@/shared/types').FileVersion[] = [],
-): Promise<SavedConfig<SkinFile> | null> {
+): Promise<SavedConfig<ConfigFamilyFile> | null> {
+  baseVersions = await capturedVersions(sessionId, modRoot, 'skin', previousId ?? skinHullId, skinHullId, baseVersions);
   const write = {
     baseVersions,
     sessionId,
@@ -151,24 +200,32 @@ export async function saveSkinAction(
     data,
     relPath,
   };
-  const result = await runConfirmedJsonWrite(feedback, (options) => writeSkinEntity(write, options));
+  const result = await retainConfigReservation(runConfirmedJsonWrite(feedback, (options) => writeSkinEntity(write, options)));
   if (!result) return null;
-  const skin = skinEntityData(result);
+  const skin = configFamilyEntityData(result);
   return { entity: skin, receipt: result };
 }
 
-export async function createSkinAction(sessionId: string, modRoot: string, baseHullId: string, skinHullId: string): Promise<SkinFile> {
-  const result = await writeCreateSkinEntity({
-    baseVersions: [],
-    sessionId,
-    modRoot,
-    previousId: null,
-    relPath: null,
-    nextId: skinHullId,
-    data: createDefaultSkin(baseHullId, skinHullId),
-  });
-  const skin = skinEntityData(result);
-  await completeConfigSave(modRoot, sessionId, result, `创建舰船皮肤 ${skin.skinHullId}`);
+export async function createSkinAction(
+  sessionId: string,
+  modRoot: string,
+  baseHullId: string,
+  skinHullId: string,
+): Promise<ConfigFamilyFile> {
+  const baseVersions = await capturedVersions(sessionId, modRoot, 'skin', skinHullId, skinHullId, [], true);
+  const result = await retainConfigReservation(
+    writeCreateSkinEntity({
+      baseVersions,
+      sessionId,
+      modRoot,
+      previousId: null,
+      relPath: null,
+      nextId: skinHullId,
+      data: createDefaultSkin(baseHullId, skinHullId),
+    }),
+  );
+  const skin = configFamilyEntityData(result);
+  await completeConfigSave(modRoot, sessionId, result, `创建舰船皮肤 ${skin.id}`);
   return skin;
 }
 
@@ -185,6 +242,6 @@ export async function deleteSkinAction(
 }
 
 export async function completeConfigSave(modRoot: string, sessionId: string, result: WriteResult, label: string) {
-  if (result.changes.length === 0) return;
-  await completeSavedWrite({ modRoot, sessionId, result, label }, useProjectStore());
+  await releaseNativeWindowTargets();
+  if (result.changes.length > 0) await completeSavedWrite({ modRoot, sessionId, result, label }, useProjectStore());
 }
