@@ -8,7 +8,7 @@ import type { CreatedMod, CreateModRequest } from '@/shared/types';
 
 export interface CreatedModProject {
   modName: string;
-  warnings: string[];
+  warnings: import('@/shared/types').FeedbackNotice[];
 }
 
 export async function createModProject(request: CreateModRequest): Promise<CreatedMod> {

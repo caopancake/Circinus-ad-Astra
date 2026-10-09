@@ -69,11 +69,12 @@ pub fn load_workspace(app_data_dir: &Path) -> AppResult<PersistedWorkspace> {
         return Ok(PersistedWorkspace::default());
     }
     let text = read_utf8_no_bom(&path)?;
-    serde_json::from_str::<PersistedWorkspace>(&text).map_err(|error| {
+    crate::parsers::parse_persisted_json::<PersistedWorkspace>(&text).map_err(|error| {
         AppError::context(
             format!("解析工作区状态文件失败 ({})", path.display()),
-            error.into(),
+            error,
         )
+        .at_path(&path)
     })
 }
 

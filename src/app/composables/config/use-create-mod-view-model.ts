@@ -5,6 +5,7 @@ import { pickDirectoryDialog } from '@/shared/runtime/dialog.runtime';
 import { createDefaultNewModTemplate, validateNewModTemplate } from '@/domain/mod-creation/new-mod-template';
 import type { NewModDestination, NewModTemplate } from '@/shared/types';
 import { useWorkspaceStore } from '@/stores/workspace.store';
+import { warningNotice } from '@/shared/lib/errors';
 
 export function useCreateModViewModel() {
   const workspace = useWorkspaceStore();
@@ -41,7 +42,7 @@ export function useCreateModViewModel() {
     }
     const validationError = validateNewModTemplate(template);
     if (validationError) {
-      feedback.warning(validationError);
+      feedback.warning(warningNotice(validationError, 'mod_creation.template_invalid', `New Mod template invalid: ${validationError}`));
       return false;
     }
     saving.value = true;

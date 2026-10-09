@@ -1,6 +1,6 @@
 use crate::{
     errors::{AppError, AppResult},
-    models::{CommittedProjection, CommittedSessionUpdate, FileChangeRecord, SynchronizationError},
+    models::{CommittedProjection, CommittedSessionUpdate, FileChangeRecord},
 };
 use std::{
     collections::BTreeMap,
@@ -65,10 +65,7 @@ pub(super) fn project_commit(
             Err(error) => {
                 crate::services::project::mark_projection_pending(&session_id)?;
                 CommittedProjection::Pending {
-                    error: SynchronizationError {
-                        code: error.code().to_string(),
-                        message: error.to_string(),
-                    },
+                    error: error.diagnostic(),
                 }
             }
         };

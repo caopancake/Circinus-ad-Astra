@@ -33,7 +33,7 @@
       </li>
     </ul>
     <footer class="mission-file-list-footer config-entity-list-footer">
-      <n-button size="small" block @click="openCreateDialog">新建战役</n-button>
+      <n-button size="small" block :loading="actionRunning" @click="openCreateDialog">新建战役</n-button>
     </footer>
 
     <n-modal
@@ -42,6 +42,7 @@
       title="新建战役"
       positive-text="创建"
       negative-text="取消"
+      :positive-button-props="{ loading: actionRunning, disabled: actionRunning }"
       @positive-click="doCreateMission"
     >
       <n-input v-model:value="newMissionId" placeholder="输入战役 ID（英文目录名）" autofocus />
@@ -50,26 +51,22 @@
 </template>
 
 <script setup lang="ts">
-import { h, onMounted, ref, watch } from 'vue';
+import { h, ref, watch } from 'vue';
 import { NCheckbox } from 'naive-ui/es/checkbox';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
-import { configEntityIdInvalidMessage } from '@/domain/config/config-entities';
 import { useVisibleResourceMedia } from '@/app/composables/use-visible-resource-media';
 import type { ResourceRef } from '@/shared/types';
 
 const props = defineProps<{
   selectedId: string | null;
-  refreshToken: number;
+  actionRunning: boolean;
   missions: Array<{ id: string }>;
   missionIconRefs: Record<string, ResourceRef | null>;
   modRoot: string | null;
   sessionId: string | null;
   listLoadStartedAt: number;
-  refreshMissionList: () => Promise<void>;
   createMission: (sessionId: string, modRoot: string, id: string) => Promise<boolean>;
   deleteMission: (sessionId: string, modRoot: string, id: string, deleteDirectory: boolean) => Promise<boolean>;
-  missionExists: (id: string) => boolean;
-  isValidMissionId: (id: string) => boolean;
 }>();
 const emit = defineEmits<{ select: [missionId: string | null] }>();
 
@@ -89,17 +86,6 @@ function missionIcon(id: string): string {
   return mediaSrc(props.missionIconRefs[id]);
 }
 
-async function refreshList() {
-  try {
-    await props.refreshMissionList();
-    if (!props.selectedId && props.missions[0]) emit('select', props.missions[0].id);
-    if (props.selectedId && !props.missions.some((mission) => mission.id === props.selectedId))
-      emit('select', props.missions[0]?.id ?? null);
-  } catch (error) {
-    feedback.error(error, '加载战役列表失败');
-  }
-}
-
 function openCreateDialog() {
   createModRoot.value = props.modRoot;
   createSessionId.value = props.sessionId;
@@ -113,23 +99,8 @@ async function doCreateMission() {
   const targetSessionId = createSessionId.value;
   if (!targetModRoot || !targetSessionId) return false;
   const id = newMissionId.value.trim();
-  if (!id) {
-    feedback.warning('战役 ID 不能为空');
-    return false;
-  }
-  if (!props.isValidMissionId(id)) {
-    feedback.warning(configEntityIdInvalidMessage('战役 ID', id), 'config.id_invalid');
-    return false;
-  }
-  if (props.missionExists(id)) {
-    feedback.warning(`战役 "${id}" 已存在`);
-    return false;
-  }
   if (!(await props.createMission(targetSessionId, targetModRoot, id))) return false;
   showCreateDialog.value = false;
-  if (props.modRoot !== targetModRoot || props.sessionId !== targetSessionId) return true;
-  await refreshList();
-  emit('select', id);
   return true;
 }
 
@@ -164,23 +135,10 @@ function confirmDeleteMission(id: string) {
 async function deleteMissionTarget(deleteSessionId: string, deleteModRoot: string, id: string, deleteDirectory: boolean) {
   try {
     await props.deleteMission(deleteSessionId, deleteModRoot, id, deleteDirectory);
-    if (props.modRoot !== deleteModRoot || props.sessionId !== deleteSessionId) return;
-    await refreshList();
-    const nextId = props.missions[0]?.id ?? null;
-    if (props.selectedId === id) emit('select', nextId);
   } catch (error) {
     feedback.error(error, '删除战役失败');
   }
 }
-
-onMounted(() => {
-  refreshList();
-});
-
-watch(
-  () => props.refreshToken,
-  () => refreshList(),
-);
 
 watch(
   () => props.missions,

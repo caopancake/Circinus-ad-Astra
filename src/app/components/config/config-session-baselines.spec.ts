@@ -265,6 +265,40 @@ afterEach(() => {
 });
 
 describe('configuration page session baselines', () => {
+  it.each(['variant', 'skin', 'faction'] as const)(
+    '%s retains the dirty field after authoritative deletion and discards by confirmation',
+    async (kind) => {
+      await mountPage(kind);
+      await input().setValue('retained raw input');
+      const field = input().element;
+      if (kind === 'variant') mocks.variants.mockResolvedValue([]);
+      if (kind === 'skin') mocks.skins.mockResolvedValue([]);
+      if (kind === 'faction') mocks.factions.mockResolvedValue([]);
+      invalidateQueryCacheByProject('sA', {
+        paths: [],
+        tables: [],
+        resources: [],
+        session: false,
+        entities: [{ kind, id: null }],
+        queryScopes: [{ kind: 'entity-list', entity: { kind, id: null }, table: null, source: null, resource: null }],
+      });
+      await flushPromises();
+      expect(wrapper!.findAll('.config-entity-list-item')).toHaveLength(0);
+      expect(input().element).toBe(field);
+      expect((field as HTMLTextAreaElement).value).toBe('retained raw input');
+      const discard = wrapper!.findAll('button').find((button) => button.text() === '放弃编辑并继续')!;
+      await discard.trigger('click');
+      await flushPromises();
+      mocks.feedback.confirmWarning.mock.lastCall![0].onCancel!();
+      await flushPromises();
+      expect(input().element).toBe(field);
+      await discard.trigger('click');
+      await flushPromises();
+      mocks.feedback.confirmWarning.mock.lastCall![0].onConfirm();
+      await flushPromises();
+      expect(wrapper!.get('.config-placeholder').text()).toContain('选择一个');
+    },
+  );
   it.each(['variant', 'skin', 'faction'] as const)('%s adopts a local rename without replacing the active control', async (kind) => {
     await mountPage(kind);
     const source = kind === 'variant' ? mocks.saveVariant : kind === 'skin' ? mocks.saveSkin : mocks.saveFaction;

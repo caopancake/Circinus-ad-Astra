@@ -28,11 +28,13 @@ pub(crate) fn load_variant_files(
     for (path, data) in crate::io::walk_json_dir(&dir, "variant", "variant")? {
         let rel_path = forward_slash_relative_path(mod_root, &path);
         let file = build_variant_file(mod_root, &rel_path, &data)
-            .map_err(|error| AppError::context(path.display().to_string(), error))?;
+            .map_err(|error| AppError::context(path.display().to_string(), error).at_path(&path))?;
         if let Some(previous) =
             seen.insert(file.variant_id.clone(), path.to_string_lossy().to_string())
         {
             warnings.push(GameScanWarning {
+                code: "scan.variant_id_duplicate".to_string(),
+                location: None,
                 path: path.to_string_lossy().to_string(),
                 message: format!(
                     "重复 variantId {}，已保留第一个文件并跳过后续文件：{previous}",
@@ -65,12 +67,14 @@ pub(crate) fn load_skin_files(mod_root: &Path) -> AppResult<(Vec<SkinFile>, Vec<
     for (path, data) in crate::io::walk_json_dir(&dir, "skin", "skin")? {
         let rel_path = forward_slash_relative_path(mod_root, &path);
         let file = build_skin_file(mod_root, &rel_path, &data)
-            .map_err(|error| AppError::context(path.display().to_string(), error))?;
+            .map_err(|error| AppError::context(path.display().to_string(), error).at_path(&path))?;
         if let Some(previous) = seen.insert(
             file.skin_hull_id.clone(),
             path.to_string_lossy().to_string(),
         ) {
             warnings.push(GameScanWarning {
+                code: "scan.skin_id_duplicate".to_string(),
+                location: None,
                 path: path.to_string_lossy().to_string(),
                 message: format!(
                     "重复 skinHullId {}，已保留第一个文件并跳过后续文件：{previous}",

@@ -119,8 +119,8 @@ describe('DetailPane', () => {
       filteredRows: 1,
       rows: [{ rowKey: 'key-XY', sourceRowIndex: 0, factionId: null, data: { id: 'XY', name: 'Ruler' } }],
     } as never;
-    tables.applyTableWindow(window);
-    tables.selectRowByKey('key-XY');
+    tables.applyTableWindow({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, window);
+    tables.selectRowByKey({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, 'key-XY');
     void manifest;
 
     const pane = mountPane();
@@ -145,8 +145,8 @@ describe('DetailPane', () => {
       filteredRows: 1,
       rows: [{ rowKey: 'key-XY', sourceRowIndex: 0, factionId: null, data: { id: 'XY' } }],
     } as never;
-    tables.applyTableWindow(window);
-    tables.selectRowByKey('key-XY');
+    tables.applyTableWindow({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, window);
+    tables.selectRowByKey({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, 'key-XY');
 
     const pane = mountPane();
     const html = pane.html();
@@ -166,8 +166,8 @@ describe('DetailPane', () => {
       filteredRows: 1,
       rows: [{ rowKey: 'key-c', sourceRowIndex: 0, factionId: null, data: { id: '#note' } }],
     } as never;
-    tables.applyTableWindow(window);
-    tables.selectRowByKey('key-c');
+    tables.applyTableWindow({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, window);
+    tables.selectRowByKey({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, 'key-c');
 
     const pane = mountPane();
     expect(pane.html()).toContain('#note');

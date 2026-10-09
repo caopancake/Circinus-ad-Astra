@@ -123,7 +123,7 @@ describe('useConfigMissionEditorViewModel', () => {
     await vi.waitFor(() => expect(vm.loadedMissionId.value).toBe('m1'));
     vm.draftData.value = { list: { mission: '' }, descriptor: {}, text: { content: '' } } as never;
     await vm.save();
-    expect(mocks.feedback.warning).toHaveBeenCalledWith('mission 不能为空');
+    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.objectContaining({ userMessage: 'mission 不能为空' }));
     expect(saveMission).not.toHaveBeenCalled();
   });
 
@@ -137,7 +137,7 @@ describe('useConfigMissionEditorViewModel', () => {
     } as never;
     await vm.save();
     expect(saveMission).toHaveBeenCalledWith('sess-1', 'M:/mod', 'm1', expect.anything(), expect.anything(), []);
-    expect(onSaved).toHaveBeenCalledWith('m9');
+    expect(onSaved).toHaveBeenCalledWith('m9', expect.objectContaining({ id: 'm9', data: expect.anything() }));
     expect(vm.loadedMissionId.value).toBe('m9');
     expect(mocks.feedback.error).not.toHaveBeenCalled();
   });

@@ -2,6 +2,7 @@
   <div class="config-factions-layout">
     <ConfigFactionList
       :selected-id="selectedFaction"
+      :action-running="actionRunning"
       :factions="factions"
       :faction-crest-refs="factionCrestRefs"
       :mod-root="modRoot"
@@ -12,20 +13,23 @@
       @select="selectFaction"
     />
     <ConfigFactionEditor
-      v-if="selectedFaction && factions[selectedFaction]"
+      v-if="selectedFaction && editorFactions[selectedFaction]"
       :key="JSON.stringify([sessionId, modRoot])"
       :faction-id="selectedFaction"
-      :faction-versions="factionVersions"
+      :faction-versions="editorFactionVersions"
       :identity-handoff="identityHandoff"
       :data-revision="factionDataRevision"
       :preview-revision="factionPreviewRevision"
-      :factions="factions"
+      :factions="editorFactions"
       :mod-root="modRoot"
       :session-id="sessionId"
       :query-preview-images="queryFactionPreviewImages"
       :schema-runtime-context="schemaRuntimeContext"
       :save-faction="saveFaction"
       :delete-faction="deleteFaction"
+      :actions-locked="actionsLocked"
+      :deleted-target="deletedTarget"
+      :discard-deleted-target="discardDeletedTarget"
       @saved="onSaved"
     />
     <div v-else class="config-placeholder"><p>选择一个势力以编辑</p></div>
@@ -35,17 +39,22 @@
 <script setup lang="ts">
 import ConfigFactionList from '@/app/components/config/ConfigFactionList.vue';
 import ConfigFactionEditor from '@/app/components/config/ConfigFactionEditor.vue';
-import { useDraftTransitionConfirmation } from '@/app/composables/use-draft-transition-confirmation';
 import { useConfigFactionViewModel } from '@/app/composables/config/use-config-faction-view-model';
 
 const {
   selectedFaction,
+  selectFaction,
+  actionsLocked,
+  actionRunning,
+  deletedTarget,
+  discardDeletedTarget,
+  editorFactions,
+  editorFactionVersions,
   identityHandoff,
   factionDataRevision,
   factionPreviewRevision,
   listLoadStartedAt,
   factions,
-  factionVersions,
   factionCrestRefs,
   modRoot,
   sessionId,
@@ -56,17 +65,4 @@ const {
   queryFactionPreviewImages,
   saveFaction,
 } = useConfigFactionViewModel();
-const { confirmDraftTransition } = useDraftTransitionConfirmation();
-
-function selectFaction(factionId: string | null): void {
-  const nextFactionId = factionId ?? '';
-  if (nextFactionId === selectedFaction.value) return;
-  confirmDraftTransition(modRoot.value, {
-    title: '切换势力？',
-    content: '当前势力有未保存修改，切换后这些修改将丢失。确认继续？',
-    action: () => {
-      selectedFaction.value = nextFactionId;
-    },
-  });
-}
 </script>

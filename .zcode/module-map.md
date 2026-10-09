@@ -74,7 +74,7 @@
 - [舰船编辑器](modules/ship-editor.md)：说明 `.ship` 画布注入、槽位、引擎、shield、贴图引用选择与独立窗口保存。
 - [武器、弹体与发射预览](modules/weapon-editing.md)：说明 `.wpn` 编辑、`specClass` 分支、弹体窗口、发射预览与武器工作流链路。
 - [战术系统编辑器](modules/system-editor.md)：说明 `.system` spec、schema 表单、type 条件字段与独立窗口保存。
-- [资源与原版回退](modules/assets-core-fallback.md)：说明 `ResourceRef`、Mod/Core 优先级、data URL batch、Mod 内 PNG 引用选择与派生资源索引。
+- [资源与原版回退](modules/assets-core-fallback.md)：说明 `ResourceRef`、Mod/Core 优先级、data URL batch、PNG 引用选择、Core 字段与 graphics 状态及加载生命周期。
 - [后端文件读写与变更集](modules/rust-file-io-changeset.md)：说明 UTF-8 IO、canonical 路径、父链校验、文件或目录快照与 replay。
 - [性能基线](modules/performance-baseline.md)：说明正式计时日志、可复现样本、ProjectSession 阶段、持久化索引和入口 bundle 体积。
 - [静态检查系统](modules/static-checks.md)：说明文本、格式配置、架构静态检查与模块文档契约的入口、边界和规则自检原则。

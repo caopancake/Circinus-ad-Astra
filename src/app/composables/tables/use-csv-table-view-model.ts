@@ -25,7 +25,7 @@ export function useCsvTableViewModel() {
   const columnWidthOverrides = ref<Record<string, number>>({});
   let windowRequestId = 0;
   let sourceOptionsRequestId = 0;
-  let lastWidthTable = '';
+  let lastWidthTarget = '';
   let disposed = false;
   let refreshAfterSave = false;
   const target = computed(() =>
@@ -48,18 +48,20 @@ export function useCsvTableViewModel() {
   }
 
   async function setSearchText(text: string) {
+    const captured = target.value;
     const key = targetKey.value;
     try {
-      if ((await commitTableInput()) && key === targetKey.value) tables.searchText = text;
+      if (captured && (await commitTableInput()) && key === targetKey.value) tables.setSearchText(captured, text);
     } catch (error) {
       feedback.error(error);
     }
   }
 
   async function setFactionFilter(value: string) {
+    const captured = target.value;
     const key = targetKey.value;
     try {
-      if ((await commitTableInput()) && key === targetKey.value) tables.currentFactionOptionValue = value;
+      if (captured && (await commitTableInput()) && key === targetKey.value) tables.setFactionFilter(captured, value);
     } catch (error) {
       feedback.error(error);
     }
@@ -81,28 +83,30 @@ export function useCsvTableViewModel() {
   const effectiveTotalWidthPx = computed(() => effectiveColumns.value.reduce((sum, col) => sum + col.widthPx, 0));
 
   watch(
-    () => [project.activeSessionId, tables.currentTab, tables.searchText, tables.currentFactionOptionValue] as const,
-    async ([sessionId, table]) => {
+    () => [targetKey.value, tables.searchText, tables.currentFactionOptionValue] as const,
+    async () => {
+      const captured = target.value;
+      const identity = targetKey.value;
       windowRequestId += 1;
       clearLocalQueryState();
-      if (!sessionId) {
+      if (!captured) {
         lockedColumnWidths.value = {};
         columnWidthOverrides.value = {};
-        lastWidthTable = '';
+        lastWidthTarget = '';
         return;
       }
-      if (tables.saving || tables.currentTableLocked || tables.hasTableDirtyChanges(table)) {
-        tables.markTableExternalUpdate(table);
-        return;
-      }
-      tables.discardTableDraftForReload(table);
-      if (table !== lastWidthTable) {
+      if (identity !== lastWidthTarget) {
         lockedColumnWidths.value = {};
-        const modRoot = tables.activeModRoot;
-        columnWidthOverrides.value = modRoot ? (workspace.getColumnWidths(modRoot, table) ?? {}) : {};
-        lastWidthTable = table;
+        columnWidthOverrides.value = workspace.getColumnWidths(captured.modRoot, captured.table) ?? {};
+        lastWidthTarget = identity;
       }
+      if (tables.saving || tables.currentTableLocked || tables.hasTableDirtyChanges(captured.table)) {
+        tables.markTableExternalUpdate(captured);
+        return;
+      }
+      tables.discardTableDraftForReload(captured);
       await loadTableWindow(0, 240);
+      if (identity !== targetKey.value || disposed) return;
       await reloadVisibleSourceOptions();
       lockColumnWidthsForLoadedModel();
     },
@@ -132,7 +136,7 @@ export function useCsvTableViewModel() {
       if (tables.saving || tables.currentTableLocked) {
         refreshAfterSave = true;
       } else if (tables.hasTableDirtyChanges(tables.currentTab)) {
-        tables.markTableExternalUpdate(tables.currentTab);
+        tables.markTableExternalUpdate(target.value!);
       } else {
         void reloadCurrentTableWindow();
       }
@@ -177,11 +181,13 @@ export function useCsvTableViewModel() {
   }
 
   async function reloadCurrentTableWindow() {
-    const table = tables.currentTab;
+    const captured = target.value!;
+    const identity = targetKey.value;
     windowRequestId += 1;
     clearLocalQueryState();
-    tables.discardTableDraftForReload(table);
+    tables.discardTableDraftForReload(captured);
     await loadTableWindow(0, 240);
+    if (disposed || identity !== targetKey.value) return;
     await reloadVisibleSourceOptions();
     lockColumnWidthsForLoadedModel();
   }
@@ -251,7 +257,7 @@ export function useCsvTableViewModel() {
       ) {
         return;
       }
-      tables.applyTableWindow(window);
+      tables.applyTableWindow({ sessionId, modRoot, table }, window);
     } catch (error) {
       // Release the window key so a retry can re-query the failed window.
       loadedWindowKeys.value.delete(key);

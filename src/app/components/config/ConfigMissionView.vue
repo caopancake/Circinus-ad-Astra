@@ -2,17 +2,14 @@
   <div class="mission-view">
     <ConfigMissionList
       :selected-id="selectedMission"
-      :refresh-token="refreshToken"
+      :action-running="actionRunning"
       :missions="missionItems"
       :mission-icon-refs="missionIconRefs"
       :mod-root="modRoot"
       :session-id="sessionId"
       :list-load-started-at="listLoadStartedAt"
-      :refresh-mission-list="refreshMissionList"
       :create-mission="createMission"
       :delete-mission="deleteMission"
-      :mission-exists="missionExists"
-      :is-valid-mission-id="isValidMissionId"
       @select="selectMission"
     />
     <ConfigMissionEditor
@@ -27,6 +24,10 @@
       :query-mission-icon="queryMissionIcon"
       :save-mission="saveMission"
       :delete-mission="deleteMission"
+      :actions-locked="actionsLocked"
+      :deleted-target="deletedTarget"
+      :discard-deleted-target="discardDeletedTarget"
+      :identity-handoff="identityHandoff"
       @saved="handleSaved"
     />
     <div v-else class="config-placeholder">
@@ -38,12 +39,16 @@
 <script setup lang="ts">
 import ConfigMissionList from '@/app/components/config/ConfigMissionList.vue';
 import ConfigMissionEditor from '@/app/components/config/ConfigMissionEditor.vue';
-import { useDraftTransitionConfirmation } from '@/app/composables/use-draft-transition-confirmation';
 import { useConfigMissionViewModel } from '@/app/composables/config/use-config-mission-view-model';
 
 const {
   selectedMission,
-  refreshToken,
+  identityHandoff,
+  selectMission,
+  actionsLocked,
+  actionRunning,
+  deletedTarget,
+  discardDeletedTarget,
   missionEditorReloadToken,
   missionIconRefreshToken,
   listLoadStartedAt,
@@ -54,24 +59,8 @@ const {
   handleSaved,
   createMission,
   deleteMission,
-  refreshMissionList,
   queryMissionEditorData,
   queryMissionIcon,
-  missionExists,
-  isValidMissionId,
   saveMission,
 } = useConfigMissionViewModel();
-const { confirmDraftTransition } = useDraftTransitionConfirmation();
-
-function selectMission(missionId: string | null): void {
-  const nextMissionId = missionId ?? '';
-  if (nextMissionId === selectedMission.value) return;
-  confirmDraftTransition(modRoot.value, {
-    title: '切换战役？',
-    content: '当前战役有未保存修改，切换后这些修改将丢失。确认继续？',
-    action: () => {
-      selectedMission.value = nextMissionId;
-    },
-  });
-}
 </script>

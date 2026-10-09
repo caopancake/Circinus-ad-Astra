@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import type { CommittedWriteEvent } from '@/shared/types';
+import type { CommittedWriteEvent, ErrorDiagnostic } from '@/shared/types';
 import { deepClone } from '@/shared/lib/starsector';
 import { normalizeFsPath } from '@/shared/lib/paths';
 
@@ -9,7 +9,7 @@ export interface PendingWriteSync {
   event: CommittedWriteEvent;
   historyAccepted: boolean;
   step: 'projection' | 'acceptance' | 'broadcast';
-  error: string | null;
+  error: ErrorDiagnostic | null;
 }
 
 export const useWriteSyncStore = defineStore('write-sync', () => {
@@ -24,7 +24,7 @@ export const useWriteSyncStore = defineStore('write-sync', () => {
     pending.value.push(entry);
     return pending.value.find((entry) => entry.id === id)!;
   }
-  function wasAccepted(event: CommittedWriteEvent) {
+  function wasAccepted(event: Pick<CommittedWriteEvent, 'modRoot' | 'result'>) {
     return completed.get(normalizeFsPath(event.modRoot))?.has(event.result.commitId) ?? false;
   }
   function markAccepted(event: CommittedWriteEvent) {
@@ -39,7 +39,7 @@ export const useWriteSyncStore = defineStore('write-sync', () => {
     pending.value = pending.value.filter((entry) => normalizeFsPath(entry.event.modRoot) !== normalizeFsPath(modRoot));
     completed.delete(normalizeFsPath(modRoot));
   }
-  function markFailed(id: string, error: string) {
+  function markFailed(id: string, error: ErrorDiagnostic) {
     const entry = pending.value.find((entry) => entry.id === id);
     if (entry) entry.error = error;
   }

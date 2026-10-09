@@ -9,11 +9,13 @@ describe('query pending ownership', () => {
     await queryCached(session, 'entity-list', { kind: 'skin' }, loader);
     markProjectionPending(session, 3);
     await expect(queryCached(session, 'entity-list', { kind: 'skin' }, loader)).rejects.toMatchObject({
-      action: 'session.projection_pending',
+      action: 'query-session',
+      code: 'session.projection_pending',
     });
     markProjectionReady(session, 2);
     await expect(queryCached(session, 'entity-list', { kind: 'skin' }, loader)).rejects.toMatchObject({
-      action: 'session.projection_pending',
+      action: 'query-session',
+      code: 'session.projection_pending',
     });
     markProjectionReady(session, 3);
     await expect(queryCached(session, 'entity-list', { kind: 'skin' }, loader)).resolves.toBe('loaded');

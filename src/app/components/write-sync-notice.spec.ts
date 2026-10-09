@@ -22,7 +22,7 @@ function mountNotice() {
     result: savedWriteFixture(),
   });
   entry.step = 'broadcast';
-  sync.markFailed(entry.id, 'broadcast');
+  sync.markFailed(entry.id, { code: 'window.broadcast_failed', message: 'broadcast', location: null });
   const wrapper = mount(WriteSyncNotice, {
     global: { stubs: { 'n-button': { props: ['loading'], template: '<button :disabled="loading"><slot /></button>' } } },
   });

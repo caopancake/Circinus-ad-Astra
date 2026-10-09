@@ -17,6 +17,7 @@ pub fn ensure_file_appendable(path: &Path) -> AppResult<()> {
         .map(|_| ())
         .map_err(|error| {
             AppError::context(format!("打开文件失败 ({})", path.display()), error.into())
+                .at_path(path)
         })?;
     Ok(())
 }
@@ -28,6 +29,7 @@ pub fn read_utf8_no_bom(path: &Path) -> AppResult<String> {
             "text.invalid_utf8",
             format!("{} is not valid UTF-8 at byte {offset}", path.display()),
         )
+        .at_path(path)
     })
 }
 
@@ -40,6 +42,7 @@ pub fn read_text_bytes_no_bom(path: &Path) -> AppResult<Vec<u8>> {
             format!("读取文本文件失败 ({})", path.display()),
             error.into(),
         )
+        .at_path(path)
     })?;
     Ok(strip_utf8_bom(bytes))
 }
@@ -58,6 +61,7 @@ pub fn write_utf8_no_bom(path: &Path, text: &str) -> AppResult<()> {
             format!("写入文本文件失败 ({})", path.display()),
             error.into(),
         )
+        .at_path(path)
     })?;
     Ok(())
 }
@@ -85,6 +89,19 @@ mod tests {
         let _ = fs::remove_file(path);
         assert!(!bytes.starts_with(UTF8_BOM));
         assert_eq!(String::from_utf8(bytes).unwrap(), "舰船");
+    }
+
+    #[test]
+    fn decoding_error_keeps_the_actual_file_for_transcoding() {
+        let path = temp_path("decoding_error_path.txt");
+        fs::write(&path, [0x81]).unwrap();
+        let error = read_utf8_no_bom(&path).unwrap_err();
+        assert_eq!(error.code(), "text.invalid_utf8");
+        assert_eq!(
+            error.location().unwrap().path.as_deref(),
+            Some(path.to_str().unwrap())
+        );
+        let _ = fs::remove_file(path);
     }
 
     #[test]

@@ -14,7 +14,7 @@ use walkdir::WalkDir;
 pub fn read_json_file(path: &Path) -> AppResult<Value> {
     let text = read_utf8_no_bom(path)?;
     parse_starsector_json(&text).map_err(|error| {
-        AppError::context(format!("解析 JSON 文件失败 ({})", path.display()), error)
+        AppError::context(format!("解析 JSON 文件失败 ({})", path.display()), error).at_path(path)
     })
 }
 
@@ -47,6 +47,7 @@ impl JsonWriteBatch {
                 format!("解析 JSON 文件失败 ({})", source_path.display()),
                 error,
             )
+            .at_path(source_path)
         })? {
             PreserveResult::Preserved(text) => Ok(text),
             PreserveResult::NeedsRewrite(reason) => {
@@ -135,6 +136,21 @@ mod tests {
     use crate::models::JsonSourceConfirmation;
     use crate::testutil::temp_dir;
     use std::fs;
+
+    #[test]
+    fn json_read_attaches_actual_path_to_parser_position() {
+        let dir = temp_dir("json_error_location");
+        let path = dir.join("nested.skin");
+        crate::io::write_utf8_no_bom(&path, "{\n\"id\":1,\"id\":2}").unwrap();
+        let error = read_json_file(&path).unwrap_err();
+        assert_eq!(error.code(), "json.duplicate_key");
+        assert_eq!(
+            error.location().unwrap().path.as_deref(),
+            Some(path.to_str().unwrap())
+        );
+        assert_eq!(error.location().unwrap().line, Some(2));
+        let _ = fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn json_write_preserves_all_business_dictionary_keys() {

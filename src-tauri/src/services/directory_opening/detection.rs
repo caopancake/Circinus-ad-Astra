@@ -75,6 +75,8 @@ fn resolve_known_root(
         Err(error) => (
             None,
             vec![GameScanWarning {
+                code: error.code().to_string(),
+                location: error.location().cloned(),
                 path: root.to_string(),
                 message: format!("已忽略无效 Starsector 根目录: {error}"),
                 edit_target: None,

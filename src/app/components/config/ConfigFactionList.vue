@@ -33,7 +33,7 @@
     </ul>
 
     <footer class="faction-list-footer config-entity-list-footer">
-      <n-button size="small" block @click="openCreateDialog">新建势力</n-button>
+      <n-button size="small" block :loading="actionRunning" @click="openCreateDialog">新建势力</n-button>
     </footer>
 
     <!-- Create dialog -->
@@ -43,6 +43,7 @@
       title="新建势力"
       positive-text="创建"
       negative-text="取消"
+      :positive-button-props="{ loading: actionRunning, disabled: actionRunning }"
       @positive-click="doCreate"
     >
       <n-input v-model:value="newFactionId" placeholder="输入势力 ID（英文标识）" autofocus />
@@ -60,6 +61,7 @@ import { useVisibleResourceMedia } from '@/app/composables/use-visible-resource-
 
 const props = defineProps<{
   selectedId: string | null;
+  actionRunning: boolean;
   factions: Record<string, RowData>;
   factionCrestRefs: Record<string, ResourceRef | null>;
   modRoot: string | null;
@@ -106,17 +108,8 @@ async function doCreate() {
   const targetSessionId = createSessionId.value;
   if (!targetModRoot || !targetSessionId) return false;
   const trimmedId = newFactionId.value.trim();
-  if (!trimmedId) {
-    feedback.warning('ID 不能为空');
-    return false;
-  }
-  if (props.factions[trimmedId]) {
-    feedback.warning(`势力 "${trimmedId}" 已存在`);
-    return false;
-  }
   if (!(await props.createFaction(targetSessionId, targetModRoot, trimmedId))) return false;
   showCreateDialog.value = false;
-  if (props.modRoot === targetModRoot && props.sessionId === targetSessionId) selectFaction(trimmedId);
   return true;
 }
 
@@ -151,10 +144,6 @@ function confirmDelete(id: string) {
 async function doDelete(deleteSessionId: string, deleteModRoot: string, id: string, deleteFile: boolean) {
   try {
     if (!(await props.deleteFaction(deleteSessionId, deleteModRoot, id, deleteFile))) return;
-    if (props.modRoot !== deleteModRoot || props.sessionId !== deleteSessionId) return;
-    if (props.selectedId === id) {
-      emit('select', null);
-    }
   } catch (error) {
     feedback.error(error, '删除势力失败');
   }

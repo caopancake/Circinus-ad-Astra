@@ -30,6 +30,7 @@ pub fn parse_faction_index(table: &CsvTable) -> AppResult<Vec<FactionIndexRow>> 
                     format!("解析 factions.csv 失败: row {}", row_index + 2),
                     error,
                 )
+                .at_path(&table.path)
             })?;
         rows.push(parsed);
     }

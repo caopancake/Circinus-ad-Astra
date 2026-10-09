@@ -46,6 +46,8 @@ pub struct GameModSummary {
 pub struct GameScanWarning {
     pub path: String,
     pub message: String,
+    pub code: String,
+    pub location: Option<crate::errors::ErrorLocation>,
     #[serde(default)]
     pub edit_target: Option<GameWarningEditTarget>,
 }
@@ -70,6 +72,8 @@ mod tests {
             mod_root: Some("D:/game/mods/x".to_string()),
             overview: None,
             warnings: vec![GameScanWarning {
+                code: "parse.json".to_string(),
+                location: None,
                 path: "D:/game/mods/x/mod_info.json".to_string(),
                 message: "broken".to_string(),
                 edit_target: Some(GameWarningEditTarget {
@@ -93,6 +97,8 @@ mod tests {
     #[test]
     fn game_mod_summary_defaults_has_mod_info_through_warning_shape() {
         let warning = GameScanWarning {
+            code: "scan.warning".to_string(),
+            location: None,
             path: "p".to_string(),
             message: "m".to_string(),
             edit_target: None,

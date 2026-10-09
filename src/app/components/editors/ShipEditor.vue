@@ -1245,7 +1245,10 @@ function actionDown(e: MouseEvent, mx: number, my: number) {
   }
   if (mode.value === 'launchBay' && e.shiftKey) {
     if (selected.value === null || !selectedSlot.value || str(selectedSlot.value.type).toUpperCase() !== 'LAUNCH_BAY') {
-      feedback.warning('先选中甲板，再为其新增港口');
+      feedback.warning({
+        userMessage: '先选中甲板，再为其新增港口',
+        diagnostic: { code: 'ship.deck_required', message: 'A deck must be selected before adding a bay port', location: null },
+      });
       return null;
     }
     beginEdit();

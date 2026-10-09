@@ -22,7 +22,7 @@ import {
 import { listenEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
 import type { EntityIdentityAppliedEvent } from '@/windows/window.events';
 import type { EntityIdentityChange } from '@/shared/types';
-import { formatError, extractFileReferenceFromError, errorMessageOf } from '@/shared/lib/errors';
+import { formatError, errorDiagnosticOf } from '@/shared/lib/errors';
 import { AppError } from '@/shared/lib/errors';
 import { captureIdentityVersions, handoffTableVersions } from '@/domain/editors/entity-identity';
 import type { WriteResult, EntityEditInfo } from '@/shared/types';
@@ -306,11 +306,11 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
       if (!saved || disposed) return;
       feedback.success('文件已保存');
     } catch (error) {
-      const location = extractFileReferenceFromError(errorMessageOf(error) ?? error);
+      const location = errorDiagnosticOf(error).location;
       if (location?.line) {
         targetLine.value = location.line;
-        targetColumn.value = location.column;
-        contextMessage.value = errorMessageOf(error) ?? formatError(error);
+        targetColumn.value = location.column ?? undefined;
+        contextMessage.value = formatError(error);
         contextSeverity.value = 'error';
       }
       feedback.error(error, '保存文件失败');
@@ -411,10 +411,10 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
       identityNotice.value = '实体已重命名，当前文本已保留；修正文本后接纳新身份。';
       contextMessage.value = formatError(error);
       contextSeverity.value = 'error';
-      const position = contextMessage.value.match(/line\s+(\d+)\s+column\s+(\d+)/i);
-      if (position) {
-        targetLine.value = parseInt(position[1]!, 10);
-        targetColumn.value = parseInt(position[2]!, 10);
+      const position = errorDiagnosticOf(error).location;
+      if (position?.line) {
+        targetLine.value = position.line;
+        targetColumn.value = position.column ?? undefined;
       }
     }
   }

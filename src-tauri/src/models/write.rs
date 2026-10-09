@@ -330,12 +330,7 @@ impl<T> WriteResult<T> {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SynchronizationError {
-    pub code: String,
-    pub message: String,
-}
+pub type SynchronizationError = crate::errors::ErrorDiagnostic;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "camelCase")]

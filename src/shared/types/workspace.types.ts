@@ -22,6 +22,7 @@ export interface ModOpeningFailureFile {
 export interface ModOpeningFailure {
   modRoot: string;
   message: string;
+  diagnostic: import('@/shared/types/error.types').ErrorDiagnostic;
   file: ModOpeningFailureFile | null;
 }
 

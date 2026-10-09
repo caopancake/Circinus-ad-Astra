@@ -20,18 +20,41 @@ use serde_json::{Map, Value};
 /// line/column, and text after the root `}` is ignored like the game.
 pub fn parse_starsector_json(text: &str) -> AppResult<Value> {
     let stripped = strip_hash_comments(text);
-    let mut tokener = Tokener::new(&stripped);
+    let mut tokener = Tokener::new(stripped);
     tokener.next_object()
 }
 
 // LoadingUtils.parseJSONStrippingComments semantics, defects included: `"`
 // flips state unconditionally and `\` escapes are invisible; newline resets
 // all state; `\r` is dropped so only `\n` reaches the tokener.
-fn strip_hash_comments(text: &str) -> String {
+struct StrippedJson {
+    text: String,
+    positions: Vec<(usize, usize)>,
+}
+
+fn strip_hash_comments(text: &str) -> StrippedJson {
     let mut result = String::with_capacity(text.len());
+    let mut positions = vec![(1, 1)];
+    let mut line = 1;
+    let mut column = 1;
+    let mut previous_cr = false;
     let mut in_comment = false;
     let mut in_string = false;
     for ch in text.chars() {
+        match ch {
+            '\r' => {
+                line += 1;
+                column = 1;
+            }
+            '\n' => {
+                if !previous_cr {
+                    line += 1;
+                }
+                column = 1;
+            }
+            _ => column += ch.len_utf16(),
+        }
+        previous_cr = ch == '\r';
         if ch == '"' {
             in_string = !in_string;
         }
@@ -41,27 +64,37 @@ fn strip_hash_comments(text: &str) -> String {
             in_string = false;
             if ch == '\n' {
                 result.push('\n');
+                positions.push((line, column));
             }
         } else if ch == '#' && !in_string {
             in_comment = true;
         } else if !in_comment {
             result.push(ch);
+            positions.push((line, column));
         }
     }
 
-    result
+    *positions
+        .last_mut()
+        .expect("source has an initial position") = (line, column);
+    StrippedJson {
+        text: result,
+        positions,
+    }
 }
 
 struct Tokener {
     chars: Vec<char>,
     pos: usize,
+    positions: Vec<(usize, usize)>,
 }
 
 impl Tokener {
-    fn new(text: &str) -> Self {
+    fn new(source: StrippedJson) -> Self {
         Self {
-            chars: text.chars().collect(),
+            chars: source.text.chars().collect(),
             pos: 0,
+            positions: source.positions,
         }
     }
 
@@ -89,21 +122,14 @@ impl Tokener {
         }
     }
 
-    // The stripped text has no `\r`, so counting `\n` yields the exact line.
     fn line_column(&self) -> (usize, usize) {
-        let end = self.pos.min(self.chars.len());
-        let before = &self.chars[..end];
-        let line = 1 + before.iter().filter(|&&c| c == '\n').count();
-        let column = match before.iter().rposition(|&c| c == '\n') {
-            Some(last) => end - last,
-            None => end + 1,
-        };
-        (line, column)
+        self.positions[self.pos]
     }
 
     fn error(&self, code: &'static str, message: &str) -> AppError {
         let (line, column) = self.line_column();
         AppError::message(code, format!("{message} at line {line} column {column}"))
+            .at_position(line, Some(column))
     }
 
     fn syntax(&self, message: &str) -> AppError {
@@ -371,6 +397,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn errors_locate_original_text_with_comments_crlf_and_utf16_columns() {
+        for text in [
+            "{# comment\n\"😀\":1,\"😀\":2}",
+            "{# comment\r\n\"😀\":1,\"😀\":2}",
+        ] {
+            let error = parse_starsector_json(text).unwrap_err();
+            let location = error.location().unwrap();
+            assert_eq!(location.line, Some(2));
+            assert_eq!(location.column, Some(14));
+        }
+        let error = parse_starsector_json("{a:1 # tail comment").unwrap_err();
+        assert_eq!(error.location().unwrap().column, Some(20));
+    }
+
+    #[test]
     fn parses_crlf_pretty_json() {
         let text = "{\r\n  \"id\": \"demo_mod\",\r\n  \"name\": \"Demo Mod\"\r\n}";
         let parsed = parse_starsector_json(text).unwrap();
@@ -479,14 +520,14 @@ mod tests {
         // Game defect: `\"` still flips state, so the rest of a valid line is
         // stripped as a comment.
         let stripped = strip_hash_comments("{\"a\": \"x\\\" # tail\", \"b\": 2}");
-        assert_eq!(stripped, "{\"a\": \"x\\\" ");
+        assert_eq!(stripped.text, "{\"a\": \"x\\\" ");
     }
 
     #[test]
     fn hash_strip_flips_quote_state_inside_comment() {
         // Game defect: quotes inside comments affect the next line's `#`.
         let stripped = strip_hash_comments("# \"in comment\n{a: 1} # \" tail\n");
-        assert_eq!(stripped, "\n{a: 1} \n");
+        assert_eq!(stripped.text, "\n{a: 1} \n");
     }
 
     #[test]

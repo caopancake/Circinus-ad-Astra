@@ -81,6 +81,7 @@ fn decode_csv_chars(path_label: &str, bytes: &[u8]) -> AppResult<Vec<char>> {
                 "text.invalid_utf8",
                 format!("{path_label} is not valid UTF-8 at byte {offset}"),
             )
+            .at_path(path_label)
         })
 }
 
@@ -157,8 +158,11 @@ fn parse_csv_chars(path_label: &str, text: &[char]) -> AppResult<CsvTable> {
     let mut col_index = 0usize;
     let mut in_quote = false;
     let mut quote_buf = String::new();
-    let mut last_quote_line = 2usize;
-    let mut line = 2usize;
+    let mut line = 1 + normalized[..=header_end]
+        .iter()
+        .filter(|&&character| matches!(character, '\n' | '\r'))
+        .count();
+    let mut last_quote_line = line;
 
     let mut index = 0usize;
     while index < body.len() {
@@ -212,7 +216,7 @@ fn parse_csv_chars(path_label: &str, text: &[char]) -> AppResult<CsvTable> {
             }
         }
 
-        if c == '\n' {
+        if matches!(c, '\n' | '\r') {
             line += 1;
         }
         index += 1;
@@ -237,7 +241,7 @@ fn parse_csv_chars(path_label: &str, text: &[char]) -> AppResult<CsvTable> {
                     "mismatched quotes in the string; unterminated quote starting at line {last_quote_line}, context: [{quote_buf}]"
                 ),
             ),
-        ));
+        ).at_position(last_quote_line, None).at_path(path_label));
     }
 
     Ok(CsvTable {
@@ -404,6 +408,18 @@ mod tests {
         assert!(error.contains("csv_unterminated_quote.csv"));
         assert!(error.contains("mismatched quotes in the string"));
         assert!(error.contains("starting at line 2"));
+    }
+
+    #[test]
+    fn csv_error_keeps_path_and_physical_quote_line() {
+        let error = parse_csv_text("demo.csv", "id,text\na,\"line\n\nunfinished").unwrap_err();
+        assert_eq!(error.code(), "parse.csv_unterminated_quote");
+        let location = error.location().unwrap();
+        assert_eq!(location.path.as_deref(), Some("demo.csv"));
+        assert_eq!(location.line, Some(2));
+        assert_eq!(location.column, None);
+        let error = parse_csv_text("demo.csv", "id,text\nrow\r,\"unfinished").unwrap_err();
+        assert_eq!(error.location().unwrap().line, Some(3));
     }
 
     #[test]

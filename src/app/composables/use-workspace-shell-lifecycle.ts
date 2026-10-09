@@ -72,7 +72,7 @@ export function useWorkspaceShellLifecycle(
         },
         onModRestoreWarnings: (displayName, warnings) => {
           for (const warning of warnings) {
-            feedback.warning(`${displayName}：${warning}`, 'mod.scan_warning');
+            feedback.warning({ ...warning, userMessage: `${displayName}：${warning.userMessage}` });
           }
         },
       });

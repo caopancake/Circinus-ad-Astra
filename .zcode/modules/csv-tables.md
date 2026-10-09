@@ -17,12 +17,14 @@
 `src/domain/schema/schema-registry.ts`：列 schema 唯一加载入口。
 `src/domain/tables/csv-grid-model.ts`：网格列模型 owner。
 `src/domain/tables/table-row-key.ts`：行身份规则 owner。
-`src/stores/tables.store.ts`：表格运行态 owner，拥有窗口行、选择、dirty、列宽、当前表与保存中状态。
+`src/stores/tables.store.ts`：表格运行态 owner，拥有窗口行、选择、dirty、当前表与保存中状态。
+`src/stores/workspace.store.ts`：按 Mod、表与列持有持久化列宽的 owner。
 
 ## 边界
 
 - 列 schema 只能从统一加载器的输出类型消费，严禁在组件内二次解析资产。
 - 列宽必须使用结构化 `modRoot/table/column`，严禁拼接 key。
+- 窗口接纳、搜索、过滤、外部更新、草稿释放与行选择必须消费显式所属目标；活动身份必须由 workspace 提供。
 - 单元格提交必须消费完整 `CsvCellTarget`，包含 sessionId、modRoot、table、rowKey 与 column；历史必须沿用同一目标。
 - 活动单元格身份必须唯一归 tables 运行态；原始输入必须归控件，输入集合必须按 session、Mod 与表隔离。
 - 身份交接表锁必须按会话、Mod 与表归属；控件、工具栏、快捷键与窗口读取必须共同消费锁定状态。
@@ -36,8 +38,9 @@
 ### 打开表格窗口
 
 1. 表格进入时按需请求当前表的窗口行。
-2. query service 调后端返回窗口与源索引。
-3. store 写入行、表头与总数，网格按可视区渲染。
+2. ViewModel 按完整目标接纳列宽并处理所属草稿保护。
+3. query service 调后端返回窗口与源索引。
+4. store 按捕获目标写入行、表头与总数，网格按可视区渲染。
 
 ### 编辑单元格
 
@@ -50,7 +53,7 @@
 ### 选择行
 
 1. 用户点击行触发选择事件。
-2. store 更新 `selectedRowKey`。
+2. store 按捕获 Mod 与表更新 `selectedRowKey`。
 3. 行组件按响应式选中态渲染高亮，右侧详情同步刷新。
 
 ### 过滤与搜索
@@ -68,6 +71,7 @@
 - 业务 CSV 字段必须归 `CsvDraftRow.data`；rowKey、factionId、sourceRowIndex 与 insertAt 必须分别归所属行记录，严禁写入业务字典。
 - 保存期间的表格失效必须合并为后续权威读取；查询必须共同比较原始行基线与版本，自身保存回声只允许更新所属投影。
 - 列宽调整必须即时反映渲染宽度并进入持久化投影。
+- 列宽覆盖与测量锁定必须绑定 session、Mod 与表；目标变化必须先接纳所属列宽再处理 dirty 与读取。
 - 前端新增行只允许使用临时 new key，保存后以后端 rowKey map 替换。
 - 单元格编辑必须在动作提交边界一次性写值与登记历史；中间输入必须参与未保存判定，行脏标记只允许表达已提交行差异。
 - 同值同版本的窗口接纳必须按 rowKey 更新势力与来源位置投影，并保留正式草稿、dirty 与活动输入。

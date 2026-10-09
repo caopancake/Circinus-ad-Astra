@@ -5,6 +5,7 @@ import { resourceCacheKey } from '@/services/resource-cache.service';
 import { sameResourceRef } from '@/shared/lib/resource-ref';
 import type { ResourceRef } from '@/shared/types';
 import { recordPerformance } from '@/shared/runtime/performance';
+import { warningNotice } from '@/shared/lib/errors';
 
 interface RegisteredMedia {
   element: Element | null;
@@ -130,7 +131,14 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
         reportedFailures.add(key);
         return true;
       });
-      if (newFailures.length > 0) feedback.warning(`${args.failureLabel}：${newFailures.length} 个资源读取失败`);
+      if (newFailures.length > 0)
+        feedback.warning(
+          warningNotice(
+            `${args.failureLabel}：${newFailures.length} 个资源读取失败`,
+            'resource.read_failed',
+            `Resource read failed: count=${newFailures.length}; surface=${args.surface}`,
+          ),
+        );
     } catch (error) {
       const firstUnreported = resources.find((resource) => {
         const key = resourceCacheKey(sessionId, resource);

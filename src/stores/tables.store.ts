@@ -122,47 +122,12 @@ export const useTablesStore = defineStore('tables', () => {
   }
 
   const tables = computed(() => getActiveState()?.tables ?? emptyTablesRecord());
-  const currentTab = computed({
-    get: () => getActiveState()?.currentTab ?? 'ships',
-    set: (v) => {
-      const s = getActiveState();
-      if (s) s.currentTab = v;
-    },
-  });
-  const currentFaction = computed({
-    get: () => getActiveState()?.currentFaction ?? DEFAULT_CSV_FACTION_FILTER,
-    set: (v) => {
-      const s = getActiveState();
-      if (s) s.currentFaction = v;
-    },
-  });
-  const currentFactionOptionValue = computed({
-    get: () => filterOptionValue(currentFaction.value),
-    set: (v) => {
-      currentFaction.value = filterFromOptionValue(v);
-    },
-  });
-  const searchText = computed({
-    get: () => getActiveState()?.searchText ?? '',
-    set: (v) => {
-      const s = getActiveState();
-      if (s) s.searchText = v;
-    },
-  });
-  const selectedRowKey = computed({
-    get: () => getActiveState()?.selectedRowKey ?? null,
-    set: (v) => {
-      const s = getActiveState();
-      if (s) s.selectedRowKey = v;
-    },
-  });
-  const editing = computed({
-    get: () => getActiveState()?.editing ?? null,
-    set: (v) => {
-      const s = getActiveState();
-      if (s) s.editing = v;
-    },
-  });
+  const currentTab = computed(() => getActiveState()?.currentTab ?? 'ships');
+  const currentFaction = computed(() => getActiveState()?.currentFaction ?? DEFAULT_CSV_FACTION_FILTER);
+  const currentFactionOptionValue = computed(() => filterOptionValue(currentFaction.value));
+  const searchText = computed(() => getActiveState()?.searchText ?? '');
+  const selectedRowKey = computed(() => getActiveState()?.selectedRowKey ?? null);
+  const editing = computed(() => getActiveState()?.editing ?? null);
   const dirty = computed(() => getActiveState()?.dirty ?? emptyDirtyState());
 
   const rows = computed(() => rowsFor(currentTab.value));
@@ -264,10 +229,9 @@ export const useTablesStore = defineStore('tables', () => {
     state.currentFaction = DEFAULT_CSV_FACTION_FILTER;
   }
 
-  function applyTableWindow(window: CsvTableWindow) {
-    const state = getActiveState();
-    if (!state) return;
-    applyCsvTableWindowDraft(state, window, getTableInputs(activeModRoot.value!, window.table).dirty.value);
+  function applyTableWindow(target: CsvTableTarget, window: CsvTableWindow) {
+    const state = stateMap.get(target.modRoot)!;
+    applyCsvTableWindowDraft(state, window, getTableInputs(target.modRoot, target.table).dirty.value);
   }
 
   function hasTableDirtyChanges(tab: TableKey): boolean {
@@ -276,20 +240,25 @@ export const useTablesStore = defineStore('tables', () => {
     return hasCsvTableDraftChanges(state, tab) || getTableInputs(activeModRoot.value!, tab).dirty.value;
   }
 
-  function markTableExternalUpdate(tab: TableKey) {
-    const state = getActiveState();
-    if (!state) return;
-    markCsvTableExternalUpdateDraft(state, tab);
+  function markTableExternalUpdate(target: CsvTableTarget) {
+    markCsvTableExternalUpdateDraft(stateMap.get(target.modRoot)!, target.table);
   }
 
-  function clearTableExternalUpdate(tab: TableKey) {
-    const state = getActiveState();
-    if (!state) return;
-    clearCsvTableExternalUpdateDraft(state, tab);
+  function clearTableExternalUpdate(target: CsvTableTarget) {
+    clearCsvTableExternalUpdateDraft(stateMap.get(target.modRoot)!, target.table);
   }
 
-  function selectRowByKey(rowKey: string | null) {
-    selectedRowKey.value = rowKey;
+  function setSearchText(target: CsvTableTarget, text: string) {
+    stateMap.get(target.modRoot)!.searchText = text;
+  }
+
+  function setFactionFilter(target: CsvTableTarget, option: string) {
+    stateMap.get(target.modRoot)!.currentFaction = filterFromOptionValue(option);
+  }
+
+  function selectRowByKey(target: CsvTableTarget, rowKey: string | null) {
+    const state = stateMap.get(target.modRoot)!;
+    if (state.currentTab === target.table) state.selectedRowKey = rowKey;
   }
 
   function isDirty(rowKey: string, col: string): boolean {
@@ -367,12 +336,10 @@ export const useTablesStore = defineStore('tables', () => {
     replaceCsvTableDraft(state, tab, rows);
   }
 
-  function discardTableDraftForReload(tab: TableKey) {
-    const state = getActiveState();
-    if (!state) return;
-    revokeTableReads(activeModRoot.value!, tab);
-    getTableInputs(activeModRoot.value!, tab).cancel();
-    discardCsvTableWindowForReloadDraft(state, tab);
+  function discardTableDraftForReload(target: CsvTableTarget) {
+    revokeTableReads(target.modRoot, target.table);
+    getTableInputs(target.modRoot, target.table).cancel();
+    discardCsvTableWindowForReloadDraft(stateMap.get(target.modRoot)!, target.table);
   }
 
   function markTableSavedForMod(modRoot: string, tab: TableKey) {
@@ -446,6 +413,8 @@ export const useTablesStore = defineStore('tables', () => {
     rowsFor,
     selectRowByKey,
     setSaving,
+    setSearchText,
+    setFactionFilter,
     clearTableExternalUpdate,
     switchTab,
     applySavedRowKeyMapForMod,

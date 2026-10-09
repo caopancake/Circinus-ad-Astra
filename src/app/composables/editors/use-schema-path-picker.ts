@@ -4,6 +4,7 @@ import { joinRootRelativePath, pathBelongsToRoot, relativePathFromRoot } from '@
 import { pickFileDialog, pickImageFileDialog } from '@/shared/runtime/dialog.runtime';
 import { onScopeDispose } from 'vue';
 import { useFieldInputs } from '@/shared/runtime/field-inputs';
+import { warningNotice } from '@/shared/lib/errors';
 
 export function useSchemaPathPicker(args: {
   runtimeContext: () => SchemaRuntimeContext | null | undefined;
@@ -46,7 +47,13 @@ export function useSchemaPathPicker(args: {
       args.setPath(relativePathFromRoot(baseRoot, selected));
       return;
     }
-    feedback.warning(args.pathBase?.() === 'mission' ? '请选择当前任务目录内的文件' : '路径字段只能选择当前 Mod 目录内的文件');
+    feedback.warning(
+      warningNotice(
+        args.pathBase?.() === 'mission' ? '请选择当前任务目录内的文件' : '路径字段只能选择当前 Mod 目录内的文件',
+        'path.outside_root',
+        `Selected path outside field root: ${selected}`,
+      ),
+    );
   }
 
   return {

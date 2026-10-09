@@ -5,7 +5,8 @@ import { useSettingsStore } from '@/stores/settings.store';
 import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
 import { emitWindowEvent, listenWindowEvent, type UnlistenFn } from '@/windows/tauri.events';
 import { WINDOW_EVENTS, type AppSettingsChangedEvent } from '@/windows/window.events';
-import { errorCodeOf, errorMessageOf } from '@/shared/lib/errors';
+import { errorDiagnosticOf } from '@/shared/lib/errors';
+import { logFields } from '@/shared/lib/log-fields';
 import type { AppSettings } from '@/shared/types';
 import { recordWindowEventHandlerError } from '@/orchestrators/window-event-errors.orchestrator';
 
@@ -75,13 +76,14 @@ export function startSettingsMirror(): () => void {
       unlisteners.push(unlisten);
     })
     .catch((error: unknown) => {
+      const diagnostic = errorDiagnosticOf(error);
       recordLogBestEffort({
         level: 'error',
-        code: errorCodeOf(error),
-        message: errorMessageOf(error) ?? 'settings broadcast listener failed',
-        path: null,
-        line: null,
-        fields: null,
+        code: diagnostic.code,
+        message: diagnostic.message,
+        path: diagnostic.location?.path ?? null,
+        line: diagnostic.location?.line ?? null,
+        fields: logFields({ action: 'settings-listen', column: diagnostic.location?.column }),
       });
     });
   return () => {
@@ -101,13 +103,14 @@ async function persistSettingsSnapshot(): Promise<void> {
     settings.confirmSavedSettings(saved);
     await broadcastSettingsSnapshot(saved);
   } catch (error) {
+    const diagnostic = errorDiagnosticOf(error);
     recordLogBestEffort({
       level: 'error',
-      code: errorCodeOf(error),
-      message: errorMessageOf(error) ?? 'settings save failed',
-      path: null,
-      line: null,
-      fields: null,
+      code: diagnostic.code,
+      message: diagnostic.message,
+      path: diagnostic.location?.path ?? null,
+      line: diagnostic.location?.line ?? null,
+      fields: logFields({ action: 'settings-save', column: diagnostic.location?.column }),
     });
     return;
   }
@@ -118,13 +121,14 @@ async function broadcastSettingsSnapshot(snapshot: AppSettings): Promise<void> {
   try {
     await emitWindowEvent<AppSettingsChangedEvent>(WINDOW_EVENTS.appSettingsChanged, snapshot);
   } catch (error) {
+    const diagnostic = errorDiagnosticOf(error);
     recordLogBestEffort({
       level: 'error',
-      code: errorCodeOf(error),
-      message: errorMessageOf(error) ?? 'settings broadcast failed',
-      path: null,
-      line: null,
-      fields: null,
+      code: diagnostic.code,
+      message: diagnostic.message,
+      path: diagnostic.location?.path ?? null,
+      line: diagnostic.location?.line ?? null,
+      fields: logFields({ action: 'settings-broadcast', column: diagnostic.location?.column }),
     });
   }
 }

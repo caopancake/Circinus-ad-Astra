@@ -1,4 +1,5 @@
 import { completeConfigSave } from '@/orchestrators/config-save.orchestrator';
+import { warningNotice } from '@/shared/lib/errors';
 import type { ConfigEditTarget } from '@/shared/types';
 import { computed, onScopeDispose, ref, watch, type Ref } from 'vue';
 import { deepClone } from '@/shared/lib/starsector';
@@ -13,7 +14,7 @@ export function useConfigMissionEditorViewModel(params: {
   iconRefreshToken: Ref<number>;
   missionId: Ref<string>;
   modRoot: Ref<string | null>;
-  onSaved: (missionId: string | null) => void | Promise<void>;
+  onSaved: (missionId: string | null, saved?: import('@/shared/types').ConfigSaveIdentity) => void | Promise<void>;
   queryMissionEditorData: (sessionId: string, id: string) => Promise<ConfigMissionEditorData | null>;
   queryMissionIcon: (sessionId: string, id: string, draft: RowData) => Promise<string>;
   saveMission: (
@@ -26,8 +27,11 @@ export function useConfigMissionEditorViewModel(params: {
   ) => Promise<import('@/shared/types').ConfigSaveIdentity | null>;
   schema: Ref<FileSchema | null>;
   sessionId: Ref<string | null>;
+  actionsLocked?: Readonly<Ref<boolean>>;
+  identityHandoff?: Readonly<Ref<import('@/shared/types').ConfigIdentityHandoff<ConfigMissionEditorData> | null>>;
 }) {
   const feedback = useAppFeedback();
+  const adoptedCommits = new Set<number>();
   function editTarget(id: string): ConfigEditTarget {
     return { sessionId: params.sessionId.value!, modRoot: params.modRoot.value!, kind: 'mission', id, relPath: null };
   }
@@ -66,7 +70,7 @@ export function useConfigMissionEditorViewModel(params: {
         if (!saveSessionId) return;
         const draft = configMissionSaveDraft(data, currentSchema);
         if (!draft.nextId) {
-          feedback.warning('mission 不能为空');
+          feedback.warning(warningNotice('mission 不能为空', 'config.missing_field', 'Mission ID is empty'));
           return;
         }
         const savedId = await params.saveMission(saveSessionId, saveModRoot, target.id, data, currentSchema, baseVersions);
@@ -81,13 +85,22 @@ export function useConfigMissionEditorViewModel(params: {
       },
       targetKey: (target) => JSON.stringify(target),
       afterSaved: async (snapshot) => {
+        if (!adoptedCommits.has(snapshot.commitId!)) {
+          if (draftSession.isTargetCurrent(snapshot.target))
+            await params.onSaved(snapshot.target.id, {
+              id: snapshot.target.id,
+              data: snapshot.value,
+              baseVersions: snapshot.baseVersions,
+              receipt: snapshot.meta.receipt!,
+            });
+          adoptedCommits.add(snapshot.commitId!);
+        }
         await completeConfigSave(
           snapshot.target.modRoot,
           snapshot.target.sessionId,
           snapshot.meta.receipt!,
           `保存战役 ${snapshot.target.id}`,
         );
-        if (draftSession.isTargetCurrent(snapshot.target)) await params.onSaved(snapshot.target.id);
       },
     },
   );
@@ -135,6 +148,22 @@ export function useConfigMissionEditorViewModel(params: {
       iconSrc.value = '';
     }
     if (!params.modRoot.value || !targetSessionId || !missionId) return;
+    const handoff = params.identityHandoff?.value;
+    if (handoff && handoff.sourceId === draftSession.currentTarget.value?.id && handoff.record.list.mission === missionId) {
+      const model = configMissionEditorModel(handoff.record);
+      draftSession.adoptIdentity(
+        draftSession.currentTarget.value,
+        {
+          target: editTarget(missionId),
+          value: model.localMission,
+          baseVersions: handoff.record.baseVersions,
+          meta: { id: missionId, iconSrc: model.iconSrc, receipt: null },
+          commitId: handoff.commitId,
+        },
+        (draft) => (handoff.preserveDraft ? { ...draft, list: { ...(draft.list as RowData), mission: missionId } } : model.localMission),
+      );
+      return;
+    }
     try {
       const snapshot = targetChanged
         ? await draftSession.loadTarget(editTarget(missionId))
@@ -145,6 +174,8 @@ export function useConfigMissionEditorViewModel(params: {
       loadedMissionId.value = data.id;
       iconSrc.value = data.iconSrc;
     } catch (error) {
+      if (disposed || requestId !== editorRequestId || targetSessionId !== params.sessionId.value || missionId !== params.missionId.value)
+        return;
       feedback.error(error, '加载战役失败');
     }
   }
@@ -168,6 +199,7 @@ export function useConfigMissionEditorViewModel(params: {
   }
 
   async function save() {
+    if (params.actionsLocked?.value) return;
     if (draftSession.saving.value) {
       await draftSession.waitForSave();
       return;

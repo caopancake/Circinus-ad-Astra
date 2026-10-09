@@ -1,4 +1,7 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import { savedWriteFixture } from '@/test/write-result';
+import { useWriteSyncStore } from '@/stores/write-sync.store';
+vi.mock('@/orchestrators/entity-events.orchestrator', () => ({ listenEntityIdentityApplied: vi.fn(async () => () => {}) }));
 import { createPinia, getActivePinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigMissionRecord } from '@/domain/config/config-records';
@@ -29,6 +32,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/orchestrators/config-save.orchestrator', () => ({
+  completeConfigSave: async (modRoot: string, _session: string, result: import('@/shared/types').WriteResult) => {
+    useWriteSyncStore().markAccepted({ modRoot, result } as import('@/shared/types').CommittedWriteEvent);
+  },
   createIndexedEntityAction: mocks.createIndexedEntityAction,
   deleteIndexedEntityAction: mocks.deleteIndexedEntityAction,
   saveIndexedEntityAction: mocks.saveIndexedEntityAction,
@@ -144,15 +150,31 @@ describe('useConfigMissionViewModel', () => {
     expect(vm.missionExists('m9')).toBe(false);
   });
 
+  it('retains mission index order when accepting a saved rename', async () => {
+    activateProject();
+    mocks.listConfigMissionRecords.mockResolvedValue([missionRecord('m1', 'One'), missionRecord('m3', 'Three')]);
+    const vm = mountViewModel();
+    await flushPromises();
+    vm.handleSaved('m2', { id: 'm2', data: { list: { mission: 'm2', title: 'Renamed' } }, baseVersions: [], receipt: savedWriteFixture() });
+    expect(vm.missionItems.value.map((mission) => mission.id)).toEqual(['m2', 'm3']);
+    expect(vm.selectedMission.value).toBe('m2');
+  });
+
   it('rejects malformed mission ids on creation', async () => {
     activateProject();
     const vm = mountViewModel();
     await expect(vm.createMission('sess-1', 'M:/mod', 'bad id')).resolves.toBe(false);
-    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.stringContaining('战役 ID'), 'config.id_invalid');
+    expect(mocks.feedback.warning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: expect.stringContaining('战役 ID'),
+        diagnostic: expect.objectContaining({ code: 'config.id_invalid' }),
+      }),
+    );
     expect(mocks.createIndexedEntityAction).not.toHaveBeenCalled();
   });
 
   it('creates a mission with a descriptor stub and refreshes the list', async () => {
+    mocks.createIndexedEntityAction.mockResolvedValue({ entity: { entityId: 'm5' }, receipt: savedWriteFixture() });
     activateProject();
     mocks.listConfigMissionRecords.mockResolvedValue([]);
     const vm = mountViewModel();
@@ -174,7 +196,7 @@ describe('useConfigMissionViewModel', () => {
     const localMission = { list: { mission: '  ' }, descriptor: { title: 'One' }, text: 'body' };
     const nextId = await vm.saveMission('sess-1', 'M:/mod', 'm1', localMission, schema, []);
     expect(nextId).toBeNull();
-    expect(mocks.feedback.warning).toHaveBeenCalledWith('mission 不能为空');
+    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.objectContaining({ userMessage: 'mission 不能为空' }));
     expect(mocks.saveIndexedEntityAction).not.toHaveBeenCalled();
   });
 
@@ -211,10 +233,11 @@ describe('useConfigMissionViewModel', () => {
     await vm.queryMissions();
 
     mocks.deleteIndexedEntityAction.mockRejectedValue(new Error('locked'));
-    await expect(vm.deleteMission('sess-1', 'M:/mod', 'm1', false)).rejects.toThrow('locked');
+    await expect(vm.deleteMission('sess-1', 'M:/mod', 'm1', false)).resolves.toBe(false);
+    expect(mocks.feedback.error).toHaveBeenCalledTimes(1);
     expect(mocks.feedback.success).not.toHaveBeenCalled();
 
-    mocks.deleteIndexedEntityAction.mockResolvedValue({});
+    mocks.deleteIndexedEntityAction.mockResolvedValue(savedWriteFixture());
     mocks.listConfigMissionRecords.mockResolvedValue([]);
     await expect(vm.deleteMission('sess-1', 'M:/mod', 'm1', true)).resolves.toBe(true);
     expect(mocks.deleteIndexedEntityAction).toHaveBeenCalledWith(
@@ -268,7 +291,7 @@ describe('useConfigMissionViewModel', () => {
     release([next]);
     await flushPromises();
     mocks.listConfigMissionRecords.mockResolvedValue([]);
-    mocks.deleteIndexedEntityAction.mockResolvedValue({});
+    mocks.deleteIndexedEntityAction.mockResolvedValue(savedWriteFixture());
     await vm.deleteMission('sB', 'M:/B', 'same', true);
     expect(mocks.deleteIndexedEntityAction).toHaveBeenCalledWith('sB', 'M:/B', 'mission', 'same', true, next.baseVersions);
   });

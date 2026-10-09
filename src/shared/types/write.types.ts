@@ -27,7 +27,8 @@ export interface WriteResult {
 }
 
 export type CommittedSessionUpdate = { sessionId: string; modRoot: string; commitId: number } & (
-  { status: 'ready'; projection: ProjectSessionInvalidationResult } | { status: 'pending'; error: { code: string; message: string } }
+  | { status: 'ready'; projection: ProjectSessionInvalidationResult }
+  | { status: 'pending'; error: import('@/shared/types/error.types').ErrorDiagnostic }
 );
 
 export interface CommittedWriteEvent {

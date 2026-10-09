@@ -1,10 +1,12 @@
 import type { VNodeChild } from 'vue';
+import type { FeedbackNotice } from '@/shared/types/error.types';
 
 export interface ConfirmOptions {
   title: string;
   content?: string | (() => VNodeChild);
   actionText: string;
   onConfirm: () => void | Promise<void>;
+  onCancel?: () => void;
 }
 
 export interface ChoiceOption {
@@ -22,7 +24,7 @@ export interface ChooseOptions {
 export interface AppFeedback {
   success(message: string): void;
   info(message: string): void;
-  warning(message: string, code?: string): void;
+  warning(notice: FeedbackNotice): void;
   error(error: unknown, contextMessage?: string): void;
   confirmDanger(options: ConfirmOptions): void;
   confirmWarning(options: ConfirmOptions): void;

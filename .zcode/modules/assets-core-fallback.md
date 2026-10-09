@@ -14,6 +14,9 @@
 `src/shared/runtime/cache.ts`：统一缓存原语 owner。
 `src/app/composables/editors/use-resource-reference.ts`：贴图引用选择 owner。
 `src/app/composables/use-visible-resource-media.ts`：可视区媒体解析 owner。
+`src/app/composables/use-core-assets.ts`：Core 字段、graphics 与窗口生命周期消费入口。
+`src/orchestrators/core-assets.orchestrator.ts`：Core 读取、根代次、共享 Promise、响应接纳与日志 owner。
+`src/stores/core-assets.store.ts`：所属窗口的 Core 根与两类资源状态 owner。
 `src/domain/schema/schema-options.ts`：引用选项与 ResourceRef 消费规则 owner。
 
 ## 边界
@@ -24,6 +27,7 @@
 - 前端 resource cache 与 media projection 在每个 WebView 共用 64 MiB data URL 预算；两层均按访问顺序逐出，resource cache 与后端资源指纹缓存各自保持 512 项容量。
 - 通用媒体服务保持 25ms 合批、single-flight、session 隔离、路径标准化与资源失效；失效或关闭时 pending 与 in-flight 投影请求立即释放，迟到结果不得重新写入。
 - Core 派生索引只按 canonical 游戏根持久化，只缓存已请求类型，读取前必须以源内容指纹校验，Mod 投射物优先覆盖 Core。
+- Core 字段与 graphics 必须分别持有数据、加载状态与结构化错误；共享运行态必须归 store，读取与日志必须归加载编排。
 
 ## 链路
 
@@ -53,12 +57,22 @@
 2. 读取前以源内容指纹校验；指纹按游戏根进程内缓存。
 3. 清空内存核心缓存时一并丢弃指纹缓存。
 
+### 窗口 Core 读取
+
+1. 窗口壳建立加载生命周期，按 settings 优先、当前 ProjectSession 补充取得根。
+2. 资源消费入口通过加载编排调用所属 Core service，同类同代次请求共用 Promise。
+3. 根变化清空两类投影并推进代次，字段与 graphics 分别查询。
+4. 当前代次结果写入所属状态，失败记录结构化诊断；读取入口再次请求执行重试。
+5. schema 与资源门面投影响应式状态，窗口释放撤销响应接纳并释放根监听。
+
 ## 规范
 
 - Skin 实体贴图必须消费 SkinFile.data.spriteName；内置槽位必须携带最后定义该内置武器的 Mod/Core 来源并据此分组。
 - 前端严禁构造 ResourceRef、拼路径、逐项读图或把 data URL 写入 manifest；缺失 data URL 保持 null。
 - Core root 与所有资源路径必须 canonicalize，拒绝 `..` 与已有父链链接或 reparse point。
 - 引用解析只接受 Mod 根内安全相对路径；绝对路径、`..` 与链接逃逸必须拒绝。
+- Core 成功、错误与请求收尾必须核对根代次及窗口生命周期；根清空必须立即清空投影。
+- Core 加载失败必须保留静态 schema 或空图形选项；后续读取必须按当前根重试。
 - 屏幕外资源严禁发起 data URL 查询；资源失效后可见资源必须重新解析。
 - 列表缩略图只允许解析 observer 预读区内的资源。
 - 指纹不一致即丢弃快照并重建；缓存损坏或不可写只降级，严禁读取旧快照。

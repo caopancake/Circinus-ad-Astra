@@ -37,7 +37,9 @@
       </li>
     </ul>
     <footer class="config-entity-list-footer">
-      <n-button size="small" block :loading="openingCreateDialog" @click="openCreateDialog">{{ family.createLabel }}</n-button>
+      <n-button size="small" block :loading="openingCreateDialog || actionRunning" @click="openCreateDialog">{{
+        family.createLabel
+      }}</n-button>
     </footer>
 
     <n-modal
@@ -46,6 +48,7 @@
       :title="family.createLabel"
       positive-text="创建"
       negative-text="取消"
+      :positive-button-props="{ loading: actionRunning, disabled: actionRunning }"
       @positive-click="submitCreate"
     >
       <div class="variant-dialog-fields">
@@ -70,6 +73,7 @@ import { useVisibleResourceMedia } from '@/app/composables/use-visible-resource-
 const props = defineProps<{
   family: ConfigEntityFamilyDefinition;
   selectedId: string | null;
+  actionRunning: boolean;
   files: ConfigFamilyFile[];
   spriteRefs: Record<string, ResourceRef | null>;
   hullNames: Record<string, string>;
@@ -128,11 +132,9 @@ async function submitCreate() {
   if (!targetModRoot || !targetSessionId) return false;
   const created = await props.createEntity(targetSessionId, targetModRoot, newCompanionId.value.trim(), newId.value.trim());
   if (!created) return false;
-  const createdId = newId.value.trim();
   showCreateDialog.value = false;
   newCompanionId.value = '';
   newId.value = '';
-  if (props.modRoot === targetModRoot && props.sessionId === targetSessionId) emit('select', createdId);
   return true;
 }
 

@@ -41,6 +41,13 @@ const wireWrites = [
 /** @type {CapabilityRule[]} */
 export const frontendCapabilities = [
   {
+    role: 'service',
+    domain: 'assets',
+    names: ['queryCoreFields', 'queryCoreGraphics'],
+    capability: 'core-index-read',
+    owners: [{ layer: 'orchestrators', domain: 'core-assets' }],
+  },
+  {
     path: 'src/shared/runtime/project-projection.ts',
     layer: 'shared',
     role: 'shared',
@@ -91,6 +98,7 @@ export const frontendCapabilities = [
       { layer: 'orchestrators', domain: 'file-history-replay' },
       { layer: 'orchestrators', domain: 'workspace-lifecycle' },
       { layer: 'app', role: 'composable', domain: 'workspace-shell-actions' },
+      { layer: 'app', role: 'composable', domain: 'config-list-selection' },
     ],
   },
   {

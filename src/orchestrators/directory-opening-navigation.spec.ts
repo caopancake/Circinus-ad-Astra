@@ -110,16 +110,19 @@ describe('workspace Mod opening navigation', () => {
 
   it('records a structured runtime failure after rolling back the Mod', async () => {
     const modRoot = '\\\\?\\D:\\game\\mods\\demo';
-    mocks.openProject.mockRejectedValue(
-      new Error('解析 CSV 失败 (D:\\game\\mods\\demo\\data\\hulls\\ship_data.csv): record starts at line 5'),
-    );
+    mocks.openProject.mockRejectedValue({
+      code: 'parse.csv',
+      message: 'CSV parse failed',
+      location: { path: 'D:\\game\\mods\\demo\\data\\hulls\\ship_data.csv', line: 5, column: null },
+    });
 
-    await expect(openModFromOverview(modRoot)).rejects.toThrow('解析 CSV 失败');
+    await expect(openModFromOverview(modRoot)).rejects.toMatchObject({ code: 'parse.csv' });
 
     expect(mocks.workspaceStore.removeLoadedModEntry).toHaveBeenCalledWith(modRoot);
     expect(mocks.workspaceStore.setModOpeningFailure).toHaveBeenCalledWith({
       modRoot,
-      message: expect.stringContaining('解析 CSV 失败'),
+      message: 'CSV 解析失败',
+      diagnostic: expect.objectContaining({ code: 'parse.csv', message: 'CSV parse failed' }),
       file: {
         path: 'D:\\game\\mods\\demo\\data\\hulls\\ship_data.csv',
         line: 5,

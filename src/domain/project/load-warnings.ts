@@ -1,5 +1,10 @@
-import type { ProjectManifest } from '@/shared/types';
+import type { ProjectManifest, FeedbackNotice, GameScanWarning } from '@/shared/types';
+import { formatError } from '@/shared/lib/errors';
 
-export function formatLoadWarnings(loaded: ProjectManifest): string[] {
-  return loaded.warnings.map((warning) => `${warning.message}（${warning.path}）`);
+export function scanWarningNotice(warning: GameScanWarning): FeedbackNotice {
+  return { userMessage: `${formatError(warning)}（${warning.path}）`, diagnostic: warning };
+}
+
+export function formatLoadWarnings(loaded: ProjectManifest): FeedbackNotice[] {
+  return loaded.warnings.map(scanWarningNotice);
 }

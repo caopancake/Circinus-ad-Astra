@@ -23,7 +23,14 @@ describe('ModOpeningFailureList', () => {
   });
 
   it('renders an error without a file action', () => {
-    wrapper = mountList([{ modRoot: 'D:\\mods\\demo', message: '打开失败', file: null }]);
+    wrapper = mountList([
+      {
+        modRoot: 'D:\\mods\\demo',
+        message: '打开失败',
+        file: null,
+        diagnostic: { code: 'unknown', message: 'Open failed', location: null },
+      },
+    ]);
     expect(wrapper.get('.mod-opening-failure-item').text()).toContain('打开失败');
     expect(wrapper.find('button').exists()).toBe(false);
   });
@@ -42,6 +49,7 @@ function mountList(failures: ModOpeningFailure[]): VueWrapper {
 
 function editableFailure(): ModOpeningFailure {
   return {
+    diagnostic: { code: 'parse.csv', message: 'raw CSV detail', location: null },
     modRoot: 'D:\\mods\\demo',
     message: '解析 CSV 失败 (D:\\mods\\demo\\data.csv): record starts at line 5',
     file: { path: 'D:\\mods\\demo\\data.csv', line: 5 },

@@ -17,6 +17,7 @@ import {
 import {
   familyFileId,
   familyFileCompanion,
+  compareFamilyFiles,
   type ConfigEntityFamilyDefinition,
   type ConfigFamilyFile,
 } from '@/domain/config/config-entity-families';
@@ -27,12 +28,13 @@ import { useProjectStore } from '@/stores/project.store';
 import { useSettingsStore } from '@/stores/settings.store';
 import type { ResourceRef, RowData, SavedConfig } from '@/shared/types';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
+import { useConfigListSelection } from '@/app/composables/config/use-config-list-selection';
+import { warningNotice } from '@/shared/lib/errors';
 import type { SelectOption } from '@/domain/schema/schema-options';
 import { hasEntityInvalidation, hasQueryInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
 
 export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
-  const selectedId = ref<string | null>(null);
   const files = ref<ConfigFamilyFile[]>([]);
   const spriteRefs = ref<Record<string, ResourceRef | null>>({});
   const hullNames = ref<Record<string, string>>({});
@@ -44,6 +46,12 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   const feedback = useAppFeedback();
   const modRoot = computed(() => project.activeManifest?.modRoot ?? null);
   const sessionId = computed(() => project.activeManifest?.sessionId ?? null);
+  const selection = useConfigListSelection({ modRoot, sessionId, label: family.displayName });
+  const selectedId = selection.selectedId;
+  const heldFile = ref<ConfigFamilyFile | null>(null);
+  const editorFiles = computed(() =>
+    heldFile.value && selectedId.value === heldFile.value.id ? [...files.value, heldFile.value] : files.value,
+  );
   let filesRequestId = 0;
   const savingSessions = new Set<string>();
   let hullNamesRequestId = 0;
@@ -87,27 +95,34 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       hullNamesRequestId++;
       hullOptionsRequestId++;
       selectedId.value = null;
+      heldFile.value = null;
       dataRevision.value += 1;
     }
-    if (!activeSessionId || disposed) return;
+    if (!activeSessionId || disposed) return false;
     listLoadStartedAt.value = performance.now();
     try {
       const records = family.id === 'variant' ? await listVariantRecords(activeSessionId) : await listSkinRecords(activeSessionId);
-      if (disposed || requestId !== filesRequestId || key !== sessionKey()) return;
+      if (disposed || requestId !== filesRequestId || key !== sessionKey()) return false;
       const previousSelected = files.value.find((file) => idOf(file) === selectedId.value);
       files.value = records.map((record) => record.file);
-      if (identity.receiving.value && previousSelected && !files.value.some((file) => file.id === previousSelected.id))
-        files.value.push(previousSelected);
+      selection.reconcile(
+        [...files.value].sort((a, b) => compareFamilyFiles(family, a, b)).map((file) => file.id),
+        identity.receiving.value,
+      );
+      if (previousSelected && selectedId.value === previousSelected.id && !files.value.some((file) => file.id === previousSelected.id))
+        heldFile.value = previousSelected;
+      else if (files.value.some((file) => file.id === selectedId.value)) heldFile.value = null;
       spriteRefs.value = Object.fromEntries(records.map((record) => [record.file.id, record.spriteRef]));
       const nextSelected = files.value.find((file) => idOf(file) === selectedId.value);
       if (selectedEntityDataChanged(previousSelected, nextSelected)) dataRevision.value += 1;
-      if (selectedId.value && !files.value.some((file) => idOf(file) === selectedId.value)) selectedId.value = null;
       if (family.usesHullNames) {
         await loadFamilyHullNames(activeSessionId, ++hullNamesRequestId, files.value);
       }
+      return true;
     } catch (error) {
-      if (disposed || requestId !== filesRequestId || key !== sessionKey()) return;
+      if (disposed || requestId !== filesRequestId || key !== sessionKey()) return false;
       feedback.error(error, `加载${family.displayName}失败`);
+      return false;
     }
   }
 
@@ -149,64 +164,79 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   async function createFamilyEntity(createSessionId: string, createModRoot: string, companionId: string, id: string): Promise<boolean> {
     if (disposed || sessionId.value !== createSessionId || modRoot.value !== createModRoot) return false;
     if (!companionId || !id) {
-      feedback.warning(`${family.companionLabel} 和 ${family.idField} 不能为空`);
+      feedback.warning(
+        warningNotice(
+          `${family.companionLabel} 和 ${family.idField} 不能为空`,
+          'config.missing_field',
+          'Family ID or companion ID is empty',
+        ),
+      );
       return false;
     }
     if (!isConfigEntityId(id)) {
-      feedback.warning(configEntityIdInvalidMessage(family.idField, id), 'config.id_invalid');
+      feedback.warning(warningNotice(configEntityIdInvalidMessage(family.idField, id), 'config.id_invalid', `Invalid family ID: ${id}`));
       return false;
     }
     if (hasConfigEntityIdConflict(files.value, id, null, idOf)) {
-      feedback.warning(`${family.displayName} "${id}" 已存在`);
+      feedback.warning(warningNotice(`${family.displayName} "${id}" 已存在`, 'config.entity_exists', `Family ID exists: ${id}`));
       return false;
     }
-    try {
-      if (family.id === 'variant') {
-        await createVariantAction(createSessionId, createModRoot, companionId, id);
-      } else {
-        await createSkinAction(createSessionId, createModRoot, companionId, id);
-      }
-      if (project.activeManifest?.modRoot !== createModRoot || project.activeManifest.sessionId !== createSessionId) return true;
-      await loadFiles();
-      if (disposed || project.activeManifest?.modRoot !== createModRoot || project.activeManifest.sessionId !== createSessionId)
+    return selection.mutate({
+      sessionId: createSessionId,
+      modRoot: createModRoot,
+      changesTarget: true,
+      label: `${family.displayName} "${id}" 已创建`,
+      write: async () => {
+        filesRequestId++;
+        const saved =
+          family.id === 'variant'
+            ? await createVariantAction(createSessionId, createModRoot, companionId, id)
+            : await createSkinAction(createSessionId, createModRoot, companionId, id);
+        return saved.receipt;
+      },
+      accept: async () => {
+        if (!(await loadFiles())) return false;
+        if (disposed || modRoot.value !== createModRoot || sessionId.value !== createSessionId) return false;
+        selectedId.value = id;
+        selection.reconcile([...files.value].sort((a, b) => compareFamilyFiles(family, a, b)).map((file) => file.id));
         return true;
-      selectedId.value = id;
-      feedback.success(`${family.displayName} "${id}" 已创建`);
-      return true;
-    } catch (error) {
-      feedback.error(error, `创建${family.displayName}失败`);
-      return false;
-    }
+      },
+    });
   }
 
   async function deleteFamilyEntity(deleteSessionId: string, deleteModRoot: string, id: string, relPath: string): Promise<boolean> {
     if (disposed || sessionId.value !== deleteSessionId || modRoot.value !== deleteModRoot) return false;
-    try {
-      if (family.id === 'variant') {
-        await deleteVariantAction(
-          deleteSessionId,
-          deleteModRoot,
-          relPath,
-          id,
-          files.value.find((file) => idOf(file) === id)?.baseVersions ?? [],
-        );
-      } else {
-        await deleteSkinAction(
-          deleteSessionId,
-          deleteModRoot,
-          relPath,
-          id,
-          files.value.find((file) => idOf(file) === id)?.baseVersions ?? [],
-        );
-      }
-      if (project.activeManifest?.modRoot !== deleteModRoot || project.activeManifest.sessionId !== deleteSessionId) return true;
-      await loadFiles();
-      feedback.success(`${family.displayName} "${id}" 已删除`);
-      return true;
-    } catch (error) {
-      feedback.error(error, `删除${family.displayName}失败`);
-      return false;
-    }
+    return selection.mutate({
+      sessionId: deleteSessionId,
+      modRoot: deleteModRoot,
+      changesTarget: selectedId.value === id,
+      label: `${family.displayName} "${id}" 已删除`,
+      write: () => {
+        filesRequestId++;
+        return family.id === 'variant'
+          ? deleteVariantAction(
+              deleteSessionId,
+              deleteModRoot,
+              relPath,
+              id,
+              files.value.find((file) => idOf(file) === id)?.baseVersions ?? [],
+            )
+          : deleteSkinAction(
+              deleteSessionId,
+              deleteModRoot,
+              relPath,
+              id,
+              files.value.find((file) => idOf(file) === id)?.baseVersions ?? [],
+            );
+      },
+      accept: async () => {
+        if (!(await loadFiles())) return false;
+        if (disposed || modRoot.value !== deleteModRoot || sessionId.value !== deleteSessionId) return false;
+        if (selectedId.value === id) selectedId.value = null;
+        selection.reconcile([...files.value].sort((a, b) => compareFamilyFiles(family, a, b)).map((file) => file.id));
+        return true;
+      },
+    });
   }
 
   async function saveFamilyEntity(
@@ -221,15 +251,23 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     const nextId = trimmedConfigStringField(data, family.idField);
     const nextCompanionId = trimmedConfigStringField(data, family.companionField);
     if (!nextId || !nextCompanionId) {
-      feedback.warning(`${family.idField} 和 ${family.companionField} 不能为空`);
+      feedback.warning(
+        warningNotice(
+          `${family.idField} 和 ${family.companionField} 不能为空`,
+          'config.missing_field',
+          'Family ID or companion ID is empty',
+        ),
+      );
       return null;
     }
     if (!isConfigEntityId(nextId)) {
-      feedback.warning(configEntityIdInvalidMessage(family.idField, nextId), 'config.id_invalid');
+      feedback.warning(
+        warningNotice(configEntityIdInvalidMessage(family.idField, nextId), 'config.id_invalid', `Invalid family ID: ${nextId}`),
+      );
       return null;
     }
     if (hasConfigEntityIdConflict(files.value, nextId, currentId, idOf)) {
-      feedback.warning(`${family.displayName} "${nextId}" 已存在`);
+      feedback.warning(warningNotice(`${family.displayName} "${nextId}" 已存在`, 'config.entity_exists', `Family ID exists: ${nextId}`));
       return null;
     }
     const renameContext = configEntityRenameContext(currentId, nextId);
@@ -290,7 +328,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     if (event.sessionId !== project.activeSessionId) return;
     const filesChanged = hasEntityInvalidation(event, 'entity-list', family.entityKind);
     const hullReferenceQueryChanged = hasQueryInvalidation(event, 'hull-references');
-    if (filesChanged && !savingSessions.has(event.sessionId)) void loadFiles();
+    if (filesChanged && !savingSessions.has(event.sessionId) && !selection.writing.value) void loadFiles();
     if (hullReferenceQueryChanged) {
       if (family.usesHullNames) {
         const requestId = ++hullNamesRequestId;
@@ -312,6 +350,12 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       identity.handoff.value ? { ...identity.handoff.value, record: identity.handoff.value.record.file } : null,
     ),
     selectedId,
+    selectFile: selection.select,
+    actionsLocked: selection.locked,
+    actionRunning: selection.writing,
+    deletedTarget: selection.deletedTarget,
+    discardDeletedTarget: selection.discardDeleted,
+    editorFiles,
     modRoot,
     sessionId,
     files,

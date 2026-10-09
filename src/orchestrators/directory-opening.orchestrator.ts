@@ -1,4 +1,4 @@
-import type { CreatedMod, ModEntry, ProjectManifest } from '@/shared/types';
+import type { CreatedMod, ModEntry, ProjectManifest, FeedbackNotice, GameScanWarning } from '@/shared/types';
 import { cell, formatModVersion } from '@/shared/lib/starsector';
 import { pathBasename } from '@/shared/lib/paths';
 import { useFileHistoryStore } from '@/stores/file-history.store';
@@ -6,7 +6,7 @@ import { useProjectStore } from '@/stores/project.store';
 import { useTablesStore } from '@/stores/tables.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { closeProject, detectDirectoryTarget, openProject, scanDirectoryGameOverview } from '@/services/session.service';
-import { formatLoadWarnings } from '@/domain/project/load-warnings';
+import { formatLoadWarnings, scanWarningNotice } from '@/domain/project/load-warnings';
 import { measurePerformance } from '@/shared/runtime/performance';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
@@ -16,13 +16,13 @@ import { buildModOpeningFailure } from '@/shared/lib/errors';
 
 export type DirectoryOpeningOutcome =
   | { type: 'game-overview'; root: string; availableModCount: number }
-  | { type: 'mod-loaded'; modRoot: string; modName: string; warnings: string[] }
+  | { type: 'mod-loaded'; modRoot: string; modName: string; warnings: FeedbackNotice[] }
   | { type: 'already-loaded'; modRoot: string; modName: string }
   | { type: 'cancelled'; modRoot: string }
   | { type: 'unknown'; message: string };
 
 type OpenModResult =
-  { alreadyLoaded: true; displayName: string } | { alreadyLoaded: false; displayName: string; warnings: string[] } | null;
+  { alreadyLoaded: true; displayName: string } | { alreadyLoaded: false; displayName: string; warnings: FeedbackNotice[] } | null;
 type AfterOpenView = 'overview' | 'mod';
 
 export async function openDirectoryTarget(path: string, knownStarsectorRoot: string | null): Promise<DirectoryOpeningOutcome> {
@@ -196,8 +196,8 @@ async function rollbackFailedModOpening(modRoot: string) {
   await removeLoadedModRuntime(modRoot);
 }
 
-function mergeOpeningWarnings(detectedWarnings: { message: string }[], manifestWarnings: string[]): string[] {
-  return [...detectedWarnings.map((warning) => warning.message), ...manifestWarnings];
+function mergeOpeningWarnings(detectedWarnings: GameScanWarning[], manifestWarnings: FeedbackNotice[]): FeedbackNotice[] {
+  return [...detectedWarnings.map(scanWarningNotice), ...manifestWarnings];
 }
 
 function createLoadingEntry(modRoot: string): ModEntry {

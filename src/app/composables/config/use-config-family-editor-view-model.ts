@@ -19,6 +19,7 @@ export function useConfigFamilyEditorViewModel(params: {
   sessionId: Ref<string | null>;
   selectedId: Ref<string>;
   files: Ref<ConfigFamilyFile[]>;
+  actionsLocked?: Readonly<Ref<boolean>>;
   identityHandoff?: Readonly<Ref<import('@/shared/types').ConfigIdentityHandoff<ConfigFamilyFile> | null>>;
 }) {
   const adoptedCommits = new Set<number>();
@@ -120,6 +121,7 @@ export function useConfigFamilyEditorViewModel(params: {
   }
 
   async function save() {
+    if (params.actionsLocked?.value) return;
     if (draftSession.saving.value) {
       await draftSession.waitForSave();
       return;

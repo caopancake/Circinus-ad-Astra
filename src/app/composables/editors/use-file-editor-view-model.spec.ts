@@ -250,7 +250,11 @@ describe('useFileEditorViewModel external text', () => {
     const vm = await initializeViewModel(paramsFixture({ modRoot: 'M:/mod', filePath: before.write.path }));
     vm.updateText('{hullId:');
     mocks.feedback.choose.mockResolvedValueOnce('follow');
-    mocks.followIdentity.mockRejectedValueOnce(new Error('parse error at line 1 column 9'));
+    mocks.followIdentity.mockRejectedValueOnce({
+      code: 'parse.json_syntax',
+      message: 'Unfinished text',
+      location: { path: null, line: 1, column: 9 },
+    });
     const result = savedWriteFixture();
     result.identityChanges = [{ before, after }];
     result.commitId = 10;

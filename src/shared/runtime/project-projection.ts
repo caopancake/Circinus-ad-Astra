@@ -9,5 +9,6 @@ export function markProjectionReady(sessionId: string, commitId?: number) {
   if (commitId === undefined || commitId >= (pendingSessions.get(sessionId) ?? 0)) pendingSessions.delete(sessionId);
 }
 export function requireProjectionReady(sessionId: string) {
-  if (pendingSessions.has(sessionId)) throw new AppError('项目已写盘，等待会话投影同步', { action: 'session.projection_pending' });
+  if (pendingSessions.has(sessionId))
+    throw new AppError('Session projection pending', { action: 'query-session', code: 'session.projection_pending' });
 }

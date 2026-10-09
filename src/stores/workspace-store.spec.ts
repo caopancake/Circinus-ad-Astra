@@ -43,5 +43,5 @@ describe('workspace Mod opening failures', () => {
 });
 
 function failure(modRoot: string, message: string): ModOpeningFailure {
-  return { modRoot, message, file: null };
+  return { modRoot, message, file: null, diagnostic: { code: 'unknown', message, location: null } };
 }

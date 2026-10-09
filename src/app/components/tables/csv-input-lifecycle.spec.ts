@@ -40,7 +40,7 @@ function mountTable() {
     sessionId: 'sA',
     tableSummaries: Object.fromEntries(TABLE_KEYS.map((table) => [table, { header: ['width'], totalRows: 1 }])),
   } as ProjectManifest);
-  tables.applyTableWindow({
+  tables.applyTableWindow(target, {
     table: 'ships',
     baseVersions: [],
     header: ['width'],
@@ -65,7 +65,7 @@ function mountTable() {
             editing: tables.editing,
             selectedRowKey: tables.selectedRowKey,
             isDirty: tables.isDirty,
-            onSelectRow: tables.selectRowByKey,
+            onSelectRow: (rowKey: string | null) => tables.selectRowByKey(target, rowKey),
           });
       },
     },
@@ -101,15 +101,18 @@ describe('CSV input, target and row lifecycle', () => {
     await nextTick();
     await wrapper.get('td[data-column-key="width"]').trigger('click');
     await wrapper.get('input.csv-cell-input').setValue('later');
-    tables.applyTableWindow({
-      table: 'ships',
-      baseVersions: [],
-      header: ['width'],
-      start: 0,
-      filteredRows: 1,
-      totalRows: 1,
-      rows: [{ rowKey: 'ships:new:0', sourceRowIndex: 0, factionId: null, data: { width: 'external' } }],
-    });
+    tables.applyTableWindow(
+      { sessionId: 'sA', modRoot: 'M:/A', table: 'ships' },
+      {
+        table: 'ships',
+        baseVersions: [],
+        header: ['width'],
+        start: 0,
+        filteredRows: 1,
+        totalRows: 1,
+        rows: [{ rowKey: 'ships:new:0', sourceRowIndex: 0, factionId: null, data: { width: 'external' } }],
+      },
+    );
     expect(tables.rows[0]?.data.width).toBe('1');
     expect(tables.hasCurrentTableExternalUpdate).toBe(true);
     await wrapper.get('.table-panel').trigger('scroll');

@@ -1,4 +1,6 @@
 import { entityTargetFixture } from '@/test/entity-target';
+import { savedWriteFixture } from '@/test/write-result';
+import { useWriteSyncStore } from '@/stores/write-sync.store';
 import { mount } from '@vue/test-utils';
 vi.mock('@/orchestrators/entity-events.orchestrator', () => ({ listenEntityIdentityApplied: vi.fn(async () => () => {}) }));
 import { createPinia, setActivePinia } from 'pinia';
@@ -28,6 +30,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/orchestrators/config-save.orchestrator', () => ({
+  completeConfigSave: async (modRoot: string, _session: string, result: import('@/shared/types').WriteResult) => {
+    useWriteSyncStore().markAccepted({ modRoot, result } as import('@/shared/types').CommittedWriteEvent);
+  },
   saveVariantAction: mocks.saveVariantAction,
   createVariantAction: mocks.createVariantAction,
   deleteVariantAction: mocks.deleteVariantAction,
@@ -177,7 +182,7 @@ describe('useConfigFamilyViewModel creation', () => {
   it('rejects empty companion or id fields', async () => {
     const vm = mountViewModel();
     await expect(vm.createFamilyEntity('sess-1', 'M:/mod', '', 'v1')).resolves.toBe(false);
-    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.stringContaining('不能为空'));
+    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.objectContaining({ userMessage: expect.stringContaining('不能为空') }));
     await expect(vm.createFamilyEntity('sess-1', 'M:/mod', 'h1', '')).resolves.toBe(false);
     expect(mocks.createVariantAction).not.toHaveBeenCalled();
   });
@@ -188,14 +193,20 @@ describe('useConfigFamilyViewModel creation', () => {
     await vm.loadFiles();
 
     await expect(vm.createFamilyEntity('sess-1', 'M:/mod', 'h1', 'bad id!')).resolves.toBe(false);
-    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.stringContaining('variantId'), 'config.id_invalid');
+    expect(mocks.feedback.warning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: expect.stringContaining('variantId'),
+        diagnostic: expect.objectContaining({ code: 'config.id_invalid' }),
+      }),
+    );
 
     await expect(vm.createFamilyEntity('sess-1', 'M:/mod', 'h1', 'v1')).resolves.toBe(false);
-    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.stringContaining('已存在'));
+    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.objectContaining({ userMessage: expect.stringContaining('已存在') }));
     expect(mocks.createVariantAction).not.toHaveBeenCalled();
   });
 
   it('creates the entity and selects it', async () => {
+    mocks.createVariantAction.mockResolvedValue({ entity: variantRecord('v2', 'h1').file, receipt: savedWriteFixture() });
     mocks.listVariantRecords.mockResolvedValue([]);
     const vm = mountViewModel();
     await vm.loadFiles();
@@ -229,7 +240,7 @@ describe('useConfigFamilyViewModel saving', () => {
     };
 
     await expect(vm.saveFamilyEntity('sess-1', 'M:/mod', current, { variantId: '', hullId: 'h1' })).resolves.toBeNull();
-    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.stringContaining('不能为空'));
+    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.objectContaining({ userMessage: expect.stringContaining('不能为空') }));
     expect(mocks.saveVariantAction).not.toHaveBeenCalled();
   });
 
@@ -247,7 +258,7 @@ describe('useConfigFamilyViewModel saving', () => {
     };
 
     await expect(vm.saveFamilyEntity('sess-1', 'M:/mod', current, { variantId: 'v2', hullId: 'h1' })).resolves.toBeNull();
-    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.stringContaining('已存在'));
+    expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.objectContaining({ userMessage: expect.stringContaining('已存在') }));
   });
 
   it('saves renames with the previous id and reloads', async () => {
@@ -291,6 +302,7 @@ describe('useConfigFamilyViewModel deletion', () => {
   });
 
   it('deletes the entity and moves the selection to the first remaining file', async () => {
+    mocks.deleteVariantAction.mockResolvedValue(savedWriteFixture());
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v1', 'h1'), variantRecord('v2', 'h1')]);
     const vm = mountViewModel();
     await vm.loadFiles();
@@ -301,7 +313,7 @@ describe('useConfigFamilyViewModel deletion', () => {
     expect(mocks.deleteVariantAction).toHaveBeenCalledWith('sess-1', 'M:/mod', 'data/variants/v2.variant', 'v2', []);
     expect(vm.files.value.map((file) => file.id)).toEqual(['v1']);
     // The reload clears the removed selection before the delete handler picks a fallback.
-    expect(vm.selectedId.value).toBeNull();
+    expect(vm.selectedId.value).toBe('v1');
     expect(mocks.feedback.success).toHaveBeenCalledWith(expect.stringContaining('已删除'));
   });
 

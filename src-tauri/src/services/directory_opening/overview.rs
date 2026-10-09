@@ -24,6 +24,8 @@ fn scan_game_overview_root(starsector_root: &Path) -> GameOverviewData {
 
     if !starsector_root.join("starsector-core").exists() {
         warnings.push(GameScanWarning {
+            code: "scan.core_missing".to_string(),
+            location: None,
             path: starsector_root
                 .join("starsector-core")
                 .to_string_lossy()
@@ -50,6 +52,8 @@ fn scan_game_overview_root(starsector_root: &Path) -> GameOverviewData {
                     Ok(entry) => entry,
                     Err(error) => {
                         warnings.push(GameScanWarning {
+                            code: "io.unexpected".to_string(),
+                            location: None,
                             path: mods_dir.to_string_lossy().to_string(),
                             message: format!("读取 mods 目录项失败: {error}"),
                             edit_target: None,
@@ -60,6 +64,8 @@ fn scan_game_overview_root(starsector_root: &Path) -> GameOverviewData {
                 let mod_root = entry.path();
                 if let Err(error) = validate_walk_entry(&mod_root, "mods directory") {
                     warnings.push(GameScanWarning {
+                        code: error.code().to_string(),
+                        location: error.location().cloned(),
                         path: mod_root.to_string_lossy().to_string(),
                         message: format!("Mod 路径使用链接或不可读取，已跳过: {error}"),
                         edit_target: None,
@@ -72,6 +78,8 @@ fn scan_game_overview_root(starsector_root: &Path) -> GameOverviewData {
                 let mod_info_path = mod_root.join("mod_info.json");
                 if !mod_info_path.exists() {
                     warnings.push(GameScanWarning {
+                        code: "scan.mod_info_missing".to_string(),
+                        location: None,
                         path: mod_root.to_string_lossy().to_string(),
                         message: "缺少 mod_info.json，已跳过".to_string(),
                         edit_target: None,
@@ -81,6 +89,8 @@ fn scan_game_overview_root(starsector_root: &Path) -> GameOverviewData {
                 match read_json_file(&mod_info_path) {
                     Ok(info) => mods.push(summary_from_mod_info(&mod_root, &info)),
                     Err(error) => warnings.push(GameScanWarning {
+                        code: error.code().to_string(),
+                        location: error.location().cloned(),
                         path: mod_info_path.to_string_lossy().to_string(),
                         message: format!("读取 mod_info.json 失败: {error}"),
                         edit_target: Some(GameWarningEditTarget {
@@ -93,6 +103,8 @@ fn scan_game_overview_root(starsector_root: &Path) -> GameOverviewData {
         }
         Err(_) if !mods_dir.exists() => {
             warnings.push(GameScanWarning {
+                code: "scan.mods_missing".to_string(),
+                location: None,
                 path: mods_dir.to_string_lossy().to_string(),
                 message: "缺少 mods 目录".to_string(),
                 edit_target: None,
@@ -100,6 +112,8 @@ fn scan_game_overview_root(starsector_root: &Path) -> GameOverviewData {
         }
         Err(error) => {
             warnings.push(GameScanWarning {
+                code: "io.unexpected".to_string(),
+                location: None,
                 path: mods_dir.to_string_lossy().to_string(),
                 message: format!("无法读取 mods 目录: {error}"),
                 edit_target: None,
@@ -202,6 +216,8 @@ fn append_duplicate_id_warnings(mods: &[GameModSummary], warnings: &mut Vec<Game
     for summary in mods {
         if counts.get(summary.id.as_str()).copied().unwrap_or_default() > 1 {
             warnings.push(GameScanWarning {
+                code: "scan.mod_id_duplicate".to_string(),
+                location: None,
                 path: summary.mod_root.clone(),
                 message: format!("重复 Mod id: {}", summary.id),
                 edit_target: None,

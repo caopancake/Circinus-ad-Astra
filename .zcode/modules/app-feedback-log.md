@@ -6,7 +6,10 @@
 
 ## 参考
 
-`src/app/app-feedback.ts`：反馈工厂 owner，拥有 message/dialog/choose、错误呈现、错误文件引用解析与打开错误文件动作。
+`src/app/app-feedback.ts`：反馈工厂 owner，拥有 message/dialog/choose、错误呈现、结构化文件位置与打开错误文件动作。
+`src/shared/types/error.types.ts`：稳定码、原始诊断、结构化位置与通知对象契约。
+`src/shared/lib/errors.ts`：错误包装、诊断投影、文案投影与恢复目标装配 owner。
+`src-tauri/src/errors.rs`：command 错误、位置与来源 payload 序列化 owner。
 `src/app/composables/use-app-feedback.ts`：反馈 hook，唯一允许消费工厂的入口。
 `src/services/app-feedback-log.service.ts`：应用日志 service，拥有日志追加、状态查询、日志与配置文件动作，并注册性能日志 sink。
 `src/shared/api/app-feedback-log-api.ts`：应用日志 wire API，映射后端日志与配置命令。
@@ -30,6 +33,8 @@
 - 级别阈值来自已保存 settings 的 `logLevel`（默认 INFO）；每次写入单点过滤，前端不做预过滤。
 - 降级类内部错误（持久化缓存不可写、锁中毒等）必须经诊断 sink 记录后才能按降级语义继续，严禁静默吞掉。
 - 错误文件入口只在路径命中已加载 `modRoot` 且有 `sessionId`（或路径属于当前子窗口自身的会话身份）时启用；否则只提示不显示按钮。
+- 错误与扫描警告必须携带稳定码、原始 message 与 nullable location；前端动作身份和用户文案必须由各自投影消费。
+- warning 必须消费 FeedbackNotice 的 userMessage 与 diagnostic；日志必须消费 diagnostic，错误包装必须保留来源稳定码及位置。
 - 每次日志操作从已保存 settings 解析目录：默认 app data 可创建，自定义目录必须已存在且可写。
 - 清空配置保留日志；清空日志仅清空内容；两者严禁写 settings、workspace 或 Mod 目标。
 - 确认类交互必须走 `AppFeedback` 确认能力；业务代码严禁直接创建 message 或 dialog。
@@ -38,8 +43,8 @@
 
 ### 浮出提示与错误文件入口
 
-1. 业务调用 `feedback.success/info/warning/error`；error 文本由 `formatError` 组装，后端 `{ code, message }` wire 错误经 `shared/lib/error-messages.ts` 的码表映射为用户文案（未映射码回退诊断消息）。
-2. 工厂对全部级别文本提取文件引用并解析会话：已加载 manifest 优先，未命中时子窗口自身 `modRoot + sessionId` 身份回退。
+1. 业务调用反馈入口；error 消费原始错误，warning 消费 userMessage 与 diagnostic；formatError 映射稳定码及动作上下文。
+2. 工厂消费诊断的结构化位置并解析会话：已加载 manifest 优先，未命中时子窗口自身 `modRoot + sessionId` 身份回退。
 3. 工厂渲染主文案；命中文件引用时追加文件位置行（路径与行列后缀）。
 4. 会话可解析时附加"打开文件"按钮，点击后按会话与路径打开文件编辑器窗口，contextSeverity 按提示级别映射。
 5. `text.invalid_utf8` 错误附加"转码为 UTF-8"动作：用户在模态选择框显式选择源编码，后端解码后经文件编辑器保存链路写回，成功与失败各呈现一条提示。
@@ -66,6 +71,8 @@
 - "转码为 UTF-8"动作仅在 `text.invalid_utf8` 错误且会话可解析时出现，其它错误严禁出现；转码写盘复用文件编辑器保存链路并登记 history。
 - 输入校验拒绝（`configEntityIdInvalidMessage`）为 warning 级，携带稳定码 `config.id_invalid` 与出错的 ID 值，严禁以 error 级呈现。
 - 错误呈现必须保留原始错误链，格式化时父子消息不得重复拼接。
+- 日志必须保留来源原始诊断链，前端包装动作必须写入结构化 action 上下文；文件位置必须从 location 消费。
+- 文件行列必须从 1 开始，列必须按编辑器 UTF-16 单元表达；根授权必须归所属会话及后端路径边界。
 - warning/error 日志条目必须携带稳定码与可选的文件位置；success/info 反馈严禁产生日志条目。
 - 动作与结果类 info 条目固定由以下稳定码承载：`app.started/exited`（带版本）、`directory.scanned/unrecognized`、`mod.session_opened/closed`、`mod.already_loaded/removed/created`、`tables.csv_saved/row_created/row_deleted/undo_applied/redo_applied`、`workspace.refreshed/closed`、`editor.file_opened/file_saved/window_opened/spec_saved`、`history.replayed`、`settings.saved`（debug）；降级丢弃类（如子窗口草稿快照解析失败）为 warning 级 `editor.draft_snapshot_invalid`。
 - 时间戳由后端写入时按本地时区渲染（`YYYY-MM-DD HH:MM:SS.mmm`）；文件达到 5MB 上限时轮转为 `.log.1`（单份历史）。

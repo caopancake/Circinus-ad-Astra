@@ -1,4 +1,20 @@
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorLocation {
+    pub path: Option<String>,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorDiagnostic {
+    pub code: String,
+    pub message: String,
+    pub location: Option<ErrorLocation>,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -12,6 +28,11 @@ pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
+    #[error("{source}")]
+    Located {
+        location: ErrorLocation,
+        source: Box<AppError>,
+    },
     #[error("{message}")]
     Message { code: &'static str, message: String },
     #[error("{context}: {source}")]
@@ -54,12 +75,62 @@ impl AppError {
         match self {
             Self::Message { code, .. } => code,
             Self::Context { source, .. } => source.code(),
+            Self::Located { source, .. } => source.code(),
             Self::Io(_) => "io.unexpected",
             Self::Csv(_) => "parse.csv",
             Self::Json(_) => "parse.json",
             Self::Base64(_) => "data.base64",
             Self::Tauri(_) => "window.native",
             Self::JsonRewriteRequired { .. } => "json.rewrite_confirmation_required",
+        }
+    }
+
+    pub fn location(&self) -> Option<&ErrorLocation> {
+        match self {
+            Self::Located { location, .. } => Some(location),
+            Self::Context { source, .. } => source.location(),
+            _ => None,
+        }
+    }
+
+    pub fn at_path(self, path: impl AsRef<std::path::Path>) -> Self {
+        let mut location = self.location().cloned().unwrap_or(ErrorLocation {
+            path: None,
+            line: None,
+            column: None,
+        });
+        location.path = Some(path.as_ref().to_string_lossy().into_owned());
+        Self::Located {
+            location,
+            source: Box::new(self),
+        }
+    }
+
+    pub fn at_position(self, line: usize, column: Option<usize>) -> Self {
+        let location = ErrorLocation {
+            path: self.location().and_then(|location| location.path.clone()),
+            line: Some(line),
+            column,
+        };
+        Self::Located {
+            location,
+            source: Box::new(self),
+        }
+    }
+
+    pub fn diagnostic(&self) -> ErrorDiagnostic {
+        ErrorDiagnostic {
+            code: self.code().to_string(),
+            message: self.to_string(),
+            location: self.location().cloned(),
+        }
+    }
+
+    fn rewrite_files(&self) -> Option<&[JsonRewriteFile]> {
+        match self {
+            Self::JsonRewriteRequired { files } => Some(files),
+            Self::Context { source, .. } | Self::Located { source, .. } => source.rewrite_files(),
+            _ => None,
         }
     }
 }
@@ -70,10 +141,11 @@ impl Serialize for AppError {
         S: Serializer,
     {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("AppError", 3)?;
+        let mut state = serializer.serialize_struct("AppError", 4)?;
         state.serialize_field("code", self.code())?;
         state.serialize_field("message", &self.to_string())?;
-        if let Self::JsonRewriteRequired { files } = self {
+        state.serialize_field("location", &self.location())?;
+        if let Some(files) = self.rewrite_files() {
             state.serialize_field("files", files)?;
         }
         state.end()
@@ -122,5 +194,40 @@ mod tests {
         let value = serde_json::to_value(&error).expect("serializable");
         assert_eq!(value["code"], "spec.missing");
         assert_eq!(value["message"], "outer: inner detail");
+        assert!(value["location"].is_null());
+    }
+
+    #[test]
+    fn wrappers_preserve_diagnostic_location_and_rewrite_payload() {
+        let error = AppError::context(
+            "save",
+            AppError::message("parse.json_syntax", "raw").at_position(3, Some(8)),
+        )
+        .at_path("demo.skin");
+        let diagnostic = error.diagnostic();
+        assert_eq!(diagnostic.code, "parse.json_syntax");
+        assert_eq!(diagnostic.message, "save: raw");
+        assert_eq!(
+            diagnostic.location,
+            Some(ErrorLocation {
+                path: Some("demo.skin".into()),
+                line: Some(3),
+                column: Some(8)
+            })
+        );
+        let rewrite = AppError::context(
+            "save",
+            AppError::JsonRewriteRequired {
+                files: vec![JsonRewriteFile {
+                    path: "demo.json".into(),
+                    reason: "shape".into(),
+                    source_fingerprint: "v1".into(),
+                }],
+            },
+        )
+        .at_path("demo.json");
+        let wire = serde_json::to_value(rewrite).unwrap();
+        assert_eq!(wire["files"][0]["sourceFingerprint"], "v1");
+        assert_eq!(wire["location"]["path"], "demo.json");
     }
 }

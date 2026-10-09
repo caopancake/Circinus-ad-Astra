@@ -30,6 +30,7 @@ export function useConfigFactionEditorViewModel(params: {
   ) => Promise<import('@/shared/types').ConfigSaveIdentity | null>;
   schema: Ref<FileSchema | null>;
   sessionId: Ref<string | null>;
+  actionsLocked?: Readonly<Ref<boolean>>;
 }) {
   const adoptedCommits = new Set<number>();
   const feedback = useAppFeedback();
@@ -170,6 +171,7 @@ export function useConfigFactionEditorViewModel(params: {
   }
 
   async function save() {
+    if (params.actionsLocked?.value) return;
     if (draftSession.saving.value) {
       await draftSession.waitForSave();
       return;

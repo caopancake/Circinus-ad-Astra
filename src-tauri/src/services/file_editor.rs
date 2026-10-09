@@ -59,6 +59,7 @@ pub fn query_text_identity_intent(
 ) -> AppResult<crate::models::EntityIdentityIntent> {
     let content = crate::parsers::parse_starsector_json(text).map_err(|error| {
         AppError::context(format!("解析 JSON 文件失败 ({})", source.write.path), error)
+            .at_path(&source.write.path)
     })?;
     let definition = crate::domain::editor_config_definitions::entity_spec_definition(source.kind)
         .expect("recognized file has spec definition");

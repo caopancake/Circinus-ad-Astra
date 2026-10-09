@@ -408,7 +408,7 @@ describe('table-save orchestrator', () => {
     state.tables.ships = [csvDraftRow({ id: 'first' }, 'ships:r1', 0), csvDraftRow({ id: 'second' }, 'ships:r2', 1)];
     state.originalTables.ships = deepClone(state.tables.ships);
     const tables = useTablesStore();
-    tables.selectRowByKey('ships:r1');
+    tables.selectRowByKey({ sessionId: SESSION_ID, modRoot: MOD_ROOT, table: 'ships' }, 'ships:r1');
     tables.deleteSelected();
     let release!: (result: WriteResult) => void;
     writeCsvPatch.mockImplementationOnce(

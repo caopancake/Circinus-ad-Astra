@@ -58,6 +58,7 @@ export function createFileReplayPlan(project: ProjectStore, direction: FileHisto
 }
 
 export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project: ProjectStore, tables: TablesStore): Promise<void> {
+  const tableTarget = { sessionId: plan.sessionId, modRoot: plan.modRoot, table: tables.currentTab };
   await retryPendingWritesForMod(plan.modRoot);
   assertReplayPlanStillCurrent(plan, project);
   const result = await replayFileChangeSet(plan.sessionId, plan.modRoot, plan.direction, plan.entry.id, plan.revision);
@@ -65,7 +66,7 @@ export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project
   useFileHistoryStore().applySnapshot(plan.modRoot, result.history);
   await publishCommittedWrite(plan.modRoot, result, plan.sessionId, plan.direction);
   if (project.activeModRoot === plan.modRoot && result.sessionUpdates.some((update) => update.modRoot === plan.modRoot))
-    tables.selectRowByKey(null);
+    tables.selectRowByKey(tableTarget, null);
   recordLogBestEffort({
     level: 'info',
     code: 'history.replayed',

@@ -1,5 +1,11 @@
 <template>
-  <div class="faction-editor-page">
+  <div class="faction-editor-page" :inert="actionsLocked">
+    <ConfigTargetNotice
+      label="势力"
+      :deleted-target="deletedTarget"
+      :actions-locked="actionsLocked"
+      :discard-deleted-target="discardDeletedTarget"
+    />
     <header class="faction-editor-header">
       <h2>{{ displayName }}</h2>
       <div class="config-editor-actions">
@@ -35,6 +41,7 @@ import type { RowData } from '@/shared/types';
 import type { SchemaRuntimeContext } from '@/domain/schema/schema-runtime';
 import type { FileSchema } from '@/domain/schema/schema.types';
 import SchemaFormRenderer from '@/app/components/schema/SchemaFormRenderer.vue';
+import ConfigTargetNotice from '@/app/components/config/ConfigTargetNotice.vue';
 import { useCoreSchema } from '@/app/composables/use-core-assets';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useConfigFactionEditorViewModel } from '@/app/composables/config/use-config-faction-editor-view-model';
@@ -43,6 +50,9 @@ import { useSaveCommandStore } from '@/stores/save-command.store';
 const props = defineProps<{
   identityHandoff: import('@/shared/types').ConfigIdentityHandoff<import('@/domain/config/config-records').ConfigFactionRecord> | null;
   factionId: string;
+  actionsLocked: boolean;
+  deletedTarget: boolean;
+  discardDeletedTarget: () => void | Promise<void>;
   dataRevision: number;
   previewRevision: number;
   factions: Record<string, RowData>;
@@ -82,6 +92,7 @@ const { crestSrc, displayName, draftData, externalUpdateNotice, hasPendingExtern
     saveFaction: props.saveFaction,
     schema,
     sessionId: toRef(props, 'sessionId'),
+    actionsLocked: toRef(props, 'actionsLocked'),
   });
 
 function confirmDeleteFaction() {
@@ -102,7 +113,6 @@ function confirmDeleteFaction() {
 async function deleteFactionTarget(deleteSessionId: string, deleteModRoot: string, deleteId: string) {
   try {
     await props.deleteFaction(deleteSessionId, deleteModRoot, deleteId, true);
-    if (props.modRoot === deleteModRoot && props.sessionId === deleteSessionId) emit('saved', null);
   } catch (error) {
     feedback.error(error, '删除势力失败');
     return false;

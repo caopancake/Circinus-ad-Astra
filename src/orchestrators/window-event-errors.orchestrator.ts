@@ -1,13 +1,15 @@
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
-import { errorCodeOf } from '@/shared/lib/errors';
+import { errorDiagnosticOf } from '@/shared/lib/errors';
+import { logFields } from '@/shared/lib/log-fields';
 
 export function recordWindowEventHandlerError(error: unknown, event: string): void {
+  const diagnostic = errorDiagnosticOf(error);
   recordLogBestEffort({
     level: 'error',
-    code: errorCodeOf(error),
-    message: 'window event handler failed',
-    path: null,
-    line: null,
-    fields: { event },
+    code: diagnostic.code,
+    message: diagnostic.message,
+    path: diagnostic.location?.path ?? null,
+    line: diagnostic.location?.line ?? null,
+    fields: logFields({ event, column: diagnostic.location?.column }),
   });
 }

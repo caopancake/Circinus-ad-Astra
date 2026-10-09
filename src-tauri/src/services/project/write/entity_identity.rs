@@ -33,6 +33,7 @@ pub fn save_entity_text(
 ) -> AppResult<WriteResult<Value>> {
     let data = crate::parsers::parse_starsector_json(&text).map_err(|error| {
         AppError::context(format!("解析 JSON 文件失败 ({})", target.write.path), error)
+            .at_path(&target.write.path)
     })?;
     let definition =
         entity_spec_definition(target.kind).expect("recognized text has a format definition");

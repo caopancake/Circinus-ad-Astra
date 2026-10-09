@@ -9,6 +9,8 @@ import {
   extractFileReferenceFromError,
   fileReferenceLocationSuffix,
   formatError,
+  errorDiagnosticOf,
+  AppError,
   type FileReference,
 } from '@/shared/lib/errors';
 import { resolveFeedbackFileSession, type FeedbackFileSession } from '@/shared/lib/feedback-session';
@@ -23,6 +25,7 @@ import { errorMessageOf } from '@/shared/lib/errors';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useProjectStore } from '@/stores/project.store';
 import { closestRootForPath } from '@/shared/lib/paths';
+import { logFields } from '@/shared/lib/log-fields';
 
 type ToastLevel = 'success' | 'info' | 'warning' | 'error';
 
@@ -47,6 +50,7 @@ const TRANSCODABLE_ERROR_CODE = 'text.invalid_utf8';
 
 interface ToastOptions {
   transcodable?: boolean;
+  reference?: FileReference | null;
 }
 
 export function createAppFeedback(message: MessageApiInjection, dialog: DialogApiInjection): AppFeedback {
@@ -57,15 +61,16 @@ export function createAppFeedback(message: MessageApiInjection, dialog: DialogAp
     info: (text) => {
       showToast(message, dialog, 'info', text);
     },
-    warning: (text, code) => {
-      const reference = showToast(message, dialog, 'warning', text);
+    warning: (notice) => {
+      const reference = extractFileReferenceFromError(notice.diagnostic);
+      showToast(message, dialog, 'warning', notice.userMessage, { reference });
       recordLogBestEffort({
         level: 'warning',
-        code: code ?? 'ui.warning',
-        message: text,
+        code: notice.diagnostic.code,
+        message: notice.diagnostic.message,
         path: reference?.path ?? null,
         line: reference?.line ?? null,
-        fields: null,
+        fields: logFields({ column: notice.diagnostic.location?.column }),
       });
     },
     error: (error, contextMessage) => showErrorToast(message, dialog, error, contextMessage),
@@ -77,14 +82,18 @@ export function createAppFeedback(message: MessageApiInjection, dialog: DialogAp
 
 function showErrorToast(message: MessageApiInjection, dialog: DialogApiInjection, error: unknown, contextMessage?: string): void {
   const text = contextMessage ? `${contextMessage}：${formatError(error)}` : formatError(error);
-  const reference = showToast(message, dialog, 'error', text, { transcodable: commandErrorCode(error) === TRANSCODABLE_ERROR_CODE });
+  const diagnostic = errorDiagnosticOf(error);
+  const reference = showToast(message, dialog, 'error', text, {
+    reference: extractFileReferenceFromError(error),
+    transcodable: diagnostic.code === TRANSCODABLE_ERROR_CODE,
+  });
   recordLogBestEffort({
     level: 'error',
-    code: commandErrorCode(error) ?? 'unknown',
-    message: errorMessageOf(error),
+    code: diagnostic.code,
+    message: diagnostic.message,
     path: reference?.path ?? null,
     line: reference?.line ?? null,
-    fields: null,
+    fields: logFields({ action: error instanceof AppError ? error.action : contextMessage, column: diagnostic.location?.column }),
   });
 }
 
@@ -95,6 +104,9 @@ function showConfirm(dialog: DialogApiInjection, type: 'error' | 'warning', opti
     positiveText: options.actionText,
     negativeText: '取消',
     onPositiveClick: () => options.onConfirm(),
+    onNegativeClick: options.onCancel,
+    onClose: options.onCancel,
+    onMaskClick: options.onCancel,
   });
 }
 
@@ -105,7 +117,7 @@ function showToast(
   text: string,
   options?: ToastOptions,
 ): FileReference | null {
-  const reference = extractFileReferenceFromError(text);
+  const reference = options?.reference ?? null;
   const session = reference === null ? null : resolveSessionForPath(reference.path);
   const content = () => renderToastContent(message, dialog, level, text, reference, session, options);
   // Error toasts stay open until closed manually: naive-ui skips the

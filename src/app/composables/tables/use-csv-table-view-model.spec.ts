@@ -98,7 +98,7 @@ vi.mock('@/stores/tables.store', () => ({
     },
     markTableExternalUpdate: vi.fn(),
     discardTableDraftForReload: vi.fn(),
-    applyTableWindow: vi.fn((window: CsvTableWindow) => {
+    applyTableWindow: vi.fn((_target: unknown, window: CsvTableWindow) => {
       tablesState.appliedWindow = window;
       tablesState.filteredRows = window.rows.map((entry) => ({ ...entry, insertAt: null }));
     }),

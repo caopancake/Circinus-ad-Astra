@@ -63,7 +63,7 @@
 import ModOpeningFailureList from '@/app/components/ModOpeningFailureList.vue';
 import type { GameOverviewData, GameScanWarning, ModOpeningFailure } from '@/shared/types';
 import { modStatusLabel } from '@/domain/workspace/mod-status';
-import { appendFileReferenceLocation, extractFileReferenceFromError } from '@/shared/lib/errors';
+import { appendFileReferenceLocation, extractFileReferenceFromError, formatError } from '@/shared/lib/errors';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useWorkspaceNavigationActions } from '@/app/composables/use-workspace-navigation-actions';
 
@@ -94,6 +94,6 @@ function warningKey(warning: GameScanWarning): string {
 }
 
 function warningMessage(warning: GameScanWarning): string {
-  return appendFileReferenceLocation(warning.message, extractFileReferenceFromError(warning.message));
+  return appendFileReferenceLocation(formatError(warning), extractFileReferenceFromError(warning));
 }
 </script>

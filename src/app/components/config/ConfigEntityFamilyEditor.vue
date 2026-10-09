@@ -1,5 +1,11 @@
 <template>
-  <main v-if="selectedFile && schema" class="config-family-editor">
+  <main v-if="selectedFile && schema" class="config-family-editor" :inert="actionsLocked">
+    <ConfigTargetNotice
+      :label="family.displayName"
+      :deleted-target="deletedTarget"
+      :actions-locked="actionsLocked"
+      :discard-deleted-target="discardDeletedTarget"
+    />
     <header class="config-family-editor-header">
       <div>
         <h3>{{ selectedId }}</h3>
@@ -25,6 +31,7 @@ import { computed, onMounted, onUnmounted, toRef } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import type { RowData, SavedConfig, ConfigIdentityHandoff } from '@/shared/types';
 import SchemaFormRenderer from '@/app/components/schema/SchemaFormRenderer.vue';
+import ConfigTargetNotice from '@/app/components/config/ConfigTargetNotice.vue';
 import { getSchema } from '@/domain/schema/schema-registry';
 import { useConfigFamilyEditorViewModel } from '@/app/composables/config/use-config-family-editor-view-model';
 import { useSaveCommandStore } from '@/stores/save-command.store';
@@ -34,6 +41,9 @@ import { familyFileId } from '@/domain/config/config-entity-families';
 const props = defineProps<{
   family: ConfigEntityFamilyDefinition;
   selectedId: string;
+  actionsLocked: boolean;
+  deletedTarget: boolean;
+  discardDeletedTarget: () => void | Promise<void>;
   files: ConfigFamilyFile[];
   modRoot: string | null;
   sessionId: string | null;
@@ -67,6 +77,7 @@ const {
   selectedId: toRef(props, 'selectedId'),
   files,
   identityHandoff: toRef(props, 'identityHandoff'),
+  actionsLocked: toRef(props, 'actionsLocked'),
 });
 
 function fileId(file: ConfigFamilyFile): string {
@@ -92,9 +103,6 @@ function confirmDelete() {
 async function deleteEntityTarget(deleteSessionId: string, deleteModRoot: string, currentId: string, relPath: string) {
   try {
     if (!(await props.deleteEntity(deleteSessionId, deleteModRoot, currentId, relPath))) return false;
-    if (props.modRoot !== deleteModRoot || props.sessionId !== deleteSessionId) return true;
-    const nextFile = files.value.find((file) => fileId(file) !== currentId) ?? null;
-    emit('saved', nextFile ? fileId(nextFile) : null);
   } catch (error) {
     feedback.error(error, `删除${props.family.displayName}失败`);
     return false;

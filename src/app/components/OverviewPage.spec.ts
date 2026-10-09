@@ -32,6 +32,7 @@ describe('OverviewPage external Mod opening failures', () => {
   it('keeps the overview actions visible with a red runtime failure', async () => {
     const workspace = useWorkspaceStore();
     workspace.setModOpeningFailure({
+      diagnostic: { code: 'parse.csv', message: 'raw CSV detail', location: null },
       modRoot: 'D:\\mods\\broken',
       message: '解析 CSV 失败',
       file: { path: 'D:\\mods\\broken\\data.csv', line: 3 },

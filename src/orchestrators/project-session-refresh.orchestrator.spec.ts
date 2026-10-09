@@ -93,7 +93,7 @@ function receipt(commitId = 1, ready = true): WriteResult {
   result.sessionUpdates = [
     ready
       ? { sessionId: 's1', modRoot: root, commitId, status: 'ready', projection: projection(commitId) }
-      : { sessionId: 's1', modRoot: root, commitId, status: 'pending', error: { code: 'parse.json', message: 'bad spec' } },
+      : { sessionId: 's1', modRoot: root, commitId, status: 'pending', error: { code: 'parse.json', message: 'bad spec', location: null } },
   ];
   return result;
 }
@@ -126,7 +126,7 @@ describe('committed session synchronization', () => {
     await expect(publishCommittedWrite(root, receipt(1, false), 's1')).rejects.toThrow('parse failed');
     expect(useWriteSyncStore().pending[0]).toMatchObject({ step: 'projection', event: { result: { commitId: 1 } } });
     expect(useFileHistoryStore().getHistoryStacks(root).revision).toBe(1);
-    expect(() => requireProjectionReady('s1')).toThrow('等待会话投影同步');
+    expect(() => requireProjectionReady('s1')).toThrow('Session projection pending');
     expect(mocks.emitWindowEvent).not.toHaveBeenCalled();
     expect(mocks.invalidateQueryCacheByProject).not.toHaveBeenCalled();
     mocks.synchronizeSessionCommit.mockResolvedValueOnce(receipt().sessionUpdates[0]);

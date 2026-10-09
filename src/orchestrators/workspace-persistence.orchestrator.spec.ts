@@ -39,7 +39,7 @@ function manifestFixture(modRoot: string): ProjectManifest {
     tableSummaries: {} as ProjectManifest['tableSummaries'],
     tableEntitySummaries: {} as ProjectManifest['tableEntitySummaries'],
     entitySummaries: { factions: 0, missions: 0, ships: 0, weapons: 0, projectiles: 0, variants: 0, skins: 0, systems: 0, skills: 0 },
-    warnings: [{ path: 'data/x.csv', message: 'scan warning', editTarget: null }],
+    warnings: [{ code: 'scan.warning', location: null, path: 'data/x.csv', message: 'scan warning', editTarget: null }],
   };
 }
 
@@ -75,7 +75,9 @@ describe('restorePersistedWorkspace', () => {
       workspace.getModGeneration('C:/mods/alpha'),
     );
     expect(mocks.hydrateOpenedModRuntime).toHaveBeenCalledWith('C:/mods/alpha', expect.anything(), false);
-    expect(onWarnings).toHaveBeenCalledWith('Alpha', ['scan warning（data/x.csv）']);
+    expect(onWarnings).toHaveBeenCalledWith('Alpha', [
+      expect.objectContaining({ userMessage: 'scan warning（data/x.csv）', diagnostic: expect.objectContaining({ code: 'scan.warning' }) }),
+    ]);
     expect(onError).not.toHaveBeenCalled();
     const mod = workspace.mods.get('C:/mods/alpha');
     expect(mod?.displayName).toBe('Alpha');

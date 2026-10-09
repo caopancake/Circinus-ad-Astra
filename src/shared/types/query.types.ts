@@ -1,5 +1,6 @@
 import type { JsonValue, RowData } from '@/shared/types/json.types';
 import type { TableKey } from '@/shared/types/tables.types';
+import type { ErrorDiagnostic } from '@/shared/types/error.types';
 
 export interface DiscoveredField {
   key: string;
@@ -176,9 +177,8 @@ export interface HullReferencesResult {
   builtInWeaponSlots: Record<string, { id: string; origin: ResourceSource }[]>;
 }
 
-export interface GameScanWarning {
+export interface GameScanWarning extends ErrorDiagnostic {
   path: string;
-  message: string;
   editTarget: GameWarningEditTarget | null;
 }
 

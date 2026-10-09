@@ -23,7 +23,7 @@ export type OpenFileEditorWindowRequest = FileEditorRequest & {
 export function openGameWarningFileEditor(warning: GameScanWarning, settings: AppSettings): Promise<void> | null {
   const target = warning.editTarget;
   if (!target) return null;
-  const reference = extractFileReferenceFromError(warning.message);
+  const reference = extractFileReferenceFromError(warning);
   return openFileEditorWindow({
     mode: 'recovery',
     modRoot: target.modRoot,

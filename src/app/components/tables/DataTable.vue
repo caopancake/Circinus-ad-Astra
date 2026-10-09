@@ -14,7 +14,7 @@
     :selected-row-key="csvTable.tables.selectedRowKey"
     @request-window="csvTable.loadTableWindow"
     @resize-column="csvTable.setColumnWidth"
-    @select-row="csvTable.tables.selectRowByKey"
+    @select-row="csvTable.tables.selectRowByKey(target, $event)"
   />
   <div v-if="csvTable.tables.filteredRowCount > 0 && csvTable.tables.visibleColumns.length === 0" class="table-empty-note">
     当前表有 {{ csvTable.tables.filteredRowCount }} 行，但没有可显示列。请检查 CSV 表头。

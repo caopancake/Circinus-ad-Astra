@@ -112,6 +112,11 @@ describe('useConfigFactionViewModel saveFaction', () => {
     const vm = mountViewModel();
     expect(await vm.saveFaction('sess-1', 'M:/mod', 'existing', { file: { id: 'bad id' } }, schema, [])).toBeNull();
     expect(mocks.saveIndexedEntityAction).not.toHaveBeenCalled();
-    expect(feedbackStub.warning).toHaveBeenCalledWith(expect.stringContaining('势力 ID'), 'config.id_invalid');
+    expect(feedbackStub.warning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: expect.stringContaining('势力 ID'),
+        diagnostic: expect.objectContaining({ code: 'config.id_invalid' }),
+      }),
+    );
   });
 });

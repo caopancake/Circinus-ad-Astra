@@ -12,6 +12,14 @@ import { rustServiceEdgeBoundaryRule } from './rules/rust-service-edge-boundary.
 import { rustProjectLayerBoundaryRule } from './rules/rust-project-layer-boundary.mjs';
 
 const cases = [
+  ['core-fields-read', 'src/orchestrators/core-assets.orchestrator.ts', 'src/services/assets.service.ts', 'queryCoreFields'],
+  ['core-graphics-read', 'src/orchestrators/core-assets.orchestrator.ts', 'src/services/assets.service.ts', 'queryCoreGraphics'],
+  [
+    'config-list-retry',
+    'src/app/composables/config/use-config-list-selection.ts',
+    'src/orchestrators/project-session-refresh.orchestrator.ts',
+    'retryPendingWritesForMod',
+  ],
   [
     'commit-recovery',
     'src/orchestrators/project-session-refresh.orchestrator.ts',

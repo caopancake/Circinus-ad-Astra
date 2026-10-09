@@ -12,7 +12,7 @@ import {
   writeSkinEntity,
   writeVariantEntity,
 } from '@/services/write.service';
-import { createDefaultSkin, createDefaultVariant, indexedConfigHistoryLabel } from '@/domain/config/config-entities';
+import { createDefaultSkin, createDefaultVariant } from '@/domain/config/config-entities';
 import { indexedConfigEntityData, configFamilyEntityData } from '@/domain/config/config-records';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
 import { retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
@@ -100,12 +100,11 @@ export async function createIndexedEntityAction(write: {
   nextId: string;
   indexRow: RowData;
   entityData: RowData;
-}): Promise<string> {
+}): Promise<SavedConfig<import('@/shared/types').IndexedConfigEntityData>> {
   const baseVersions = await capturedVersions(write.sessionId, write.modRoot, write.kind, write.nextId, write.nextId, [], true);
   const result = await retainConfigReservation(writeCreateIndexedConfigEntity({ ...write, baseVersions }));
   const entity = indexedConfigEntityData(result);
-  await completeConfigSave(write.modRoot, write.sessionId, result, indexedConfigHistoryLabel(write.kind, 'create', entity.entityId));
-  return entity.entityId;
+  return { entity, receipt: result };
 }
 
 export async function deleteIndexedEntityAction(
@@ -115,10 +114,9 @@ export async function deleteIndexedEntityAction(
   id: string,
   deleteTarget: boolean,
   baseVersions: import('@/shared/types').FileVersion[] = [],
-): Promise<string> {
+): Promise<WriteResult> {
   const result = await writeDeleteIndexedConfigEntity({ sessionId, modRoot, kind, id, deleteTarget, baseVersions });
-  await completeConfigSave(modRoot, sessionId, result, indexedConfigHistoryLabel(kind, 'delete', id));
-  return indexedConfigEntityData(result).entityId;
+  return result;
 }
 
 export async function saveVariantAction(
@@ -152,7 +150,7 @@ export async function createVariantAction(
   modRoot: string,
   hullId: string,
   variantId: string,
-): Promise<ConfigFamilyFile> {
+): Promise<SavedConfig<ConfigFamilyFile>> {
   const baseVersions = await capturedVersions(sessionId, modRoot, 'variant', variantId, variantId, [], true);
   const result = await retainConfigReservation(
     writeCreateVariantEntity({
@@ -166,8 +164,7 @@ export async function createVariantAction(
     }),
   );
   const variant = configFamilyEntityData(result);
-  await completeConfigSave(modRoot, sessionId, result, `创建装配 ${variant.id}`);
-  return variant;
+  return { entity: variant, receipt: result };
 }
 
 export async function deleteVariantAction(
@@ -178,7 +175,6 @@ export async function deleteVariantAction(
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
   const result = await writeDeleteVariantEntity({ sessionId, modRoot, relPath, entityId: variantId, baseVersions });
-  await completeConfigSave(modRoot, sessionId, result, `删除装配 ${variantId}`);
   return result;
 }
 
@@ -213,7 +209,7 @@ export async function createSkinAction(
   modRoot: string,
   baseHullId: string,
   skinHullId: string,
-): Promise<ConfigFamilyFile> {
+): Promise<SavedConfig<ConfigFamilyFile>> {
   const baseVersions = await capturedVersions(sessionId, modRoot, 'skin', skinHullId, skinHullId, [], true);
   const result = await retainConfigReservation(
     writeCreateSkinEntity({
@@ -227,8 +223,7 @@ export async function createSkinAction(
     }),
   );
   const skin = configFamilyEntityData(result);
-  await completeConfigSave(modRoot, sessionId, result, `创建舰船皮肤 ${skin.id}`);
-  return skin;
+  return { entity: skin, receipt: result };
 }
 
 export async function deleteSkinAction(
@@ -239,7 +234,6 @@ export async function deleteSkinAction(
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
   const result = await writeDeleteSkinEntity({ sessionId, modRoot, relPath, entityId: skinHullId, baseVersions });
-  await completeConfigSave(modRoot, sessionId, result, `删除舰船皮肤 ${skinHullId}`);
   return result;
 }
 

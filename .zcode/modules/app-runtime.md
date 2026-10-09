@@ -7,7 +7,7 @@
 ## 参考
 
 `src/main.ts`：启动入口 owner，解析 URL 窗口类型、加载 settings、初始化 settings store、创建 Vue 与 Pinia、注册 Naive UI，并按窗口类型异步加载唯一窗口根。
-`src/app/WindowShell.vue`：唯一窗口壳 owner，以 main/child 模式区分设置持久化与设置镜像，统一挂载 Naive Provider 栈与主题 DOM effect。
+`src/app/WindowShell.vue`：唯一窗口壳 owner，以 main/child 模式区分设置持久化与设置镜像，统一挂载 Provider、主题与 Core 加载生命周期。
 `src/app/App.vue`：主窗口根，以 main 模式包装唯一窗口壳并装配主窗口内容。
 `src/app/EditorWindowApp.vue`：编辑器子窗口根，以 child 模式包装编辑器窗口内容。
 `src/app/FileEditorApp.vue`：文件编辑器子窗口根，以 child 模式包装文件编辑器窗口内容。
@@ -23,7 +23,7 @@
 - settings 读取只在主窗口进行；子窗口只能消费主窗口传入的完整 snapshot，严禁自行读盘或补默认值。
 - 窗口创建、单例复用与跨窗口事件不归本模块；本模块只消费已建立的窗口身份参数。
 - 每个窗口类型只允许加载唯一对应的根组件；不得静态导入所有窗口根扩大任一窗口的启动依赖。
-- 共享窗口壳只允许装配 provider、设置生命周期与主题 effect，主窗口内容必须由主窗口根注入。
+- 共享窗口壳只允许装配 provider、设置、主题与 Core 生命周期，主窗口内容必须由主窗口根注入。
 - 新增控件必须在启动注册表中显式登记；非 provider 控件按首次渲染异步解析。
 - 主题令牌计算归 settings store，主题 DOM 写入归唯一窗口壳挂载的主题 effect；启动与挂载链路本身不写主题。
 - 启动失败只允许写入 `#app` 的错误呈现容器，并尽力显示已创建窗口，不得静默白屏。
@@ -37,7 +37,7 @@
 3. settings 校验通过后 `initializeSettingsStore(settings)` 写入初始快照。
 4. 创建 Vue 应用并安装 Pinia 与 Naive UI 按需注册。
 5. 挂载主窗口根；根以 main 模式装配唯一窗口壳。
-6. 唯一窗口壳启动设置持久化并挂载主题 DOM effect。
+6. 唯一窗口壳启动设置持久化、主题 DOM effect 与 Core 根监听。
 7. `showCurrentWindow()` 显示窗口。
 
 ### 子窗口启动
@@ -61,6 +61,7 @@
 - 窗口根组件必须按窗口类型懒加载，严禁建立包含全部窗口根的公共入口模块。
 - 启动链路的控件注册必须显式登记，禁止通过副作用自动注册控件。
 - 主窗口与子窗口的模式差异必须由唯一窗口壳的 mode 参数表达，严禁出现第二份 Provider 栈。
+- 每个窗口壳必须建立一次 Core 加载生命周期，释放时必须撤销所属监听及响应接纳。
 - 启动错误呈现必须 HTML 转义消息内容，严禁拼接未转义文本。
 - 标题栏必须使用 `src/assets/app-icon.svg`，图标区域必须保持 24 px × 24 px。
 

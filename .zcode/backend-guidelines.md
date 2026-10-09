@@ -35,6 +35,7 @@
 - `#[tauri::command]` 只允许出现在 `src-tauri/src/commands/`。
 - command 层只负责参数接收、状态访问、错误转换和调用后端实现；严禁承载解析、扫描或写盘实现。
 - command 错误必须携带可定位上下文（路径、行、位置）与稳定语义，前端负责动作归类与呈现。
+- command、扫描警告与 pending 提交必须共同消费 code、原始 message 与 nullable location；解析器必须提供原文行列，IO 必须绑定实际路径，context 必须保留来源码、位置与附加 payload。
 - 同步 query/invalidate 类 command 标注 `(async)` 经异步运行时执行，不占主线程；含网络或磁盘等待的链路必须显式 await。
 - 跨模块引用只经正式公开入口；`shared` 不得依赖业务模块。
 - clippy 零 warning；模块按作用域拆分，严禁单文件承载多类职责。

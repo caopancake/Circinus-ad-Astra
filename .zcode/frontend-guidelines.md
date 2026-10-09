@@ -63,6 +63,7 @@
 
 - 预期错误（业务拒绝、写入失败、输入非法）由 service/orchestrator 抛出携带 `action` 的 `AppError`，这是架构规则强制的边界。
 - 一次用户动作只产生一条错误提示；action 内 toast 与 rethrow 不并存。
+- 稳定码、原始诊断、用户文案与结构化位置必须分别消费；错误包装必须保留来源码与位置，日志必须消费原始诊断。
 - 错误呈现必须经 `formatError` 与统一反馈入口；禁止裸 `String(error)` 或 `error?.toString()`。
 - 禁止空 catch：任何 catch 分支必须提示、上报或恢复。
 
@@ -81,6 +82,7 @@
 - store id 是 Pinia 内部标识符，禁止按 id 动态访问 store；store id 与持久化文件、事件名互不相干。
 - 从 store 解构响应式字段必须用 `storeToRefs`；一次性解构会静默丢失响应性。
 - store 严禁拥有 IO、确认框或跨模块编排；保存类动作经注册表分派。
+- Core 根与两类资源状态必须归正式 store，加载 Promise、根代次与错误日志必须归加载编排；窗口壳必须拥有加载生命周期的装配与释放。
 
 ### 测试与验收习惯
 

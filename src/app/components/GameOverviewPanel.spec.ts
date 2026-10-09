@@ -12,6 +12,8 @@ vi.mock('@/app/composables/use-workspace-navigation-actions', () => ({
 }));
 
 const warning: GameScanWarning = {
+  code: 'parse.json_syntax',
+  location: { path: 'D:/game/mods/broken/mod_info.json', line: 5, column: 44 },
   path: 'D:\\game\\mods\\broken\\mod_info.json',
   message: '读取 mod_info.json 失败: 解析 JSON 文件失败 (D:\\game\\mods\\broken\\mod_info.json): expected `,` or `}` at line 5 column 44',
   editTarget: {
@@ -42,6 +44,7 @@ describe('GameOverviewPanel warning file actions', () => {
 
   it('renders Mod opening failures before scan warnings', () => {
     const failure: ModOpeningFailure = {
+      diagnostic: { code: 'parse.csv', message: 'raw CSV detail', location: null },
       modRoot: 'D:\\game\\mods\\broken',
       message: '解析 CSV 失败',
       file: null,
@@ -54,7 +57,9 @@ describe('GameOverviewPanel warning file actions', () => {
   });
 
   it('keeps non-editable warnings without a file button', () => {
-    wrapper = mountPanel([{ path: 'D:\\game\\starsector-core', message: '缺少 starsector-core', editTarget: null }]);
+    wrapper = mountPanel([
+      { code: 'scan.core_missing', location: null, path: 'D:\\game\\starsector-core', message: '缺少 starsector-core', editTarget: null },
+    ]);
 
     expect(wrapper.get('.game-warning-item').find('button').exists()).toBe(false);
   });

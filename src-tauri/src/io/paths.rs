@@ -18,6 +18,7 @@ impl FsRootBoundary {
                 format!("canonicalize {label} path failed ({})", root.display()),
                 error.into(),
             )
+            .at_path(root)
         })?;
         if !root.is_dir() {
             return Err(AppError::message(
@@ -76,6 +77,7 @@ impl FsRootBoundary {
                 format!("canonicalize {label} path failed ({})", existing.display()),
                 error.into(),
             )
+            .at_path(&existing)
         })?;
         if !path_belongs_to_root(&canonical, &self.root) {
             return Ok(None);
@@ -117,6 +119,7 @@ impl FsRootBoundary {
                 format!("canonicalize {label} path failed ({})", existing.display()),
                 error.into(),
             )
+            .at_path(&existing)
         })?;
         if !path_belongs_to_root(&canonical, &self.root) {
             return Err(AppError::message(
@@ -201,6 +204,7 @@ fn reject_link_path(path: &Path, label: &str) -> AppResult<()> {
             format!("读取 {label} 路径元数据失败 ({})", path.display()),
             error.into(),
         )
+        .at_path(path)
     })?;
     let file_type = metadata.file_type();
     if file_type.is_symlink() || is_reparse_point(&metadata) {

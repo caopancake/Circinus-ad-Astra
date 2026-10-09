@@ -73,11 +73,8 @@ pub fn load_settings(app_data_dir: &Path) -> AppResult<AppSettings> {
         return Ok(AppSettings::default());
     }
     let text = read_utf8_no_bom(&path)?;
-    serde_json::from_str::<AppSettings>(&text).map_err(|error| {
-        AppError::context(
-            format!("解析配置文件失败 ({})", path.display()),
-            error.into(),
-        )
+    crate::parsers::parse_persisted_json::<AppSettings>(&text).map_err(|error| {
+        AppError::context(format!("解析配置文件失败 ({})", path.display()), error).at_path(&path)
     })
 }
 

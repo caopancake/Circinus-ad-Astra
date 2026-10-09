@@ -181,7 +181,8 @@ describe('config-save orchestrator', () => {
       entityData: {},
     });
 
-    expect(entityId).toBe('mission_new');
+    expect(entityId.entity.entityId).toBe('mission_new');
+    await completeConfigSave(MOD_ROOT, SESSION_ID, entityId.receipt, indexedConfigHistoryLabel('mission', 'create', 'mission_new'));
     expect(mocks.writeCreateIndexedConfigEntity).toHaveBeenCalledTimes(1);
     expect(mocks.writeIndexedConfigEntity).not.toHaveBeenCalled();
     expect(mocks.completeSavedWrite).toHaveBeenCalledWith({
@@ -225,7 +226,7 @@ describe('config-save orchestrator', () => {
 
     const variant = await createVariantAction(SESSION_ID, MOD_ROOT, 'npc_dave', 'variant_new');
 
-    expect(variant.id).toBe('variant_new');
+    expect(variant.entity.id).toBe('variant_new');
     const payload = mocks.writeCreateVariantEntity.mock.calls[0]![0];
     expect(payload.nextId).toBe('variant_new');
     expect(payload.data).toEqual(createDefaultVariant('npc_dave', 'variant_new'));
@@ -294,7 +295,7 @@ describe('config-save orchestrator', () => {
 
     const skin = await createSkinAction(SESSION_ID, MOD_ROOT, 'npc_dave', 'skin_new');
 
-    expect(skin.id).toBe('skin_new');
+    expect(skin.entity.id).toBe('skin_new');
     expect(mocks.writeCreateSkinEntity).toHaveBeenCalledTimes(1);
   });
 

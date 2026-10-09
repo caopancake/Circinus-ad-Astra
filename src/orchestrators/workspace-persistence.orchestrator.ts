@@ -1,13 +1,13 @@
 import { watch } from 'vue';
-import { errorCodeOf } from '@/shared/lib/errors';
+import { errorDiagnosticOf } from '@/shared/lib/errors';
+import { logFields } from '@/shared/lib/log-fields';
 import { cell, formatModVersion } from '@/shared/lib/starsector';
-import type { PersistedMod, ProjectManifest } from '@/shared/types';
+import type { PersistedMod, ProjectManifest, FeedbackNotice } from '@/shared/types';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { formatLoadWarnings } from '@/domain/project/load-warnings';
 import { hydrateOpenedModRuntime, openModProjectManifest } from '@/orchestrators/directory-opening.orchestrator';
 import { measurePerformance } from '@/shared/runtime/performance';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
-import { errorMessageOf } from '@/shared/lib/errors';
 import { scanDirectoryGameOverview } from '@/services/session.service';
 import { loadPersistedWorkspace, savePersistedWorkspace } from '@/services/workspace-state.service';
 
@@ -15,7 +15,7 @@ interface RestoreWorkspaceOptions {
   knownStarsectorRoot: string | null;
   loadCoreFields?: () => void | Promise<void>;
   onModRestoreError: (modRoot: string, displayName: string, error: unknown) => void | Promise<void>;
-  onModRestoreWarnings?: (displayName: string, warnings: string[]) => void;
+  onModRestoreWarnings?: (displayName: string, warnings: FeedbackNotice[]) => void;
 }
 
 export function watchWorkspacePersistence() {
@@ -30,13 +30,14 @@ export function watchWorkspacePersistence() {
       if (saveTimer !== null) window.clearTimeout(saveTimer);
       saveTimer = window.setTimeout(() => {
         savePersistedWorkspace(state).catch((error) => {
+          const diagnostic = errorDiagnosticOf(error);
           recordLogBestEffort({
             level: 'error',
-            code: errorCodeOf(error),
-            message: errorMessageOf(error) ?? 'workspace state save failed',
-            path: null,
-            line: null,
-            fields: null,
+            code: diagnostic.code,
+            message: diagnostic.message,
+            path: diagnostic.location?.path ?? null,
+            line: diagnostic.location?.line ?? null,
+            fields: logFields({ action: 'workspace-save', column: diagnostic.location?.column }),
           });
         });
       }, 500);

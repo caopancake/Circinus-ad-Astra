@@ -1,5 +1,11 @@
 <template>
-  <main v-if="schema" class="mission-editor">
+  <main v-if="schema" class="mission-editor" :inert="actionsLocked">
+    <ConfigTargetNotice
+      label="战役"
+      :deleted-target="deletedTarget"
+      :actions-locked="actionsLocked"
+      :discard-deleted-target="discardDeletedTarget"
+    />
     <header class="mission-editor-header">
       <h3>{{ editingMissionId || missionId }}</h3>
       <div class="config-editor-actions">
@@ -24,6 +30,7 @@
 import { computed, onMounted, onUnmounted, toRef } from 'vue';
 import type { ConfigMissionEditorData, RowData } from '@/shared/types';
 import SchemaFormRenderer from '@/app/components/schema/SchemaFormRenderer.vue';
+import ConfigTargetNotice from '@/app/components/config/ConfigTargetNotice.vue';
 import { getSchema } from '@/domain/schema/schema-registry';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { createSchemaRuntimeContext } from '@/app/composables/use-schema-runtime-context';
@@ -33,6 +40,10 @@ import { useSaveCommandStore } from '@/stores/save-command.store';
 
 const props = defineProps<{
   missionId: string;
+  actionsLocked: boolean;
+  deletedTarget: boolean;
+  discardDeletedTarget: () => void | Promise<void>;
+  identityHandoff: import('@/shared/types').ConfigIdentityHandoff<ConfigMissionEditorData> | null;
   modRoot: string | null;
   sessionId: string | null;
   editorReloadToken: number;
@@ -49,7 +60,7 @@ const props = defineProps<{
   ) => Promise<import('@/shared/types').ConfigSaveIdentity | null>;
   deleteMission: (sessionId: string, modRoot: string, id: string, deleteDirectory: boolean) => Promise<boolean>;
 }>();
-const emit = defineEmits<{ saved: [missionId: string | null] }>();
+const emit = defineEmits<{ saved: [missionId: string | null, saved?: import('@/shared/types').ConfigSaveIdentity] }>();
 
 const feedback = useAppFeedback();
 
@@ -60,7 +71,6 @@ const schemaRuntimeContext = computed(() =>
   props.modRoot && props.sessionId ? { ...createSchemaRuntimeContext(props.modRoot, props.sessionId), missionId: props.missionId } : null,
 );
 const {
-  clearMissionTarget,
   draftData,
   editingMissionId,
   externalUpdateNotice,
@@ -75,12 +85,14 @@ const {
   iconRefreshToken: toRef(props, 'iconRefreshToken'),
   missionId: toRef(props, 'missionId'),
   modRoot,
-  onSaved: (missionId) => emit('saved', missionId),
+  onSaved: (missionId, saved) => emit('saved', missionId, saved),
   queryMissionEditorData: props.queryMissionEditorData,
   queryMissionIcon: props.queryMissionIcon,
   saveMission: props.saveMission,
   schema,
   sessionId,
+  actionsLocked: toRef(props, 'actionsLocked'),
+  identityHandoff: toRef(props, 'identityHandoff'),
 });
 
 function confirmDeleteMission() {
@@ -101,9 +113,6 @@ function confirmDeleteMission() {
 async function deleteMissionTarget(deleteSessionId: string, deleteModRoot: string, id: string) {
   try {
     await props.deleteMission(deleteSessionId, deleteModRoot, id, true);
-    if (modRoot.value !== deleteModRoot || sessionId.value !== deleteSessionId) return true;
-    clearMissionTarget();
-    emit('saved', null);
   } catch (error) {
     feedback.error(error, '删除战役失败');
     return false;

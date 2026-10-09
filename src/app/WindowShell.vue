@@ -10,6 +10,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useCoreAssetsLifecycle } from '@/app/composables/use-core-assets';
 import { useSettingsStore } from '@/stores/settings.store';
 import { buildThemeOverrides } from '@/app/theme-overrides';
 import { useThemeDomEffect } from '@/app/composables/settings/use-theme-dom-effect';
@@ -20,6 +21,7 @@ const props = withDefaults(defineProps<{ mode?: 'main' | 'child' }>(), {
 });
 
 const settings = useSettingsStore();
+useCoreAssetsLifecycle();
 if (props.mode === 'main') useSettingsPersistence();
 else useSettingsMirror();
 useThemeDomEffect();

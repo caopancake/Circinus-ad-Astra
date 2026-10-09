@@ -9,7 +9,7 @@ import { synchronizeSessionCommit } from '@/services/session.service';
 import { invalidateQueryCacheByProject } from '@/services/query-cache.service';
 import { invalidateResourceCacheByProject } from '@/services/resource-cache.service';
 import { markProjectionPending, markProjectionReady } from '@/shared/runtime/project-projection';
-import { AppError, formatError } from '@/shared/lib/errors';
+import { AppError, errorDiagnosticOf } from '@/shared/lib/errors';
 import type { WriteResult } from '@/shared/types';
 
 const acceptedProjections = new WeakMap<ReturnType<typeof useWriteSyncStore>, Set<string>>();
@@ -75,7 +75,7 @@ async function synchronizeEntry(entry: PendingWriteSync): Promise<void> {
   if (running) return running;
   const operation = executeSync(entry)
     .catch((error) => {
-      sync.markFailed(entry.id, formatError(error));
+      sync.markFailed(entry.id, errorDiagnosticOf(error));
       throw error;
     })
     .finally(() => syncExecutions.get(sync)!.delete(entry.id));
@@ -101,7 +101,12 @@ async function executeSync(entry: PendingWriteSync) {
       if (update.status === 'pending') {
         markProjectionPending(update.sessionId, update.commitId);
         const restored = await synchronizeSessionCommit(update.sessionId, update.modRoot, update.commitId);
-        if (restored.status === 'pending') throw new AppError(restored.error.message, { action: restored.error.code });
+        if (restored.status === 'pending')
+          throw new AppError(restored.error.message, {
+            action: 'synchronize-committed-write',
+            code: restored.error.code,
+            location: restored.error.location,
+          });
         entry.event.result.sessionUpdates[index] = restored;
       }
     }
