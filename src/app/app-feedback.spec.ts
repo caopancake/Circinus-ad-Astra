@@ -4,13 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MessageApiInjection } from 'naive-ui/es/message/src/MessageProvider';
 import type { DialogApiInjection } from 'naive-ui/es/dialog/src/DialogProvider';
 import { createAppFeedback } from './app-feedback';
-import { withCause } from '@/shared/lib/errors';
+import { AppError, withCause } from '@/shared/lib/errors';
 import { useProjectStore } from '@/stores/project.store';
 import { initializeSettingsStore } from '@/stores/settings.store';
 import { sessionUpdateFixture } from '@/test/write-result';
 
 const mocks = vi.hoisted(() => ({ log: vi.fn(), open: vi.fn(async () => {}), transcode: vi.fn() }));
-vi.mock('@/services/app-feedback-log.service', () => ({ recordLogBestEffort: mocks.log }));
+vi.mock('@/services/app-log.service', () => ({ recordLogBestEffort: mocks.log }));
 vi.mock('@/windows/file-editor.window', () => ({ openFileEditorWindow: mocks.open }));
 vi.mock('@/windows/window-identity.window', () => ({ currentWindowSessionIdentity: () => null }));
 vi.mock('@/services/files.service', () => ({ transcodeFileToUtf8: mocks.transcode }));
@@ -54,7 +54,9 @@ describe('feedback diagnostics, file authorization and actions', () => {
       message: 'Unexpected token',
       location: { path: 'M:/mod/demo.skin', line: 3, column: 7 },
     };
-    feedback.error(withCause('保存失败', diagnostic, 'save-skin'));
+    feedback.error(
+      withCause('保存失败', new AppError(diagnostic.message, { command: 'save_skin_entity', cause: diagnostic }), 'save-skin'),
+    );
     wrapper = mount({ render: messages.error.mock.lastCall![0] });
     expect(wrapper.text()).toContain('JSON 语法错误');
     expect(wrapper.text()).toContain('第 3 行，第 7 列');
@@ -64,7 +66,7 @@ describe('feedback diagnostics, file authorization and actions', () => {
         message: 'Unexpected token',
         path: 'M:/mod/demo.skin',
         line: 3,
-        fields: { action: 'save-skin', column: '7' },
+        fields: { action: 'save-skin', command: 'save_skin_entity', column: '7' },
       }),
     );
     await wrapper.get('button').trigger('click');

@@ -5,7 +5,7 @@ import { recordWindowEventHandlerError } from '@/orchestrators/window-event-erro
 import { useProjectStore } from '@/stores/project.store';
 import { useFileHistoryStore } from '@/stores/file-history.store';
 import { useWriteSyncStore, type PendingWriteSync } from '@/stores/write-sync.store';
-import { synchronizeSessionCommit } from '@/services/session.service';
+import { synchronizeSessionCommit } from '@/services/project-session.service';
 import { invalidateQueryCacheByProject } from '@/services/query-cache.service';
 import { invalidateResourceCacheByProject } from '@/services/resource-cache.service';
 import { markProjectionPending, markProjectionReady } from '@/shared/runtime/project-projection';

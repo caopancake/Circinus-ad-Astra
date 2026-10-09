@@ -1,8 +1,8 @@
 import { computed, ref } from 'vue';
 import { pickDirectoryDialog } from '@/shared/runtime/dialog.runtime';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
-import { clearConfig, clearLog, loadLogStatus, openConfigFolder, openLogFile } from '@/services/app-feedback-log.service';
-import { reloadCurrentWindow } from '@/windows/current.window';
+import { clearLog, loadLogStatus, openLogFile } from '@/services/app-log.service';
+import { useAppConfigActions } from '@/app/composables/settings/use-app-config-actions';
 import { useSettingsStore } from '@/stores/settings.store';
 import { saveLogDirectory } from '@/orchestrators/settings-persistence.orchestrator';
 
@@ -13,6 +13,7 @@ export function useSettingsViewModel() {
   const logPath = ref('');
   const formattedLogSize = computed(() => formatBytes(logSizeBytes.value));
   const logPathHint = computed(() => (logPath.value ? `Log 文件: ${logPath.value}` : 'Log 文件尚未创建。'));
+  const configActions = useAppConfigActions(refreshLogStatus);
 
   async function pickStarsectorRoot() {
     const selected = await pickDirectoryDialog('选择 Starsector 安装目录');
@@ -53,14 +54,6 @@ export function useSettingsViewModel() {
     }
   }
 
-  async function openConfigFolderAction() {
-    try {
-      await openConfigFolder();
-    } catch (error) {
-      feedback.error(error, '打开配置文件夹失败');
-    }
-  }
-
   async function openLogFileAction() {
     try {
       await openLogFile();
@@ -68,24 +61,6 @@ export function useSettingsViewModel() {
     } catch (error) {
       feedback.error(error, '打开 log 文件失败');
     }
-  }
-
-  function confirmClearConfig() {
-    feedback.confirmDanger({
-      title: '清空配置文件',
-      content: '将删除配置目录内除 log 文件外的工具配置文件。确认清空？',
-      actionText: '清空',
-      onConfirm: async () => {
-        try {
-          await clearConfig();
-          await refreshLogStatus();
-          feedback.success('配置文件已清空');
-          await reloadCurrentWindow();
-        } catch (error) {
-          feedback.error(error, '清空配置文件失败');
-        }
-      },
-    });
   }
 
   function confirmClearLog() {
@@ -112,10 +87,10 @@ export function useSettingsViewModel() {
     pickLogDirectory,
     pickStarsectorRoot,
     refreshLogStatus,
-    openConfigFolderAction,
+    openConfigFolderAction: configActions.openConfigFolderAction,
     openLogFileAction,
     restoreDefaultLogDirectory,
-    confirmClearConfig,
+    confirmClearConfig: configActions.confirmClearConfig,
     confirmClearLog,
   };
 }

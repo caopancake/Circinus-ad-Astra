@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   recordLogBestEffort: vi.fn(),
 }));
 
-vi.mock('@/services/session.service', () => ({
+vi.mock('@/services/directory.service', () => ({
   pickDirectory: mocks.pickDirectory,
   scanDirectoryGameOverview: mocks.scanDirectoryGameOverview,
 }));
@@ -55,7 +55,7 @@ vi.mock('@/windows/file-editor.window', () => ({
   openModOpeningFailureFileEditor: vi.fn(() => null),
 }));
 
-vi.mock('@/services/app-feedback-log.service', () => ({
+vi.mock('@/services/app-log.service', () => ({
   recordLogBestEffort: mocks.recordLogBestEffort,
 }));
 

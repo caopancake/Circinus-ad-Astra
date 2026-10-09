@@ -1,27 +1,33 @@
-mod app_feedback_log;
+mod app_config;
+mod app_log;
 mod app_settings;
 mod assets;
+mod core_assets;
 mod directory_opening;
 mod editor_config;
 mod file_changes;
 mod file_editor;
 mod mod_creation;
 mod project;
+mod project_session;
 mod tables;
 mod windows;
 mod workspace_persistence;
 
 use crate::{errors::AppResult, models::SessionModScope, services};
 
-pub use app_feedback_log::*;
+pub use app_config::*;
+pub use app_log::*;
 pub use app_settings::*;
 pub use assets::*;
+pub use core_assets::*;
 pub use directory_opening::*;
 pub use editor_config::*;
 pub use file_changes::*;
 pub use file_editor::*;
 pub use mod_creation::*;
 pub use project::*;
+pub use project_session::*;
 pub use tables::*;
 pub use windows::*;
 pub use workspace_persistence::*;

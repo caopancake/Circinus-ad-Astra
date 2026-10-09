@@ -1,10 +1,16 @@
 /** @typedef {'external' | 'test' | 'shared' | 'domain' | 'services' | 'stores' | 'orchestrators' | 'windows' | 'app' | 'styles' | 'unknown'} FrontendLayer */
-/** @typedef {{ layer: FrontendLayer, role: string, domain: string | null }} FrontendPathClass */
+/** @typedef {{ path: string, layer: FrontendLayer, role: string, domain: string | null }} FrontendPathClass */
 
 /** @param {string} path @returns {FrontendPathClass} */
 export function classifyFrontendPath(path) {
+  return { ...classifyPathRole(path), path };
+}
+
+/** @param {string} path @returns {Omit<FrontendPathClass, 'path'>} */
+function classifyPathRole(path) {
   if (!path.startsWith('src/')) return { layer: 'external', role: 'external', domain: null };
   if (/\.spec\.(ts|tsx)$/.test(path) || path.startsWith('src/test/')) return { layer: 'test', role: 'test', domain: null };
+  if (path === 'src/main.ts') return { layer: 'app', role: 'bootstrap', domain: 'app-runtime' };
   if (path.startsWith('src/shared/api/')) return { layer: 'shared', role: 'api', domain: sharedApiDomain(path) };
   if (path.startsWith('src/shared/')) return { layer: 'shared', role: 'shared', domain: sharedDomain(path) };
   if (path.startsWith('src/domain/')) return { layer: 'domain', role: roleFor(path), domain: segment(path, 2) };

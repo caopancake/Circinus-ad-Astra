@@ -30,7 +30,7 @@ Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，目标�
 - `src/orchestrators/`：编排跨模块用户动作（保存、打开、历史、刷新）；依赖图必须单向无环。
 - `src/stores/`：保存内存运行态；严禁 IO、确认框或跨模块编排。
 - `src/windows/`：管理窗口身份、生命周期与事件。
-- `src/shared/`：承载 wire API、runtime、类型与纯工具；`shared/api` 是唯一 invoke 边界。
+- `src/shared/`：承载 runtime、类型、纯工具与查询/持久化 wire 能力；command.runtime 是唯一原始 invoke 边界。
 - `schemas/`：保存配置字段与 CSV 列 schema 资产，经唯一加载入口消费。
 - `src/styles/`：承载全局主题、应用框架和业务样式。
 
@@ -46,8 +46,8 @@ Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，目标�
 
 ### 跨层链路
 
-- 实体读取：`组件 -> ViewModel/composable -> service -> shared/api -> Rust command -> project query -> parser/IO/cache`，返回实体数据与资源引用，写入前端按 session 隔离的查询缓存（manifest 由目录打开链路返回）。
-- 保存：`组件动作 -> orchestrator -> write service -> shared/api -> Rust FIFO 事务 -> changeset、File History 与会话投影 -> receipt 基线接纳 -> 历史、manifest 与缓存接纳 -> 统一提交事件`；待同步结果经原提交恢复入口继续接纳。
+- 实体读取：`组件 -> ViewModel/composable -> 读取能力 -> command.runtime -> Rust command -> project query -> parser/IO/cache`，返回实体数据与资源引用，写入前端按 session 隔离的查询缓存（manifest 由目录打开链路返回）。
+- 保存：`组件动作 -> orchestrator -> 写入能力 -> command.runtime -> Rust FIFO 事务 -> changeset、File History 与会话投影 -> receipt 基线接纳 -> 历史、manifest 与缓存接纳 -> 统一提交事件`；待同步结果经原提交恢复入口继续接纳。
 - 目录打开：`组件 -> directory-opening orchestrator -> 后端识别（game-root / mod-in-game / external-mod / unknown 类型化 outcome，边界失败走错误通道）-> 游戏概览或 ProjectSession -> workspace/project 运行态`。
 - 撤销重做：`快捷键命令 -> 主窗口历史分派 -> CSV 草稿历史优先 -> 文件历史回放（强制用户确认，按已加载会话逐一刷新）-> 编辑器同步`。
 - 资源读取：`后端 ResourceRef -> Mod/Core 解析（Core 兜底）-> 批量 data URL -> 前端 query/resource/media 三级缓存与后端 media cache -> 组件`；无上传入口，路径字段只能选择当前 Mod 目录内的文件。

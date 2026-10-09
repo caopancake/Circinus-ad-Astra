@@ -2,9 +2,9 @@ import { computed, watch } from 'vue';
 import { useCoreAssetsStore, type CoreAssetState } from '@/stores/core-assets.store';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useProjectStore } from '@/stores/project.store';
-import { queryCoreFields, queryCoreGraphics } from '@/services/assets.service';
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
-import { errorDiagnosticOf } from '@/shared/lib/errors';
+import { queryCoreFields, queryCoreGraphics } from '@/services/core-assets.service';
+import { recordLogBestEffort } from '@/services/app-log.service';
+import { errorContextOf, errorDiagnosticOf } from '@/shared/lib/errors';
 import { logFields } from '@/shared/lib/log-fields';
 
 interface CoreLoader {
@@ -50,7 +50,7 @@ export function startCoreAssetsLoading(): () => void {
             message: diagnostic.message,
             path: diagnostic.location?.path ?? null,
             line: diagnostic.location?.line ?? null,
-            fields: logFields({ root: capturedRoot, column: diagnostic.location?.column }),
+            fields: logFields({ ...errorContextOf(error), root: capturedRoot, column: diagnostic.location?.column }),
           });
         })
         .finally(() => {

@@ -31,7 +31,7 @@ pub fn open_project_session_with_root(
                 .root()
                 .to_path_buf(),
         ),
-        None => super::overview::infer_starsector_root(mod_root_path),
+        None => crate::services::directory_opening::infer_starsector_root(mod_root_path),
     };
     let result = open_project_session_traced(mod_root_path, starsector_root.as_deref(), &mut trace);
     if result.is_ok() {

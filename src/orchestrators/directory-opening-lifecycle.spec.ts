@@ -22,11 +22,15 @@ const mocks = vi.hoisted(() => ({
   detectDirectoryTarget: vi.fn(),
 }));
 
-vi.mock('@/services/session.service', () => ({
+vi.mock('@/services/project-session.service', () => ({
   openProject: mocks.openProject,
   closeProject: mocks.closeProject,
+}));
+vi.mock('@/services/directory.service', () => ({
   detectDirectoryTarget: mocks.detectDirectoryTarget,
   scanDirectoryGameOverview: mocks.scanDirectoryGameOverview,
+}));
+vi.mock('@/services/core-assets.service', () => ({
   invalidateCoreCacheForRoot: vi.fn(async () => {}),
 }));
 vi.mock('@/services/workspace-state.service', () => ({
@@ -36,7 +40,7 @@ vi.mock('@/services/workspace-state.service', () => ({
 vi.mock('@/stores/tables.store', () => ({
   useTablesStore: () => ({ hydrate: mocks.hydrate, hydrateWithoutActivate: mocks.hydrateWithoutActivate, removeModState: vi.fn() }),
 }));
-vi.mock('@/services/app-feedback-log.service', () => ({ recordLogBestEffort: vi.fn() }));
+vi.mock('@/services/app-log.service', () => ({ recordLogBestEffort: vi.fn() }));
 
 const modRoot = 'D:/game/mods/demo';
 

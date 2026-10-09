@@ -11,12 +11,12 @@ import type { FileSchema } from '@/domain/schema/schema.types';
 import type { RowData } from '@/shared/types';
 import { deepClone } from '@/shared/lib/starsector';
 
-vi.mock('@/services/assets.service', () => ({
+vi.mock('@/services/core-assets.service', () => ({
   queryCoreFields: vi.fn(async () => ({})),
   queryCoreGraphics: vi.fn(async () => []),
 }));
 
-vi.mock('@/services/app-feedback-log.service', () => ({ recordLogBestEffort: vi.fn() }));
+vi.mock('@/services/app-log.service', () => ({ recordLogBestEffort: vi.fn() }));
 
 vi.mock('@/app/composables/use-app-feedback', () => ({
   useAppFeedback: () => ({

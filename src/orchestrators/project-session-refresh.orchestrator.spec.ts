@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   emitWindowEvent: vi.fn(),
   handler: null as null | ((event: CommittedWriteEvent) => Promise<void>),
 }));
-vi.mock('@/services/session.service', () => ({ synchronizeSessionCommit: mocks.synchronizeSessionCommit }));
+vi.mock('@/services/project-session.service', () => ({ synchronizeSessionCommit: mocks.synchronizeSessionCommit }));
 vi.mock('@/services/query-cache.service', () => ({ invalidateQueryCacheByProject: mocks.invalidateQueryCacheByProject }));
 vi.mock('@/services/resource-cache.service', () => ({ invalidateResourceCacheByProject: mocks.invalidateResourceCacheByProject }));
 vi.mock('@/windows/current.window', () => ({ currentWindowLabel: () => 'main' }));

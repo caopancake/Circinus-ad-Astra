@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   saveSettings: vi.fn(),
@@ -40,11 +40,13 @@ function settingsFixture(overrides: { theme?: 'light' | 'dark'; historyLimit?: n
 }
 
 describe('settings persistence orchestration', () => {
+  let stopPersistence: () => void;
   beforeAll(() => {
     setActivePinia(createPinia());
     initializeSettingsStore(settingsFixture());
-    startSettingsPersistence();
+    stopPersistence = startSettingsPersistence();
   });
+  afterAll(() => stopPersistence());
 
   beforeEach(() => {
     mocks.saveSettings.mockReset();
@@ -127,5 +129,48 @@ describe('settings persistence orchestration', () => {
     settings.setTheme('light');
     await nextTick();
     await vi.waitFor(() => expect(mocks.saveSettings).toHaveBeenCalled());
+  });
+
+  it('releases a listener that arrives after its window lifecycle ends', async () => {
+    let finish!: (unlisten: () => Promise<void>) => void;
+    mocks.listenWindowEvent.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const stop = startSettingsMirror();
+    stop();
+    const unlisten = vi.fn(async () => {});
+    finish(unlisten);
+    await vi.waitFor(() => expect(unlisten).toHaveBeenCalledOnce());
+    mocks.listenWindowEvent.mockImplementationOnce(async () => async () => {});
+    const nextStop = startSettingsMirror();
+    await Promise.resolve();
+    expect(mocks.listenWindowEvent).toHaveBeenCalledTimes(2);
+    nextStop();
+  });
+
+  it('keeps a captured settings write from broadcasting after its lifecycle is replaced', async () => {
+    const { nextTick } = await import('vue');
+    let finish!: (snapshot: ReturnType<typeof settingsFixture>) => void;
+    mocks.saveSettings.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    useSettingsStore().setTheme('dark');
+    await nextTick();
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    stopPersistence();
+    setActivePinia(createPinia());
+    initializeSettingsStore(settingsFixture());
+    stopPersistence = startSettingsPersistence();
+    finish(settingsFixture({ theme: 'dark' }));
+    await nextTick();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(useSettingsStore().theme).toBe('light');
+    expect(mocks.emitWindowEvent).not.toHaveBeenCalled();
   });
 });

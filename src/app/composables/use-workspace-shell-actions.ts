@@ -7,7 +7,7 @@ import type { AppFeedback, GameScanWarning, ModOpeningFailure } from '@/shared/t
 import { useSettingsStore } from '@/stores/settings.store';
 import { openEditorWindow } from '@/windows/editor.window';
 import { useProjectStore } from '@/stores/project.store';
-import { pickDirectory, scanDirectoryGameOverview } from '@/services/session.service';
+import { pickDirectory, scanDirectoryGameOverview } from '@/services/directory.service';
 import { pendingTableSave, saveTableChanges, type TableSaveResult } from '@/orchestrators/table-save.orchestrator';
 import { useSaveCommandStore } from '@/stores/save-command.store';
 import { useTablesStore } from '@/stores/tables.store';
@@ -29,7 +29,7 @@ import {
   type WorkspaceCloseTarget,
 } from '@/orchestrators/workspace-lifecycle.orchestrator';
 import { useWorkspaceStore } from '@/stores/workspace.store';
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { recordLogBestEffort } from '@/services/app-log.service';
 import { logFields } from '@/shared/lib/log-fields';
 import { queryEditorEditInfo } from '@/services/editor.service';
 import { useWriteSyncStore } from '@/stores/write-sync.store';

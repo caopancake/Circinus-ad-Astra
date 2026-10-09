@@ -9,6 +9,7 @@ pub mod file_editor;
 pub mod file_history;
 pub mod mod_creation;
 pub mod project;
+pub mod project_session;
 pub mod schema;
 pub mod system_open;
 pub mod windows;

@@ -15,7 +15,7 @@ vi.mock('@/services/workspace-state.service', () => ({
   savePersistedWorkspace: mocks.savePersistedWorkspace,
 }));
 
-vi.mock('@/services/session.service', () => ({
+vi.mock('@/services/directory.service', () => ({
   scanDirectoryGameOverview: mocks.scanDirectoryGameOverview,
 }));
 
@@ -73,6 +73,7 @@ describe('restorePersistedWorkspace', () => {
       'C:/mods/alpha',
       'D:/games/starsector',
       workspace.getModGeneration('C:/mods/alpha'),
+      expect.any(Function),
     );
     expect(mocks.hydrateOpenedModRuntime).toHaveBeenCalledWith('C:/mods/alpha', expect.anything(), false);
     expect(onWarnings).toHaveBeenCalledWith('Alpha', [
@@ -109,6 +110,23 @@ describe('restorePersistedWorkspace', () => {
     await restorePersistedWorkspace({ knownStarsectorRoot: null, onModRestoreError: onError });
     expect(mocks.hydrateOpenedModRuntime).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('revokes a late persisted snapshot when its owner is released', async () => {
+    let finish!: (snapshot: unknown) => void;
+    mocks.loadPersistedWorkspace.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    let active = true;
+    const pending = restorePersistedWorkspace({ knownStarsectorRoot: null, onModRestoreError: vi.fn(), isCurrent: () => active });
+    active = false;
+    finish({ mods: [{ modRoot: 'M:/late', displayName: 'Late', version: '' }], starsectorRoot: null });
+    await pending;
+    expect(useWorkspaceStore().mods.size).toBe(0);
+    expect(mocks.openModProjectManifest).not.toHaveBeenCalled();
   });
 });
 

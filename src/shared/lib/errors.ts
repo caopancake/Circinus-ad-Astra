@@ -5,13 +5,18 @@ import { commandErrorCopy } from '@/shared/lib/error-messages';
 export class AppError extends Error {
   readonly action?: string;
   readonly code?: string;
+  readonly command?: string;
   readonly location: ErrorLocation | null;
   readonly cause?: unknown;
 
-  constructor(message: string, options: { action?: string; code?: string; location?: ErrorLocation | null; cause?: unknown } = {}) {
+  constructor(
+    message: string,
+    options: { action?: string; command?: string; code?: string; location?: ErrorLocation | null; cause?: unknown } = {},
+  ) {
     super(message);
     this.name = 'AppError';
     this.action = options.action;
+    this.command = options.command;
     this.code = options.code;
     this.location = options.location ?? null;
     this.cause = options.cause;
@@ -65,9 +70,18 @@ function joinErrorMessages(context: string, source: string): string {
 }
 
 export function formatError(error: unknown): string {
-  if (error instanceof AppError && error.cause !== undefined) return joinErrorMessages(error.message, formatError(error.cause));
+  if (error instanceof AppError && error.cause !== undefined) {
+    const source = formatError(error.cause);
+    return error.command ? source : joinErrorMessages(error.message, source);
+  }
   const diagnostic = errorDiagnosticOf(error);
   return commandErrorCopy(diagnostic.code) ?? diagnostic.message;
+}
+
+export function errorContextOf(error: unknown): { action?: string; command?: string } {
+  if (!(error instanceof AppError)) return {};
+  const source = errorContextOf(error.cause);
+  return { action: error.action ?? source.action, command: error.command ?? source.command };
 }
 
 export function warningNotice(userMessage: string, code: string, message: string): FeedbackNotice {

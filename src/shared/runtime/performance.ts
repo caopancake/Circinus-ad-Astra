@@ -1,6 +1,6 @@
 /**
  * Frontend performance telemetry cross-cutting facility. Log persistence is injected
- * via setPerformanceLogSink by the app-feedback-log service at module load; this
+ * via setPerformanceLogSink by the application log capability at startup; this
  * module depends on no service.
  */
 
@@ -21,8 +21,11 @@ type PerformanceLogSink = (entry: PerformanceLogEntry) => void;
 
 let logSink: PerformanceLogSink = () => {};
 
-export function setPerformanceLogSink(sink: PerformanceLogSink): void {
+export function setPerformanceLogSink(sink: PerformanceLogSink): () => void {
   logSink = sink;
+  return () => {
+    if (logSink === sink) logSink = () => {};
+  };
 }
 
 export function measurePerformance<T>(name: string, fields: PerformanceFields, action: () => T): T {

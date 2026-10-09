@@ -2,9 +2,10 @@ import { classifyFrontendPath } from './classify.mjs';
 import { dependencyOrigins } from './imports.mjs';
 
 /** @typedef {import('./classify.mjs').FrontendPathClass} PathRole */
-/** @typedef {{ layer: string, domain?: string, role?: string }} Owner */
+/** @typedef {{ path?: string, layer: string, domain?: string, role?: string }} Owner */
 /** @typedef {{ path?: string, layer?: string, role: string, domain: string, names: string[], capability: string, owners: Owner[] }} CapabilityRule */
 
+/** @type {Owner[]} */
 const readOwners = [{ layer: 'services' }, { layer: 'orchestrators' }, { layer: 'app', role: 'composable' }];
 const configWrites = [
   'writeModInfo',
@@ -41,8 +42,73 @@ const wireWrites = [
 /** @type {CapabilityRule[]} */
 export const frontendCapabilities = [
   {
+    path: 'src/shared/runtime/command.runtime.ts',
+    layer: 'shared',
+    role: 'shared',
+    domain: 'runtime',
+    names: ['invokeCommand'],
+    capability: 'command-transport',
+    owners: [{ layer: 'services' }, { layer: 'shared', role: 'api' }],
+  },
+  {
     role: 'service',
-    domain: 'assets',
+    domain: 'app-settings',
+    names: ['loadSettings'],
+    capability: 'settings-read',
+    owners: [{ path: 'src/main.ts', layer: 'app' }],
+  },
+  {
+    role: 'service',
+    domain: 'app-settings',
+    names: ['saveSettings'],
+    capability: 'settings-write',
+    owners: [{ layer: 'orchestrators', domain: 'settings-persistence' }],
+  },
+  {
+    role: 'service',
+    domain: 'app-log',
+    names: ['recordLogBestEffort'],
+    capability: 'log-record',
+    owners: readOwners.concat([{ layer: 'app', domain: 'app-feedback' }]),
+  },
+  {
+    role: 'service',
+    domain: 'app-log',
+    names: ['startPerformanceLogSink'],
+    capability: 'log-lifecycle',
+    owners: [{ path: 'src/main.ts', layer: 'app' }],
+  },
+  {
+    role: 'service',
+    domain: 'app-log',
+    names: ['loadLogStatus', 'openLogFile', 'clearLog'],
+    capability: 'log-maintenance',
+    owners: [{ layer: 'app', role: 'composable', domain: 'settings-view-model' }],
+  },
+  {
+    role: 'service',
+    domain: 'app-config',
+    names: ['openConfigFolder', 'clearConfig'],
+    capability: 'config-maintenance',
+    owners: [{ layer: 'app', role: 'composable', domain: 'app-config-actions' }],
+  },
+  {
+    role: 'service',
+    domain: 'workspace-state',
+    names: ['loadPersistedWorkspace', 'savePersistedWorkspace'],
+    capability: 'workspace-persistence',
+    owners: [{ layer: 'orchestrators', domain: 'workspace-persistence' }],
+  },
+  {
+    role: 'service',
+    domain: 'mod-creation',
+    names: ['createNewModProject'],
+    capability: 'mod-create',
+    owners: [{ layer: 'orchestrators', domain: 'mod-creation' }],
+  },
+  {
+    role: 'service',
+    domain: 'core-assets',
     names: ['queryCoreFields', 'queryCoreGraphics'],
     capability: 'core-index-read',
     owners: [{ layer: 'orchestrators', domain: 'core-assets' }],
@@ -123,21 +189,6 @@ export const frontendCapabilities = [
     owners: [{ layer: 'orchestrators', domain: 'entity-identity' }],
   },
   {
-    role: 'api',
-    domain: 'window',
-    names: [
-      'openManagedWindow',
-      'updateManagedWindowStatus',
-      'reserveWindowTargets',
-      'releaseWindowTargets',
-      'retargetManagedWindow',
-      'requestSessionWindowClose',
-      'cancelWindowCloseRequest',
-    ],
-    capability: 'window-wire',
-    owners: [{ layer: 'services', domain: 'window' }],
-  },
-  {
     role: 'service',
     domain: 'window',
     names: ['openNativeManagedWindow'],
@@ -189,7 +240,7 @@ export const frontendCapabilities = [
     domain: '@tauri-apps/api/core',
     names: ['invoke'],
     capability: 'invoke-wire',
-    owners: [{ layer: 'shared', role: 'api' }],
+    owners: [{ path: 'src/shared/runtime/command.runtime.ts', layer: 'shared', domain: 'runtime' }],
   },
   ...['naive-ui', 'naive-ui/es/message', 'naive-ui/es/dialog', 'naive-ui/es/discrete'].map((domain) => ({
     role: 'external',
@@ -360,35 +411,35 @@ export const frontendCapabilities = [
   },
   {
     role: 'service',
-    domain: 'session',
+    domain: 'project-session',
     names: ['openProject'],
     capability: 'session-open',
     owners: [{ layer: 'orchestrators', domain: 'directory-opening' }],
   },
   {
     role: 'service',
-    domain: 'session',
+    domain: 'project-session',
     names: ['closeProject'],
     capability: 'session-close',
     owners: ['directory-opening', 'workspace-lifecycle'].map((domain) => ({ layer: 'orchestrators', domain })),
   },
   {
     role: 'service',
-    domain: 'session',
+    domain: 'project-session',
     names: ['requestProjectSessionRefresh', 'synchronizeSessionCommit'],
     capability: 'session-refresh',
     owners: [{ layer: 'orchestrators', domain: 'project-session-refresh' }],
   },
   {
     role: 'service',
-    domain: 'session',
+    domain: 'core-assets',
     names: ['invalidateCoreCacheForRoot'],
     capability: 'core-cache-clear',
     owners: [{ layer: 'orchestrators', domain: 'workspace-lifecycle' }],
   },
   {
     role: 'service',
-    domain: 'session',
+    domain: 'directory',
     names: ['pickDirectory', 'detectDirectoryTarget', 'scanDirectoryGameOverview'],
     capability: 'directory-read',
     owners: [
@@ -396,21 +447,6 @@ export const frontendCapabilities = [
       { layer: 'orchestrators', domain: 'workspace-persistence' },
       { layer: 'app', domain: 'workspace-shell-actions' },
     ],
-  },
-  {
-    role: 'api',
-    domain: 'session',
-    names: [
-      'openProjectSession',
-      'closeProjectSession',
-      'invalidateProjectSession',
-      'synchronizeCommittedWrite',
-      'invalidateCoreCache',
-      'detectDirectory',
-      'scanGameOverview',
-    ],
-    capability: 'session-wire',
-    owners: [{ layer: 'services', domain: 'session' }],
   },
 ];
 
@@ -451,6 +487,7 @@ export function capabilityOrigins(edge, nodes) {
 
 /** @param {PathRole} current @param {PathRole} target @param {import('./imports.mjs').ResolvedImport} edge @returns {string | null} */
 export function frontendDependencyFailure(current, target, edge) {
+  if (current.role === 'bootstrap' && target.layer === 'styles') return null;
   if (!validFrontendDependency(current.layer, target.layer)) return `${current.layer} must not import ${target.layer}`;
   if (!edge.typeOnly && current.role === 'component' && ['service', 'orchestrator', 'api'].includes(target.role))
     return 'components must consume ViewModel/composable state and actions';
@@ -472,6 +509,7 @@ export function canConsumeCapability(current, capability) {
 /** @param {PathRole} current @param {Owner} owner @returns {boolean} */
 function matchesOwner(current, owner) {
   return (
+    (owner.path === undefined || current.path === owner.path) &&
     current.layer === owner.layer &&
     (owner.domain === undefined || current.domain === owner.domain) &&
     (owner.role === undefined || current.role === owner.role)

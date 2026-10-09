@@ -29,13 +29,15 @@ vi.mock('@/shared/runtime/dialog.runtime', () => ({
   pickDirectoryDialog: mocks.pickDirectoryDialog,
 }));
 
-vi.mock('@/services/app-feedback-log.service', () => ({
+vi.mock('@/services/app-log.service', () => ({
   loadLogStatus: mocks.loadLogStatus,
   openConfigFolder: mocks.openConfigFolder,
   openLogFile: mocks.openLogFile,
   clearConfig: mocks.clearConfig,
   clearLog: mocks.clearLog,
 }));
+
+vi.mock('@/services/app-config.service', () => ({ openConfigFolder: mocks.openConfigFolder, clearConfig: mocks.clearConfig }));
 
 vi.mock('@/orchestrators/settings-persistence.orchestrator', () => ({
   saveLogDirectory: mocks.saveLogDirectory,

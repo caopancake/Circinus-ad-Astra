@@ -1,7 +1,7 @@
 import { publishCommittedWrite } from '@/orchestrators/project-session-refresh.orchestrator';
 import { withCause, errorMessageOf } from '@/shared/lib/errors';
 import type { WriteResult } from '@/shared/types';
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { recordLogBestEffort } from '@/services/app-log.service';
 
 export interface SavedWriteCompletion {
   label: string;

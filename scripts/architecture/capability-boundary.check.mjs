@@ -12,8 +12,8 @@ import { rustServiceEdgeBoundaryRule } from './rules/rust-service-edge-boundary.
 import { rustProjectLayerBoundaryRule } from './rules/rust-project-layer-boundary.mjs';
 
 const cases = [
-  ['core-fields-read', 'src/orchestrators/core-assets.orchestrator.ts', 'src/services/assets.service.ts', 'queryCoreFields'],
-  ['core-graphics-read', 'src/orchestrators/core-assets.orchestrator.ts', 'src/services/assets.service.ts', 'queryCoreGraphics'],
+  ['core-fields-read', 'src/orchestrators/core-assets.orchestrator.ts', 'src/services/core-assets.service.ts', 'queryCoreFields'],
+  ['core-graphics-read', 'src/orchestrators/core-assets.orchestrator.ts', 'src/services/core-assets.service.ts', 'queryCoreGraphics'],
   [
     'config-list-retry',
     'src/app/composables/config/use-config-list-selection.ts',
@@ -23,10 +23,9 @@ const cases = [
   [
     'commit-recovery',
     'src/orchestrators/project-session-refresh.orchestrator.ts',
-    'src/services/session.service.ts',
+    'src/services/project-session.service.ts',
     'synchronizeSessionCommit',
   ],
-  ['commit-recovery-wire', 'src/services/session.service.ts', 'src/shared/api/session-api.ts', 'synchronizeCommittedWrite'],
   [
     'commit-publication',
     'src/orchestrators/file-history-write.orchestrator.ts',
@@ -40,7 +39,6 @@ const cases = [
     'markProjectionPending',
   ],
   ['projection-read-owner', 'src/services/query-cache.service.ts', 'src/shared/runtime/project-projection.ts', 'requireProjectionReady'],
-  ['window-wire', 'src/services/window.service.ts', 'src/shared/api/window-api.ts', 'openManagedWindow'],
   ['window-open', 'src/windows/managed.window.ts', 'src/services/window.service.ts', 'openNativeManagedWindow'],
   ['window-status', 'src/app/composables/use-dirty-window-close-guard.ts', 'src/services/window.service.ts', 'updateNativeWindowStatus'],
   [
@@ -99,21 +97,26 @@ const cases = [
     'src/services/resource-cache.service.ts',
     'invalidateResourceCacheForSession',
   ],
-  ['session-open', 'src/orchestrators/directory-opening.orchestrator.ts', 'src/services/session.service.ts', 'openProject'],
-  ['session-close', 'src/orchestrators/workspace-lifecycle.orchestrator.ts', 'src/services/session.service.ts', 'closeProject'],
-  ['late-session-close', 'src/orchestrators/directory-opening.orchestrator.ts', 'src/services/session.service.ts', 'closeProject'],
+  ['session-open', 'src/orchestrators/directory-opening.orchestrator.ts', 'src/services/project-session.service.ts', 'openProject'],
+  ['session-close', 'src/orchestrators/workspace-lifecycle.orchestrator.ts', 'src/services/project-session.service.ts', 'closeProject'],
+  ['late-session-close', 'src/orchestrators/directory-opening.orchestrator.ts', 'src/services/project-session.service.ts', 'closeProject'],
   [
     'session-refresh',
     'src/orchestrators/project-session-refresh.orchestrator.ts',
-    'src/services/session.service.ts',
+    'src/services/project-session.service.ts',
     'requestProjectSessionRefresh',
   ],
-  ['core-clear', 'src/orchestrators/workspace-lifecycle.orchestrator.ts', 'src/services/session.service.ts', 'invalidateCoreCacheForRoot'],
-  ['directory-read', 'src/app/composables/use-workspace-shell-actions.ts', 'src/services/session.service.ts', 'pickDirectory'],
+  [
+    'core-clear',
+    'src/orchestrators/workspace-lifecycle.orchestrator.ts',
+    'src/services/core-assets.service.ts',
+    'invalidateCoreCacheForRoot',
+  ],
+  ['directory-read', 'src/app/composables/use-workspace-shell-actions.ts', 'src/services/directory.service.ts', 'pickDirectory'],
   [
     'overview-restore',
     'src/orchestrators/workspace-persistence.orchestrator.ts',
-    'src/services/session.service.ts',
+    'src/services/directory.service.ts',
     'scanDirectoryGameOverview',
   ],
 ];
@@ -379,5 +382,5 @@ test('window settings consumption is constrained through the actual settings cap
   });
   const failures = rules.flatMap((rule) => rule.check(files)).filter((failure) => failure.includes('src/windows/audit.window.ts'));
   assert.equal(failures.length, 1);
-  assert.match(failures[0], /windows must receive settings by request data or events/);
+  assert.match(failures[0], /settings-read/);
 });

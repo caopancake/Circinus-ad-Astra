@@ -3,18 +3,89 @@ import { parse } from 'vue/compiler-sfc';
 
 /** @typedef {{ importedName: string | null, localName: string | null, specifier: string, typeOnly: boolean, kind: 'import' | 'export' | 'dynamic' | 'type', line: number, column: number }} ImportSpecifierInfo */
 /** @typedef {{ exportedName: string, localName: string, specifier: string | null, importedName: string, typeOnly: boolean }} ExportBinding */
-/** @typedef {{ imports: ImportSpecifierInfo[], exports: ExportBinding[], exportedFunctions: string[], dependencyFailures: string[] }} FrontendSource */
+/** @typedef {{ localName: string | null, member: string | null, specifier: string | null, command: string | null, line: number, column: number }} SourceCall */
+/** @typedef {{ imports: ImportSpecifierInfo[], exports: ExportBinding[], exportedFunctions: string[], calls: SourceCall[], dependencyFailures: string[] }} FrontendSource */
 
 /** @param {import('./files.mjs').SourceFile} file @returns {FrontendSource} */
 export function parseFrontendSource(file) {
   /** @type {FrontendSource} */
-  const facts = { imports: [], exports: [], exportedFunctions: [], dependencyFailures: [] };
+  const facts = { imports: [], exports: [], exportedFunctions: [], calls: [], dependencyFailures: [] };
   if (!/\.(?:ts|tsx|js|jsx|mjs|vue)$/.test(file.rel)) return facts;
   const blocks = scriptBlocks(file);
   for (const block of blocks) {
     const ast = ts.createSourceFile(file.rel, block.text, ts.ScriptTarget.Latest, true, block.kind);
+    /** @type {Map<ts.Node, Map<string, ts.Expression | null>>} */
+    const scopes = new Map();
+    /** @param {ts.Node} node @returns {ts.Node} */
+    function scopeOf(node) {
+      let scope = node.parent;
+      while (scope && !ts.isSourceFile(scope) && !ts.isBlock(scope) && !ts.isFunctionLike(scope)) scope = scope.parent;
+      return scope ?? ast;
+    }
+    /** @param {ts.Node} node @param {string} name @param {ts.Expression | null} expression */
+    function bindAlias(node, name, expression) {
+      const scope = scopeOf(node);
+      const bindings = scopes.get(scope) ?? new Map();
+      bindings.set(name, expression);
+      scopes.set(scope, bindings);
+    }
+    /** @param {ts.Node} node */
+    function collectAliases(node) {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) bindAlias(node, node.name.text, node.initializer ?? null);
+      if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && node.initializer) {
+        for (const element of node.name.elements) {
+          if (ts.isIdentifier(element.name) && !element.dotDotDotToken) {
+            const member = element.propertyName?.getText(ast) ?? element.name.text;
+            bindAlias(node, element.name.text, ts.factory.createPropertyAccessExpression(node.initializer, member));
+          }
+        }
+      }
+      if (ts.isParameter(node) && ts.isIdentifier(node.name)) bindAlias(node, node.name.text, null);
+      if (ts.isFunctionDeclaration(node) && node.name) bindAlias(node, node.name.text, null);
+      ts.forEachChild(node, collectAliases);
+    }
+    collectAliases(ast);
+    /** @param {ts.Expression} expression @param {Set<string>} [seen] @returns {{localName: string | null, member: string | null, specifier: string | null} | null} */
+    function callTarget(expression, seen = new Set()) {
+      if (ts.isParenthesizedExpression(expression) || ts.isAwaitExpression(expression)) return callTarget(expression.expression, seen);
+      if (ts.isIdentifier(expression)) {
+        let scope = scopeOf(expression);
+        while (scope) {
+          const bindings = scopes.get(scope);
+          if (bindings?.has(expression.text)) {
+            const alias = bindings.get(expression.text);
+            return alias && !seen.has(expression.text) ? callTarget(alias, new Set(seen).add(expression.text)) : null;
+          }
+          if (ts.isSourceFile(scope)) break;
+          scope = scopeOf(scope);
+        }
+        return { localName: expression.text, member: null, specifier: null };
+      }
+      if (ts.isPropertyAccessExpression(expression)) {
+        const source = callTarget(expression.expression, seen);
+        return source ? { ...source, member: expression.name.text } : null;
+      }
+      if (ts.isCallExpression(expression) && expression.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        const argument = expression.arguments[0];
+        if (argument && ts.isStringLiteralLike(argument)) return { localName: null, member: null, specifier: argument.text };
+      }
+      return null;
+    }
     /** @param {ts.Node} node @returns {void} */
     function visit(node) {
+      if (ts.isCallExpression(node) && node.expression.kind !== ts.SyntaxKind.ImportKeyword) {
+        const target = callTarget(node.expression);
+        if (target) {
+          const argument = node.arguments[0];
+          const prefix = file.text.slice(0, block.offset + node.getStart(ast)).split('\n');
+          facts.calls.push({
+            ...target,
+            command: argument && ts.isStringLiteralLike(argument) ? argument.text : null,
+            line: prefix.length,
+            column: prefix[prefix.length - 1].length + 1,
+          });
+        }
+      }
       if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
         const specifier = node.moduleSpecifier.text;
         const clause = node.importClause;

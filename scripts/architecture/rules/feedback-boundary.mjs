@@ -30,7 +30,7 @@ export const feedbackBoundaryRule = {
           'app settings service must not import feedback/log API',
         );
       }
-      if (current.layer === 'services' && current.domain === 'app-feedback-log') {
+      if (current.layer === 'services' && current.domain === 'app-log') {
         assertNoImportDomain(
           file,
           failures,

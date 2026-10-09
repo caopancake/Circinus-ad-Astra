@@ -7,6 +7,8 @@
 ## 参考
 
 `scripts/architecture/capability-boundary.check.mjs`：能力授权、规则归属和真实仓库入口的行为测试。
+`scripts/architecture/command-boundary.check.mjs`：command 来源、词法作用域与 owner 验收。
+`scripts/architecture/rules/command-boundary.mjs`：command 调用归属的唯一检查 owner。
 `scripts/architecture/rules/frontend-layer-boundary.mjs`：前端层级、组件消费、wire 边界、service 依赖和运行时循环的检查 owner。
 `scripts/architecture/rules/index.mjs`：正式规则及元规则注册表。
 `scripts/architecture/rules/parser-boundary.mjs`：工具资产、Mod JSON-like 与 CSV 解析职责 owner。
@@ -19,6 +21,7 @@
 `scripts/check-architecture.mjs`：仓库事实建立、规则执行和诊断输出入口。
 `scripts/check-encoding.mjs`：UTF-8 无 BOM 检查入口。
 `scripts/check-identifier-length.mjs`：变量与函数长度检查入口。
+`scripts/shared/command-policy.mjs`：实际 command 装配 owner 的契约。
 `scripts/shared/files.mjs`：仓库路径清单、源码读取和事实装配 owner。
 `scripts/shared/frontend-policy.mjs`：层级、能力、正式 owner 与诊断位置的共享契约。
 `scripts/shared/frontend-source.mjs`：TypeScript 与 Vue 脚本解析、绑定、转导出和源码位置 owner。
@@ -28,18 +31,18 @@
 
 ## 边界
 
+- Core 字段与 graphics 读取必须归 Core 加载编排；配置列表交接重试必须归共同选择与动作 owner。
+- Rust 内部模块分类必须按完整模块段比较，正式 facade 的能力名称必须保持 facade 归属。
 - Rust 规则必须复用生产源码过滤与 crate 路径解析，同一模块或层级依赖只允许报告一次。
 - 全部依赖规则必须消费入口建立的同一份绑定、实际节点和模块边，严禁在规则内重新解析导入或补文件扩展名。
+- 共址测试与 src/test 夹具必须共同按测试角色分类；生产源码严禁消费夹具层。
 - 同一依赖事实必须具有唯一规则 owner；层级失败必须由通用依赖规则报告，能力权限必须由能力规则报告。
+- 提交恢复必须归 project-session 能力，恢复执行必须归提交同步编排；投影运行态写入、查询 gate、receipt 发布与重试必须分别声明正式能力消费者。
 - 模块业务规则只允许表达独立业务契约；组件消费、wire 调用和 service 横向依赖必须由通用规则拥有。
 - 注册表必须装配全部正式规则和元规则；退役契约必须同步收束其检查入口与消费者。
 - 测试源码必须按测试角色分类；生产能力权限必须通过合成生产节点和实际仓库入口验收。
-- 共址测试与 src/test 夹具必须共同按测试角色分类；生产源码严禁消费夹具层。
-- Rust 内部模块分类必须按完整模块段比较，正式 facade 的能力名称必须保持 facade 归属。
-- 窗口 wire 必须归 window service；创建必须归 managed window，状态与关闭取消必须归关闭守卫，身份交接必须归实体身份编排。
-- 提交恢复 wire 必须归 session service，恢复执行必须归提交同步编排；投影运行态写入、查询 gate、receipt 发布与重试必须分别声明正式能力消费者。
-- Core 字段与 graphics 读取必须归 Core 加载编排；配置列表交接重试必须归共同选择与动作 owner。
 - 源码事实只允许由共享解析入口建立；规则只允许读取事实和输出诊断，严禁修改仓库状态。
+- 窗口 wire 必须归 window service；创建必须归 managed window，状态与关闭取消必须归关闭守卫，身份交接必须归实体身份编排。
 - 路径角色与能力表必须表达正式所有权，严禁以原始源文件身份或内容字符串授权绕过边界。
 
 ## 链路
@@ -90,7 +93,7 @@
 ## 陷阱
 
 - 严禁以导入字符串的省略路径代替实际文件节点判断职责。
-- 严禁把整条混合导入标记为类型边，或把类型引用加入运行时循环。
-- 严禁将查询和订阅按状态变更能力授权。
 - 严禁依赖转导出、namespace 或动态导入隐藏正式能力来源。
+- 严禁将查询和订阅按状态变更能力授权。
+- 严禁把整条混合导入标记为类型边，或把类型引用加入运行时循环。
 - 严禁通过多个规则重复报告同一模块依赖或能力归属事实。

@@ -7,7 +7,7 @@ import { replayFileChangeSet } from '@/services/write.service';
 import { publishCommittedWrite, retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
 import type { FileChangeRecord, FileChangeReplayDirection, FileSaveHistoryEntry } from '@/shared/types';
 import { AppError } from '@/shared/lib/errors';
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { recordLogBestEffort } from '@/services/app-log.service';
 import { logFields } from '@/shared/lib/log-fields';
 import { loadFileHistory } from '@/services/file-history.service';
 

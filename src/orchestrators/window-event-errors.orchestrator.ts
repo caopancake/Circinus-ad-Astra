@@ -1,5 +1,5 @@
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
-import { errorDiagnosticOf } from '@/shared/lib/errors';
+import { recordLogBestEffort } from '@/services/app-log.service';
+import { errorContextOf, errorDiagnosticOf } from '@/shared/lib/errors';
 import { logFields } from '@/shared/lib/log-fields';
 
 export function recordWindowEventHandlerError(error: unknown, event: string): void {
@@ -10,6 +10,6 @@ export function recordWindowEventHandlerError(error: unknown, event: string): vo
     message: diagnostic.message,
     path: diagnostic.location?.path ?? null,
     line: diagnostic.location?.line ?? null,
-    fields: logFields({ event, column: diagnostic.location?.column }),
+    fields: logFields({ ...errorContextOf(error), event, column: diagnostic.location?.column }),
   });
 }

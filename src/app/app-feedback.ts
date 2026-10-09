@@ -10,7 +10,7 @@ import {
   fileReferenceLocationSuffix,
   formatError,
   errorDiagnosticOf,
-  AppError,
+  errorContextOf,
   type FileReference,
 } from '@/shared/lib/errors';
 import { resolveFeedbackFileSession, type FeedbackFileSession } from '@/shared/lib/feedback-session';
@@ -20,7 +20,7 @@ import { openFileEditorWindow } from '@/windows/file-editor.window';
 import type { FileEditorContextSeverity } from '@/windows/window.events';
 import { currentWindowSessionIdentity } from '@/windows/window-identity.window';
 import { transcodeFileToUtf8 } from '@/services/files.service';
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { recordLogBestEffort } from '@/services/app-log.service';
 import { errorMessageOf } from '@/shared/lib/errors';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useProjectStore } from '@/stores/project.store';
@@ -93,7 +93,11 @@ function showErrorToast(message: MessageApiInjection, dialog: DialogApiInjection
     message: diagnostic.message,
     path: reference?.path ?? null,
     line: reference?.line ?? null,
-    fields: logFields({ action: error instanceof AppError ? error.action : contextMessage, column: diagnostic.location?.column }),
+    fields: logFields({
+      ...errorContextOf(error),
+      action: errorContextOf(error).action ?? contextMessage,
+      column: diagnostic.location?.column,
+    }),
   });
 }
 

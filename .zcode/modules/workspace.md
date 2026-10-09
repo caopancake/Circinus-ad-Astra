@@ -6,24 +6,24 @@
 
 ## 参考
 
-`src/stores/workspace.store.ts`：运行态 owner，拥有全局页、已加载 Mod、Mod 页面上下文、概览、打开失败状态、列宽与持久化投影。
-`src/orchestrators/workspace-persistence.orchestrator.ts`：workspace 快照保存与启动恢复 owner。
+`scripts/architecture/rules/workspace-module-boundary.mjs`：workspace 边界规则 owner。
+`src-tauri/src/services/workspace_persistence.rs`：工具私有快照读写 owner。
 `src/orchestrators/workspace-lifecycle.orchestrator.ts`：生命周期 owner，拥有关闭目标捕获、5-store 清理用例与工作区关闭。
 `src/orchestrators/workspace-navigation.orchestrator.ts`：页签与页面导航 owner，同步跨 store 运行态。
-`src/shared/api/workspace-api.ts`：workspace 持久化 wire API。
-`src-tauri/src/services/workspace_persistence.rs`：工具私有快照读写 owner。
-`scripts/architecture/rules/workspace-module-boundary.mjs`：workspace 边界规则 owner。
+`src/orchestrators/workspace-persistence.orchestrator.ts`：workspace 快照保存与启动恢复 owner。
+`src/services/workspace-state.service.ts`：workspace 持久化签名与协议装配主归属。
+`src/stores/workspace.store.ts`：运行态 owner，拥有全局页、已加载 Mod、Mod 页面上下文、概览、打开失败状态、列宽与持久化投影。
 
 ## 边界
 
-- workspace store 必须拥有全局页、已加载 Mod、按 `modRoot` 保存的运行代次与页面上下文、概览、打开失败状态与列宽；页面与组件只允许消费。
-- 移除 Mod 的 5-store 清理序列唯一归属生命周期编排的清理用例；缓存失效、session 关闭与视图回退由调用方组合。
-- 前端按会话清理、后端 session 关闭与 Core 缓存清理必须由生命周期能力边界拥有；目录打开只允许关闭所属迟到响应的 session。
-- 顶部页签经导航编排先同步同一 `modRoot` 的 project/tables/editor/history 运行态，再恢复该 Mod 最近的表格或配置页。
-- 导航 ViewModel 在替换当前配置视图前查询该 Mod 的活跃 Draft Session；工作区关闭、Mod 移除和主窗口关闭同时检查 CSV 与配置 dirty。
-- 表格导航必须先提交当前表的活动输入，再按明确目标 Mod 更新表状态；CSV 草稿必须按 Mod 与表保留。
 - Rust workspace service 只读写工具私有文件；目录打开只提供打开 outcome。
+- workspace store 必须拥有全局页、已加载 Mod、按 `modRoot` 保存的运行代次与页面上下文、概览、打开失败状态与列宽；页面与组件只允许消费。
+- 前端按会话清理、后端 session 关闭与 Core 缓存清理必须由生命周期能力边界拥有；目录打开只允许关闭所属迟到响应的 session。
 - 启动恢复一律回到工作区总览；Mod 页面上下文与打开失败状态只存于本次运行。
+- 导航 ViewModel 在替换当前配置视图前查询该 Mod 的活跃 Draft Session；工作区关闭、Mod 移除和主窗口关闭同时检查 CSV 与配置 dirty。
+- 移除 Mod 的 5-store 清理序列唯一归属生命周期编排的清理用例；缓存失效、session 关闭与视图回退由调用方组合。
+- 表格导航必须先提交当前表的活动输入，再按明确目标 Mod 更新表状态；CSV 草稿必须按 Mod 与表保留。
+- 顶部页签经导航编排先同步同一 `modRoot` 的 project/tables/editor/history 运行态，再恢复该 Mod 最近的表格或配置页。
 
 ## 链路
 
@@ -61,23 +61,24 @@
 
 ## 规范
 
-- 游戏概览、ProjectSession 与 Mod 打开失败状态必须分离并按 `modRoot` 隔离；同一 Mod 只保留最新一条失败。
-- workspace 缺失返回空默认；损坏时报错且不得立即用空态覆盖。
-- 持久化只保存可恢复的目录、Mod 与列宽投影，严禁保存活动页签、全局视图或旧侧栏展开态。
-- 列宽必须使用结构化 `modRoot/table/column`，严禁拼接 key。
-- 表格切换必须显式接收目标 Mod；活动输入提交后的导航必须复核原身份，输入失败必须保留原输入面。
-- 返回目标 Mod 的当前表必须保留搜索、过滤与选择；切换该 Mod 的表必须清空搜索、过滤与选择；列宽必须按所属 Mod 与表恢复。
 - Mod 代次必须在注册时分配、移除时撤销，并且只允许保存在当前运行的内存中；恢复响应必须沿用捕获的代次。
+- workspace 缺失返回空默认；损坏时报错且不得立即用空态覆盖。
 - 任何会卸载当前配置组件的导航或移除动作在 dirty 时必须先确认放弃；取消时不得同步活动运行态或销毁 session。
+- 列宽必须使用结构化 `modRoot/table/column`，严禁拼接 key。
 - 子窗口关闭取消或保存失败必须保留所属 Mod 运行态；主窗口关闭必须等待全部会话的窗口生命周期交接。
 - 导航、窗口关闭、Mod 移除及工作区关闭必须先重试所属待同步结果；失败必须保持当前编辑面，成功后必须重新判定 dirty。
+- 工作区恢复必须同时核对工作区代次及窗口壳接纳权；迟到快照严禁建立运行态，迟到 session 必须由目录打开 owner 清理。
+- 持久化只保存可恢复的目录、Mod 与列宽投影，严禁保存活动页签、全局视图或旧侧栏展开态。
 - 概览成功打开 Mod 后进入该 Mod 的概览页；恢复流程严禁作为页面导航入口。
+- 游戏概览、ProjectSession 与 Mod 打开失败状态必须分离并按 `modRoot` 隔离；同一 Mod 只保留最新一条失败。
+- 表格切换必须显式接收目标 Mod；活动输入提交后的导航必须复核原身份，输入失败必须保留原输入面。
+- 返回目标 Mod 的当前表必须保留搜索、过滤与选择；切换该 Mod 的表必须清空搜索、过滤与选择；列宽必须按所属 Mod 与表恢复。
 
 ## 陷阱
 
-- 把概览扫描结果或恢复快照当作已加载运行态会让概览与 session 身份混淆。
-- 移除 Mod 时绕过统一清理用例会残留页签、草稿或历史状态。
-- 恢复期间未暂停自动保存会把半恢复状态写回快照。
-- 用字符串拼接列宽 key 会让不同表列宽互相覆盖。
 - 关闭工作区跳过 dirty 确认会让未保存修改静默丢失。
 - 工作区关闭必须撤销工作区代次；关闭前发起的目录探测、创建后扫描、刷新与恢复响应不得重新建立概览或运行态。
+- 恢复期间未暂停自动保存会把半恢复状态写回快照。
+- 把概览扫描结果或恢复快照当作已加载运行态会让概览与 session 身份混淆。
+- 用字符串拼接列宽 key 会让不同表列宽互相覆盖。
+- 移除 Mod 时绕过统一清理用例会残留页签、草稿或历史状态。

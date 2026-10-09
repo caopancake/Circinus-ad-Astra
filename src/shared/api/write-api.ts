@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invokeCommand } from '@/shared/runtime/command.runtime';
 import type {
   AssociatedFileChange,
   AssociatedSpecWrite,
@@ -27,7 +27,7 @@ export function saveCsvPatch(
   jsonWrite?: JsonWriteOptions,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  return invoke('save_csv_patch', {
+  return invokeCommand('save_csv_patch', {
     payload: { baseVersions, sessionId, modRoot, table, patches, associatedSpecs, ...(jsonWrite ? { jsonWrite } : {}) },
   });
 }
@@ -39,7 +39,7 @@ export function saveTextFile(
   text: string,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  return invoke('save_text_file', { payload: { baseVersions, sessionId, modRoot, path, text } });
+  return invokeCommand('save_text_file', { payload: { baseVersions, sessionId, modRoot, path, text } });
 }
 
 export function transcodeFileToUtf8(
@@ -49,7 +49,7 @@ export function transcodeFileToUtf8(
   encoding: string,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  return invoke('transcode_file_to_utf8', { payload: { baseVersions, sessionId, modRoot, path, encoding } });
+  return invokeCommand('transcode_file_to_utf8', { payload: { baseVersions, sessionId, modRoot, path, encoding } });
 }
 
 export function saveEditorSpec(
@@ -60,7 +60,7 @@ export function saveEditorSpec(
   jsonWrite?: JsonWriteOptions,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  return invoke('save_editor_spec', {
+  return invokeCommand('save_editor_spec', {
     payload: { baseVersions, sessionId, modRoot, target, data, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(data) } : {}) },
   });
 }
@@ -72,7 +72,9 @@ export function saveModInfo(
   jsonWrite: JsonWriteOptions,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  return invoke('save_mod_info', { payload: { baseVersions, sessionId, modRoot, data, jsonWrite, orderedJson: JSON.stringify(data) } });
+  return invokeCommand('save_mod_info', {
+    payload: { baseVersions, sessionId, modRoot, data, jsonWrite, orderedJson: JSON.stringify(data) },
+  });
 }
 
 export function saveModFiles(
@@ -81,7 +83,7 @@ export function saveModFiles(
   files: AssociatedFileChange[],
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult> {
-  return invoke('save_mod_files', { payload: { baseVersions, sessionId, modRoot, files } });
+  return invokeCommand('save_mod_files', { payload: { baseVersions, sessionId, modRoot, files } });
 }
 
 export function applyFileChangeSet(
@@ -91,19 +93,19 @@ export function applyFileChangeSet(
   entryId: number,
   revision: number,
 ): Promise<WriteResult> {
-  return invoke('apply_file_change_set', { payload: { sessionId, modRoot, direction, entryId, revision } });
+  return invokeCommand('apply_file_change_set', { payload: { sessionId, modRoot, direction, entryId, revision } });
 }
 
 export function queryFileHistory(sessionId: string, modRoot: string): Promise<import('@/shared/types').FileHistorySnapshot> {
-  return invoke('query_file_history', { payload: { sessionId, modRoot } });
+  return invokeCommand('query_file_history', { payload: { sessionId, modRoot } });
 }
 
 export function clearFileHistory(sessionId: string, modRoot: string): Promise<import('@/shared/types').FileHistorySnapshot> {
-  return invoke('clear_file_history', { payload: { sessionId, modRoot } });
+  return invokeCommand('clear_file_history', { payload: { sessionId, modRoot } });
 }
 
 export function saveIndexedConfigEntity(write: IndexedConfigEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
-  return invoke('save_indexed_config_entity', {
+  return invokeCommand('save_indexed_config_entity', {
     payload: {
       modRoot: write.modRoot,
       baseVersions: write.baseVersions,
@@ -121,7 +123,7 @@ export function saveIndexedConfigEntity(write: IndexedConfigEntityWrite, jsonWri
 }
 
 export function createIndexedConfigEntity(write: IndexedConfigEntityWrite): Promise<WriteResult> {
-  return invoke('create_indexed_config_entity', {
+  return invokeCommand('create_indexed_config_entity', {
     payload: {
       modRoot: write.modRoot,
       baseVersions: write.baseVersions,
@@ -136,33 +138,33 @@ export function createIndexedConfigEntity(write: IndexedConfigEntityWrite): Prom
 }
 
 export function deleteIndexedConfigEntity(write: DeleteIndexedConfigEntityWrite): Promise<WriteResult> {
-  return invoke('delete_indexed_config_entity', { payload: write });
+  return invokeCommand('delete_indexed_config_entity', { payload: write });
 }
 
 export function saveVariantEntity(write: VariantEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
-  return invoke('save_variant_entity', {
+  return invokeCommand('save_variant_entity', {
     payload: { ...write, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(write.data) } : {}) },
   });
 }
 
 export function createVariantEntity(write: VariantEntityWrite): Promise<WriteResult> {
-  return invoke('create_variant_entity', { payload: write });
+  return invokeCommand('create_variant_entity', { payload: write });
 }
 
 export function deleteVariantEntity(write: DeleteVariantEntityWrite): Promise<WriteResult> {
-  return invoke('delete_variant_entity', { payload: write });
+  return invokeCommand('delete_variant_entity', { payload: write });
 }
 
 export function saveSkinEntity(write: SkinEntityWrite, jsonWrite?: JsonWriteOptions): Promise<WriteResult> {
-  return invoke('save_skin_entity', {
+  return invokeCommand('save_skin_entity', {
     payload: { ...write, ...(jsonWrite ? { jsonWrite, orderedJson: JSON.stringify(write.data) } : {}) },
   });
 }
 
 export function createSkinEntity(write: SkinEntityWrite): Promise<WriteResult> {
-  return invoke('create_skin_entity', { payload: write });
+  return invokeCommand('create_skin_entity', { payload: write });
 }
 
 export function deleteSkinEntity(write: DeleteSkinEntityWrite): Promise<WriteResult> {
-  return invoke('delete_skin_entity', { payload: write });
+  return invokeCommand('delete_skin_entity', { payload: write });
 }

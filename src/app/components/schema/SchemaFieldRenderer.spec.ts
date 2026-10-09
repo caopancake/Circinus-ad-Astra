@@ -15,12 +15,12 @@ const mocks = vi.hoisted(() => ({
   queryCoreGraphics: vi.fn(async () => ['graphics/one.png', 'graphics/two.png']),
 }));
 
-vi.mock('@/services/assets.service', () => ({
+vi.mock('@/services/core-assets.service', () => ({
   queryCoreFields: mocks.queryCoreFields,
   queryCoreGraphics: mocks.queryCoreGraphics,
 }));
 
-vi.mock('@/services/app-feedback-log.service', () => ({
+vi.mock('@/services/app-log.service', () => ({
   recordLogBestEffort: vi.fn(),
 }));
 

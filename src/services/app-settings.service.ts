@@ -1,10 +1,10 @@
-import { loadAppSettings, saveAppSettings } from '@/shared/api/app-settings-api';
+import { invokeCommand } from '@/shared/runtime/command.runtime';
 import type { AppSettings } from '@/shared/types';
 
 export function loadSettings(): Promise<AppSettings> {
-  return loadAppSettings();
+  return invokeCommand('load_app_settings');
 }
 
 export function saveSettings(settings: AppSettings): Promise<AppSettings> {
-  return saveAppSettings(settings);
+  return invokeCommand('save_app_settings', { payload: { settings } });
 }

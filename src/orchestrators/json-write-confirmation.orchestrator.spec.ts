@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { AppFeedback } from '@/shared/types';
 import { initializeSettingsStore, useSettingsStore } from '@/stores/settings.store';
 import { runConfirmedJsonWrite } from './json-write-confirmation.orchestrator';
+import { AppError, withCause } from '@/shared/lib/errors';
 
 const feedback: AppFeedback = {
   success: vi.fn(),
@@ -45,6 +46,19 @@ describe('runConfirmedJsonWrite', () => {
       confirmedSources: [{ path: rewriteFile.path, sourceFingerprint: rewriteFile.sourceFingerprint }],
     });
     expect(feedback.choose).toHaveBeenCalledTimes(1);
+  });
+
+  it('consumes the original rewrite payload through command and action wrappers', async () => {
+    const source = { code: 'json.rewrite_confirmation_required', message: 'raw', files: [rewriteFile] };
+    const write = vi
+      .fn()
+      .mockRejectedValueOnce(withCause('保存失败', new AppError('raw', { command: 'save_editor_spec', cause: source }), 'save-spec'))
+      .mockResolvedValueOnce('saved');
+    expect(await runConfirmedJsonWrite(feedback, write)).toBe('saved');
+    expect(write).toHaveBeenLastCalledWith({
+      preserveOriginalJson: true,
+      confirmedSources: [{ path: rewriteFile.path, sourceFingerprint: 'abc123' }],
+    });
   });
 
   it('keeps the write uncommitted when confirmation is cancelled', async () => {

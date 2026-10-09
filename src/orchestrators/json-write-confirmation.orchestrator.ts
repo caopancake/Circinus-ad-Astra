@@ -8,6 +8,7 @@ interface RewriteFile extends JsonSourceConfirmation {
 }
 
 function rewriteFiles(error: unknown): RewriteFile[] | null {
+  if (error instanceof Error && 'cause' in error) return rewriteFiles(error.cause);
   if (commandErrorCode(error) === 'json.rewrite_confirmation_required' && typeof error === 'object' && error !== null) {
     const files = (error as { files?: unknown }).files;
     if (!Array.isArray(files)) return null;
@@ -21,7 +22,6 @@ function rewriteFiles(error: unknown): RewriteFile[] | null {
     );
     return valid ? (files as RewriteFile[]) : null;
   }
-  if (error instanceof Error && 'cause' in error) return rewriteFiles(error.cause);
   return null;
 }
 

@@ -9,6 +9,8 @@
 - 模块文档统一放在 `.zcode/modules/`。
 - 文件名使用英文 kebab-case，并以 `.md` 结尾
 - 文档标题使用中文模块名，保持和本文档索引一致。
+- 正式模块与模块文档必须一一对应，生产文件必须具有唯一主归属；跨层文件与公开交接必须在所属文档共同登记。
+- 文件位置必须体现现有层级与领域归属，优先采用现有目录及一致命名；新增目录必须具有职责隔离或归属表达依据。
 
 ### 内容结构
 
@@ -54,7 +56,11 @@
 - [应用启动与窗口挂载](modules/app-runtime.md)：说明 URL 窗口类型、settings 初始化、唯一窗口壳、窗口根装配和应用启动失败呈现。
 - [多窗口机制](modules/app-windowing.md)：说明类型化 identity、Rust 原生实例登记、目标占用、跨窗口事件与会话关闭守卫。
 - [应用设置与主题](modules/app-settings.md)：说明 settings store、主题令牌、editMode、日志目录、persistence/mirror 与子窗口 snapshot。
-- [应用反馈与日志](modules/app-feedback-log.md)：说明 AppFeedback 工厂与 hook、确认框、业务消息、应用日志、错误文件入口与工具私有配置清理。
+- [后端能力与 IPC 传输](modules/backend-capabilities.md)：说明最小传输、透明错误、command 归属与公开能力授权。
+- [应用反馈与错误恢复](modules/app-feedback.md)：说明反馈工厂、确认、诊断文案和授权文件恢复。
+- [应用日志](modules/app-log.md)：说明日志能力、性能装配、best-effort、路径与维护。
+- [工具配置维护](modules/app-config.md)：说明工具目录、配置清理范围与危险动作接纳。
+- [Core 索引与加载](modules/core-assets.md)：说明根代次、fields/graphics 独立状态、读取与释放。
 - [目录打开](modules/directory-opening.md)：说明目录选择、游戏或 Mod 识别、canonical root、ProjectSession 建立与打开 outcome。
 - [新建 Mod](modules/mod-creation.md)：说明 Mod 父目录、最小目录骨架、`mod_info.json` renderer 与创建后的受信 session 打开。
 - [工作区运行态与持久化](modules/workspace.md)：说明多 Mod 页签、导航上下文、workspace 快照、启动恢复、移除 Mod 与活动 Mod 同步。

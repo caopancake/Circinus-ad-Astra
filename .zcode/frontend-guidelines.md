@@ -29,19 +29,19 @@
 - `src/orchestrators/`：跨模块用户动作编排；拥有失效顺序、确认与回滚语义。
 - `src/stores/`：内存运行态；每个 store 一个 `.store.ts` 文件。
 - `src/windows/`：窗口身份、生命周期、事件名与事件封装。
-- `src/shared/`：wire API（唯一 invoke 边界）、runtime、类型与纯工具。
+- `src/shared/`：查询/持久化 wire 能力、runtime、类型与纯工具；原始 invoke 必须只由 command.runtime 消费。
 - `schemas/`：配置字段、CSV 列与规格默认模板资产必须经各自正式加载 owner 消费。
 
 ## 硬性调用链
 
-- 页面和组件不直接散写 `invoke()`；固定链路是 `Vue -> ViewModel/composable -> service -> shared/api -> Rust command`。
+- 页面和组件必须消费 ViewModel/composable；所属能力必须通过唯一 command.runtime 调用 Rust command，并共同拥有类型化签名与协议装配。
 - 保存链路必须为 `组件动作 -> orchestrator -> write service -> shared/api -> Rust FIFO 事务 -> changeset、文件历史与会话投影 -> receipt 接纳 -> 统一提交通知`；待同步恢复必须消费原提交。
 - 撤销重做分派固定为快捷键命令、CSV 草稿历史优先、文件历史回放兜底；命令解析与分发归唯一 owner，严禁组件自建全局键盘监听。
 - 全局启动恢复只由窗口挂载入口协调；页面不得直接调用恢复动作。
 - 缓存失效与派生状态同步必须位于编排事务边界，不在页面局部手补。
 - 配置写入必须由配置保存编排消费，CSV patch 必须由表格保存编排消费，规格和文本写入必须分别由 editor 与 files 能力消费，changeset 回放必须由文件历史回放编排消费。
 - 文件历史读取与清空 wire 能力必须由文件历史 service 消费；会话打开、关闭、刷新和 Core 清理必须分别由目录打开、生命周期与刷新边界拥有。
-- invoke 必须由 wire API 消费；反馈运行时与工厂必须由统一反馈 hook 消费，并接受转导出后的能力检查。
+- invoke 必须由唯一传输入口消费；command 实现必须消费正式归属和字面量，反馈运行时与工厂必须由统一反馈 hook 消费，并接受转导出后的能力检查。
 - 跨模块 payload 用 `null` 表示无值；表单内部可用空字符串，提交或 IPC 边界必须显式转换。
 - 语义 ID、路由目标与跨层提交 ID 必须在来源边界表达解析语义，不在业务链路直接 `String(id)`。
 

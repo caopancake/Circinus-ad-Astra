@@ -8,8 +8,8 @@ import { initializeSettingsStore, useSettingsStore } from '@/stores/settings.sto
 import type { DiscoveredField } from '@/shared/types';
 
 const mocks = vi.hoisted(() => ({ fields: vi.fn(), graphics: vi.fn(), log: vi.fn() }));
-vi.mock('@/services/assets.service', () => ({ queryCoreFields: mocks.fields, queryCoreGraphics: mocks.graphics }));
-vi.mock('@/services/app-feedback-log.service', () => ({ recordLogBestEffort: mocks.log }));
+vi.mock('@/services/core-assets.service', () => ({ queryCoreFields: mocks.fields, queryCoreGraphics: mocks.graphics }));
+vi.mock('@/services/app-log.service', () => ({ recordLogBestEffort: mocks.log }));
 const fields: Record<string, DiscoveredField[]> = { faction: [{ key: 'bonus', type: 'string', origin: 'core' }] };
 let stop: () => void;
 let scope: ReturnType<typeof effectScope>;

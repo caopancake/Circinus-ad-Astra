@@ -9,7 +9,7 @@ import { isLoadedCsvTableRow } from '@/domain/tables/csv-table-rows';
 import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
 import { retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { recordLogBestEffort } from '@/services/app-log.service';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { commitCsvTableSaveDraft } from '@/domain/tables/csv-table-draft';
 import { deepClone } from '@/shared/lib/starsector';

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { savedWriteFixture } from '@/test/write-result';
 const mocks = vi.hoisted(() => ({ publishCommittedWrite: vi.fn(), recordLogBestEffort: vi.fn() }));
 vi.mock('@/orchestrators/project-session-refresh.orchestrator', () => ({ publishCommittedWrite: mocks.publishCommittedWrite }));
-vi.mock('@/services/app-feedback-log.service', () => ({ recordLogBestEffort: mocks.recordLogBestEffort }));
+vi.mock('@/services/app-log.service', () => ({ recordLogBestEffort: mocks.recordLogBestEffort }));
 import { completeSavedWrite } from './file-history-write.orchestrator';
 beforeEach(() => {
   setActivePinia(createPinia());

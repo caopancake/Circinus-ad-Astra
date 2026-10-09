@@ -2,7 +2,7 @@ import { openCreatedModTarget, type DirectoryOpeningOutcome } from '@/orchestrat
 import { createNewModProject } from '@/services/mod-creation.service';
 import { AppError } from '@/shared/lib/errors';
 import { measurePerformanceAsync } from '@/shared/runtime/performance';
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { recordLogBestEffort } from '@/services/app-log.service';
 import { logFields } from '@/shared/lib/log-fields';
 import type { CreatedMod, CreateModRequest } from '@/shared/types';
 

@@ -5,10 +5,11 @@ import { useFileHistoryStore } from '@/stores/file-history.store';
 import { useProjectStore } from '@/stores/project.store';
 import { useTablesStore } from '@/stores/tables.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
-import { closeProject, detectDirectoryTarget, openProject, scanDirectoryGameOverview } from '@/services/session.service';
+import { closeProject, openProject } from '@/services/project-session.service';
+import { detectDirectoryTarget, scanDirectoryGameOverview } from '@/services/directory.service';
 import { formatLoadWarnings, scanWarningNotice } from '@/domain/project/load-warnings';
 import { measurePerformance } from '@/shared/runtime/performance';
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { recordLogBestEffort } from '@/services/app-log.service';
 import { logFields } from '@/shared/lib/log-fields';
 import { navigateToModOverview } from '@/orchestrators/workspace-navigation.orchestrator';
 import { removeLoadedModRuntime } from '@/orchestrators/workspace-lifecycle.orchestrator';
@@ -135,18 +136,19 @@ export async function openModProjectManifest(
   modRoot: string,
   starsectorRoot: string | null,
   generation: number,
+  accepts: () => boolean = () => true,
 ): Promise<ProjectManifest | null> {
   const workspace = useWorkspaceStore();
   const project = useProjectStore();
-  if (workspace.getModGeneration(modRoot) !== generation) return null;
+  if (!accepts() || workspace.getModGeneration(modRoot) !== generation) return null;
   let loaded: ProjectManifest;
   try {
     loaded = await openProject(modRoot, starsectorRoot);
   } catch (error) {
-    if (workspace.getModGeneration(modRoot) !== generation) return null;
+    if (!accepts() || workspace.getModGeneration(modRoot) !== generation) return null;
     throw error;
   }
-  if (workspace.getModGeneration(modRoot) !== generation) {
+  if (!accepts() || workspace.getModGeneration(modRoot) !== generation) {
     await closeProject(loaded.sessionId);
     return null;
   }

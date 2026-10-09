@@ -13,7 +13,7 @@ vi.mock('@/orchestrators/directory-opening.orchestrator', () => ({
   openCreatedModTarget: mocks.openCreatedModTarget,
 }));
 
-vi.mock('@/services/app-feedback-log.service', () => ({
+vi.mock('@/services/app-log.service', () => ({
   recordLogBestEffort: vi.fn(),
 }));
 

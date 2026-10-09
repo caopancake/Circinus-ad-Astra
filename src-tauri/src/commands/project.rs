@@ -1,35 +1,16 @@
 use crate::{
     errors::AppError,
     models::command_payloads::{
-        CloseProjectSessionPayload, CsvRowPreviewPayload, CsvSourceOptionsPayload,
-        CsvTableWindowPayload, EditorDraftResourcesPayload, HullReferencesPayload,
-        InvalidateCoreCachePayload, InvalidateProjectSessionPayload, QueryEntityListPayload,
+        CsvRowPreviewPayload, CsvSourceOptionsPayload, CsvTableWindowPayload,
+        EditorDraftResourcesPayload, HullReferencesPayload, QueryEntityListPayload,
         QueryEntityPayload, ResourceDataUrlBatchPayload,
     },
     models::{
         CsvRowPreview, CsvTableWindow, EntityData, HullReferencesResult,
-        ProjectSessionInvalidationResult, ResourceDataUrlBatchResult, SourceOptionGroup,
+        ResourceDataUrlBatchResult, SourceOptionGroup,
     },
     services,
 };
-
-#[tauri::command(async)]
-pub fn close_project_session(payload: CloseProjectSessionPayload) -> Result<(), AppError> {
-    services::write_transactions::release_session_commits(&payload.session_id)?;
-    services::project::close_project_session(payload.session_id.clone())?;
-    services::windows::release_session(&payload.session_id)
-}
-
-#[tauri::command(async)]
-pub fn synchronize_committed_write(
-    payload: crate::models::command_payloads::SynchronizeCommittedWritePayload,
-) -> Result<crate::models::CommittedSessionUpdate, AppError> {
-    services::write_transactions::synchronize_committed_write(
-        &payload.session_id,
-        &payload.mod_root,
-        payload.commit_id,
-    )
-}
 
 #[tauri::command(async)]
 pub fn query_csv_table_window(payload: CsvTableWindowPayload) -> Result<CsvTableWindow, AppError> {
@@ -107,16 +88,4 @@ pub fn query_resource_data_urls(
     payload: ResourceDataUrlBatchPayload,
 ) -> Result<ResourceDataUrlBatchResult, AppError> {
     services::project::query_resource_data_urls(&payload.session_id, payload.resources)
-}
-
-#[tauri::command(async)]
-pub fn invalidate_project_session(
-    payload: InvalidateProjectSessionPayload,
-) -> Result<ProjectSessionInvalidationResult, AppError> {
-    services::project::invalidate_project_session(&payload.session_id, payload.changes)
-}
-
-#[tauri::command(async)]
-pub fn invalidate_core_cache(payload: InvalidateCoreCachePayload) -> Result<(), AppError> {
-    services::project::invalidate_core_cache(&payload.starsector_root)
 }

@@ -72,14 +72,19 @@ vi.mock('@/stores/tables.store', () => ({ useTablesStore: () => mocks.tables }))
 vi.mock('@/stores/file-history.store', () => ({ useFileHistoryStore: () => mocks.fileHistory }));
 vi.mock('@/stores/tables-edit-history.store', () => ({ useTablesEditHistoryStore: () => mocks.csvHistory }));
 vi.mock('@/stores/write-sync.store', () => ({ useWriteSyncStore: () => mocks.writeSync }));
-vi.mock('@/services/session.service', () => ({
-  detectDirectoryTarget: vi.fn(),
+vi.mock('@/services/project-session.service', () => ({
   openProject: mocks.openProject,
   closeProject: mocks.closeProject,
+}));
+vi.mock('@/services/directory.service', () => ({
+  detectDirectoryTarget: vi.fn(),
   scanDirectoryGameOverview: vi.fn(),
 }));
+vi.mock('@/services/core-assets.service', () => ({
+  invalidateCoreCacheForRoot: vi.fn(async () => {}),
+}));
 vi.mock('@/domain/project/load-warnings', () => ({ formatLoadWarnings: () => [] }));
-vi.mock('@/services/app-feedback-log.service', () => ({ recordLogBestEffort: vi.fn() }));
+vi.mock('@/services/app-log.service', () => ({ recordLogBestEffort: vi.fn() }));
 vi.mock('@/shared/runtime/performance', () => ({
   measurePerformance: (_name: string, _detail: unknown, action: () => unknown) => action(),
 }));

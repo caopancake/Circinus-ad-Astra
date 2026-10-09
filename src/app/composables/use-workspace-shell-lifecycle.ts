@@ -12,7 +12,7 @@ import {
 } from '@/orchestrators/workspace-persistence.orchestrator';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { useCoreSchema } from '@/app/composables/use-core-assets';
-import { recordLogBestEffort } from '@/services/app-feedback-log.service';
+import { recordLogBestEffort } from '@/services/app-log.service';
 import { buildModOpeningFailure } from '@/shared/lib/errors';
 
 // Main-window-only bootstrap: startup restore, workspace-state persistence and
@@ -27,9 +27,15 @@ export function useWorkspaceShellLifecycle(
   let stopWindowSaveEvents: (() => void) | null = null;
   let stopIdentityPreparation: (() => void) | null = null;
   let workspacePersistence: WorkspacePersistenceWatcher | null = null;
+  let disposed = false;
 
   onMounted(async () => {
-    stopIdentityPreparation = await listenEntityTablePreparation(feedback, selectAssociatedSpecs);
+    const stopIdentity = await listenEntityTablePreparation(feedback, selectAssociatedSpecs);
+    if (disposed) {
+      stopIdentity();
+      return;
+    }
+    stopIdentityPreparation = stopIdentity;
     recordLogBestEffort({
       level: 'info',
       code: 'app.started',
@@ -39,8 +45,9 @@ export function useWorkspaceShellLifecycle(
       fields: { version: __APP_VERSION__ },
     });
     workspacePersistence = watchWorkspacePersistence();
-    stopWindowSaveEvents = await listenWindowSaveEvents({
+    const stopEvents = await listenWindowSaveEvents({
       onEditorSpecSaved: (event) => {
+        if (disposed) return;
         recordLogBestEffort({
           level: 'info',
           code: 'editor.spec_saved',
@@ -58,37 +65,47 @@ export function useWorkspaceShellLifecycle(
         feedback.success(`${event.id} 已保存`);
       },
     });
+    if (disposed) {
+      stopEvents();
+      return;
+    }
+    stopWindowSaveEvents = stopEvents;
     const persistence = workspacePersistence;
     let shouldPersistRestoredWorkspace = false;
     try {
       persistence.beginRestore();
       await restorePersistedWorkspace({
+        isCurrent: () => !disposed,
         knownStarsectorRoot: settings.starsectorRoot,
         loadCoreFields,
         onModRestoreError: async (modRoot, displayName, error) => {
+          if (disposed) return;
           await removeLoadedModRuntime(modRoot);
+          if (disposed) return;
           workspace.setModOpeningFailure(buildModOpeningFailure(modRoot, error));
           feedback.error(error, `恢复 ${displayName} 失败`);
         },
         onModRestoreWarnings: (displayName, warnings) => {
+          if (disposed) return;
           for (const warning of warnings) {
             feedback.warning({ ...warning, userMessage: `${displayName}：${warning.userMessage}` });
           }
         },
       });
-      shouldPersistRestoredWorkspace = true;
+      shouldPersistRestoredWorkspace = !disposed;
     } catch (error) {
-      feedback.error(error, '恢复工作区状态失败');
+      if (!disposed) feedback.error(error, '恢复工作区状态失败');
     } finally {
       try {
         await persistence.finishRestore(shouldPersistRestoredWorkspace);
       } catch (error) {
-        feedback.error(error, '保存工作区状态失败');
+        if (!disposed) feedback.error(error, '保存工作区状态失败');
       }
     }
   });
 
   onUnmounted(() => {
+    disposed = true;
     recordLogBestEffort({
       level: 'info',
       code: 'app.exited',

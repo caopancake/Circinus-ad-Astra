@@ -2,6 +2,7 @@ import { createApp, type Component } from 'vue';
 import { createPinia } from 'pinia';
 import { installNaiveUi } from '@/app/naive-ui.runtime';
 import { loadSettings } from '@/services/app-settings.service';
+import { startPerformanceLogSink } from '@/services/app-log.service';
 import { initializeSettingsStore } from '@/stores/settings.store';
 import { showCurrentWindow } from '@/windows/current.window';
 import './styles/index.css';
@@ -10,6 +11,8 @@ const params = new window.URLSearchParams(window.location.search);
 const windowKind = params.get('window');
 
 async function bootstrap() {
+  const stopLog = startPerformanceLogSink();
+  window.addEventListener('pagehide', stopLog, { once: true });
   const [Root, settings] = await Promise.all([loadWindowRoot(windowKind), initialSettings()]);
   initializeSettingsStore(settings);
   const app = createApp(Root).use(createPinia());

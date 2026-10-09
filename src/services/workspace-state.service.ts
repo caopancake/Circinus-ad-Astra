@@ -1,10 +1,10 @@
-import { loadWorkspace, saveWorkspace } from '@/shared/api/workspace-api';
+import { invokeCommand } from '@/shared/runtime/command.runtime';
 import type { PersistedWorkspace } from '@/shared/types';
 
 export function loadPersistedWorkspace(): Promise<PersistedWorkspace> {
-  return loadWorkspace();
+  return invokeCommand('load_workspace');
 }
 
 export function savePersistedWorkspace(state: PersistedWorkspace): Promise<void> {
-  return saveWorkspace(state);
+  return invokeCommand('save_workspace', { payload: { state } });
 }
