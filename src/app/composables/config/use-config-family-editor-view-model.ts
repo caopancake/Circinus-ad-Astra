@@ -14,13 +14,14 @@ export function useConfigFamilyEditorViewModel(params: {
   family: ConfigEntityFamilyDefinition;
   dataRevision: Ref<number>;
   modRoot: Ref<string | null>;
-  onSaved: (id: string | null) => void | Promise<void>;
+  onSaved: (id: string | null, file?: ConfigFamilyFile) => void | Promise<void>;
   saveFile: (sessionId: string, modRoot: string, current: ConfigFamilyFile, data: RowData) => Promise<SavedConfig<ConfigFamilyFile> | null>;
   sessionId: Ref<string | null>;
   selectedId: Ref<string>;
   files: Ref<ConfigFamilyFile[]>;
   identityHandoff?: Readonly<Ref<import('@/shared/types').ConfigIdentityHandoff<ConfigFamilyFile> | null>>;
 }) {
+  const adoptedCommits = new Set<number>();
   const feedback = useAppFeedback();
   function editTarget(id: string): ConfigEditTarget {
     return {
@@ -65,13 +66,16 @@ export function useConfigFamilyEditorViewModel(params: {
     },
     targetKey: (target) => JSON.stringify(target),
     afterSaved: async (snapshot) => {
+      if (!adoptedCommits.has(snapshot.commitId!)) {
+        if (draftSession.isTargetCurrent(snapshot.target)) await params.onSaved(snapshot.target.id, snapshot.meta.file!);
+        adoptedCommits.add(snapshot.commitId!);
+      }
       await completeConfigSave(
         snapshot.target.modRoot,
         snapshot.target.sessionId,
         snapshot.meta.receipt!,
         `保存${family.displayName} ${snapshot.target.id}`,
       );
-      if (draftSession.isTargetCurrent(snapshot.target)) await params.onSaved(snapshot.target.id);
     },
   });
 

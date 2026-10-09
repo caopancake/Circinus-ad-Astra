@@ -92,9 +92,16 @@ export function useConfigFactionViewModel() {
     }
   }
 
-  async function onSaved(id: string | null) {
+  async function onSaved(id: string | null, saved?: import('@/shared/types').ConfigSaveIdentity) {
+    if (saved) {
+      const next = { ...factions.value };
+      delete next[selectedFaction.value!];
+      next[saved.id] = saved.data.file as RowData;
+      factions.value = next;
+      factionVersions.value = { ...factionVersions.value, [saved.id]: saved.baseVersions };
+    }
     selectedFaction.value = id;
-    await loadFactions();
+    if (!saved) await loadFactions();
   }
 
   async function createFaction(createSessionId: string, createModRoot: string, id: string): Promise<boolean> {
@@ -163,16 +170,6 @@ export function useConfigFactionViewModel() {
     }
     if (!saved) return null;
     feedback.success(`势力 "${nextId}" 已保存`);
-    if (disposed || project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId)
-      return { id: nextId, data: saved.entity.entityData!, receipt: saved.receipt, baseVersions: saved.entity.baseVersions };
-    const nextFactions = { ...factions.value };
-    delete nextFactions[previousId];
-    nextFactions[nextId] = saved.entity.entityData!.file as RowData;
-    factions.value = nextFactions;
-    const nextVersions = { ...factionVersions.value };
-    delete nextVersions[previousId];
-    nextVersions[nextId] = saved.entity.baseVersions;
-    factionVersions.value = nextVersions;
     return { id: nextId, data: saved.entity.entityData!, receipt: saved.receipt, baseVersions: saved.entity.baseVersions };
   }
 

@@ -1,7 +1,7 @@
 use super::super::{
     cache::{
         ensure_registered_table_rows, load_core_csv_table, load_core_source_data, loaded_csv_rows,
-        loaded_registered_csv_rows, lock_session, session_handle,
+        loaded_registered_csv_rows, lock_ready_session, session_handle,
     },
     definitions::{
         entity_definitions::entity_definitions,
@@ -37,7 +37,7 @@ pub fn query_csv_source_options(
     source: &str,
 ) -> AppResult<Vec<SourceOptionGroup>> {
     let handle = session_handle(session_id)?;
-    let mut session = lock_session(&handle)?;
+    let mut session = lock_ready_session(&handle)?;
     if let Some(groups) = entity_source_option_groups(&mut session, source)? {
         return Ok(groups);
     }

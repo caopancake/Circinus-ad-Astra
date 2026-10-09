@@ -1,5 +1,5 @@
 use super::super::{
-    cache::{lock_session, session_handle},
+    cache::{lock_ready_session, session_handle},
     definitions::entity_definitions::entity_definition,
     definitions::entity_resources::{
         faction_resource_refs, mission_resource_refs, ship_resource_refs, weapon_resource_refs,
@@ -12,7 +12,7 @@ use crate::{
 
 pub fn query_entity(session_id: &str, kind: EntityKind, id: &str) -> AppResult<Option<EntityData>> {
     let handle = session_handle(session_id)?;
-    let mut session = lock_session(&handle)?;
+    let mut session = lock_ready_session(&handle)?;
     let definition = entity_definition(kind)?;
     (definition.prepare)(&mut session)?;
     let data = (definition.detail)(&mut session, id)?;
@@ -33,7 +33,7 @@ pub fn query_entity(session_id: &str, kind: EntityKind, id: &str) -> AppResult<O
 
 pub fn query_entity_list(session_id: &str, kind: EntityKind) -> AppResult<Vec<EntityData>> {
     let handle = session_handle(session_id)?;
-    let mut session = lock_session(&handle)?;
+    let mut session = lock_ready_session(&handle)?;
     let definition = entity_definition(kind)?;
     (definition.prepare)(&mut session)?;
     let projections = (definition.list)(&mut session)?;
@@ -61,7 +61,7 @@ pub fn query_editor_draft_resources(
     draft: &serde_json::Value,
 ) -> AppResult<std::collections::BTreeMap<String, crate::models::ResourceRef>> {
     let handle = session_handle(session_id)?;
-    let _session = lock_session(&handle)?;
+    let _session = lock_ready_session(&handle)?;
     Ok(match kind {
         crate::models::EditorResourceKind::Ship => ship_resource_refs(id, draft),
         crate::models::EditorResourceKind::Weapon => weapon_resource_refs(id, draft),
@@ -240,6 +240,8 @@ mod tests {
             },
         );
         let session = super::super::super::model::ProjectSession {
+            projection_revision: 0,
+            projection_pending: false,
             source_versions: BTreeMap::new(),
             manifest: crate::models::ProjectManifest {
                 base_versions: Vec::new(),
@@ -260,6 +262,8 @@ mod tests {
             ship_files: BTreeMap::new(),
             variant_files: Vec::new(),
             skin_files: Vec::new(),
+            variant_warnings: Vec::new(),
+            skin_warnings: Vec::new(),
             weapon_specs: BTreeMap::new(),
             projectile_specs: BTreeMap::new(),
             system_files: BTreeMap::new(),

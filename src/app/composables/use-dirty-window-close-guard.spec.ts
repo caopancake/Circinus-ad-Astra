@@ -156,6 +156,29 @@ describe('useDirtyWindowCloseGuard', () => {
     expect(mocks.feedback.choose).not.toHaveBeenCalled();
   });
 
+  it.each([true, false])('retries an idle committed synchronization before closing with %s', async (synchronized) => {
+    const pendingSynchronization = ref(true);
+    const waitForSave = vi.fn(async () => {
+      if (synchronized) pendingSynchronization.value = false;
+      return synchronized;
+    });
+    useSaveCommandStore().registerSaveSession({
+      targetKey: ref('one'),
+      modRoot: ref('M:/mod'),
+      saving: ref(false),
+      pendingSynchronization,
+      waitForSave,
+    });
+    const guard = mountGuard(ref(false));
+    await guard.install();
+    expect(closeRequest().prevented).toBe(true);
+    await flushPromises();
+    expect(waitForSave).toHaveBeenCalledOnce();
+    if (synchronized) expect(mocks.destroyCurrentWindow).toHaveBeenCalledOnce();
+    else expect(mocks.destroyCurrentWindow).not.toHaveBeenCalled();
+    guard.dispose();
+  });
+
   it.each([true, false])('immediately intercepts close and coalesces requests while save completes with %s', async (saved) => {
     const dirty = ref(true);
     const saving = ref(true);

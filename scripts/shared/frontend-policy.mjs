@@ -3,7 +3,7 @@ import { dependencyOrigins } from './imports.mjs';
 
 /** @typedef {import('./classify.mjs').FrontendPathClass} PathRole */
 /** @typedef {{ layer: string, domain?: string, role?: string }} Owner */
-/** @typedef {{ layer?: string, role: string, domain: string, names: string[], capability: string, owners: Owner[] }} CapabilityRule */
+/** @typedef {{ path?: string, layer?: string, role: string, domain: string, names: string[], capability: string, owners: Owner[] }} CapabilityRule */
 
 const readOwners = [{ layer: 'services' }, { layer: 'orchestrators' }, { layer: 'app', role: 'composable' }];
 const configWrites = [
@@ -40,6 +40,80 @@ const wireWrites = [
 
 /** @type {CapabilityRule[]} */
 export const frontendCapabilities = [
+  {
+    path: 'src/shared/runtime/project-projection.ts',
+    layer: 'shared',
+    role: 'shared',
+    domain: 'runtime',
+    names: ['markProjectionPending'],
+    capability: 'projection-state',
+    owners: [{ layer: 'orchestrators', domain: 'project-session-refresh' }],
+  },
+  {
+    path: 'src/shared/runtime/project-projection.ts',
+    layer: 'shared',
+    role: 'shared',
+    domain: 'runtime',
+    names: ['markProjectionReady'],
+    capability: 'projection-state',
+    owners: [
+      { layer: 'orchestrators', domain: 'project-session-refresh' },
+      { layer: 'orchestrators', domain: 'workspace-lifecycle' },
+    ],
+  },
+  {
+    path: 'src/shared/runtime/project-projection.ts',
+    layer: 'shared',
+    role: 'shared',
+    domain: 'runtime',
+    names: ['requireProjectionReady'],
+    capability: 'projection-read',
+    owners: [{ layer: 'services' }],
+  },
+  {
+    role: 'orchestrator',
+    domain: 'project-session-refresh',
+    names: ['publishCommittedWrite'],
+    capability: 'commit-synchronize',
+    owners: ['file-history-write', 'file-history-replay', 'editor-window', 'file-editor-window'].map((domain) => ({
+      layer: 'orchestrators',
+      domain,
+    })),
+  },
+  {
+    role: 'orchestrator',
+    domain: 'project-session-refresh',
+    names: ['retryPendingWritesForMod'],
+    capability: 'commit-retry',
+    owners: [
+      { layer: 'orchestrators', domain: 'table-save' },
+      { layer: 'orchestrators', domain: 'config-save' },
+      { layer: 'orchestrators', domain: 'file-history-replay' },
+      { layer: 'orchestrators', domain: 'workspace-lifecycle' },
+      { layer: 'app', role: 'composable', domain: 'workspace-shell-actions' },
+    ],
+  },
+  {
+    role: 'orchestrator',
+    domain: 'project-session-refresh',
+    names: ['retryPendingProjectSessionWrites'],
+    capability: 'commit-retry',
+    owners: [{ layer: 'app', role: 'composable', domain: 'write-sync-view-model' }],
+  },
+  {
+    role: 'orchestrator',
+    domain: 'project-session-refresh',
+    names: ['listenCommittedWrites', 'listenProjectSessionInvalidated', 'applyProjectSessionCacheInvalid'],
+    capability: 'commit-observe',
+    owners: [{ layer: 'orchestrators' }, { layer: 'app', role: 'composable' }],
+  },
+  {
+    role: 'orchestrator',
+    domain: 'project-session-refresh',
+    names: ['applyCommittedWriteCacheInvalid'],
+    capability: 'commit-accept',
+    owners: [{ layer: 'orchestrators', domain: 'entity-identity' }],
+  },
   {
     role: 'api',
     domain: 'window',
@@ -293,7 +367,7 @@ export const frontendCapabilities = [
   {
     role: 'service',
     domain: 'session',
-    names: ['requestProjectSessionRefresh'],
+    names: ['requestProjectSessionRefresh', 'synchronizeSessionCommit'],
     capability: 'session-refresh',
     owners: [{ layer: 'orchestrators', domain: 'project-session-refresh' }],
   },
@@ -322,6 +396,7 @@ export const frontendCapabilities = [
       'openProjectSession',
       'closeProjectSession',
       'invalidateProjectSession',
+      'synchronizeCommittedWrite',
       'invalidateCoreCache',
       'detectDirectory',
       'scanGameOverview',
@@ -337,6 +412,7 @@ export function capabilityFor(rel, name) {
   const domain = target.layer === 'external' ? rel : target.domain;
   return frontendCapabilities.find(
     (rule) =>
+      (rule.path === undefined || rule.path === rel) &&
       (rule.layer === undefined || rule.layer === target.layer) &&
       rule.role === target.role &&
       rule.domain === domain &&
@@ -344,10 +420,14 @@ export function capabilityFor(rel, name) {
   );
 }
 
-/** @param {PathRole} role @returns {boolean} */
-export function hasCapabilityBoundary(role) {
+/** @param {PathRole} role @param {string} rel @returns {boolean} */
+export function hasCapabilityBoundary(role, rel) {
   return frontendCapabilities.some(
-    (rule) => (rule.layer === undefined || rule.layer === role.layer) && rule.role === role.role && rule.domain === role.domain,
+    (rule) =>
+      (rule.path === undefined || rule.path === rel) &&
+      (rule.layer === undefined || rule.layer === role.layer) &&
+      rule.role === role.role &&
+      rule.domain === role.domain,
   );
 }
 

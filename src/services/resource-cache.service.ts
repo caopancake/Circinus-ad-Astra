@@ -1,4 +1,5 @@
 import { queryResourceDataUrlBatch } from '@/shared/api/query-api';
+import { requireProjectionReady } from '@/shared/runtime/project-projection';
 import { normalizeFsPath } from '@/shared/lib/paths';
 import { AppError } from '@/shared/lib/errors';
 import { sameResourceRef } from '@/shared/lib/resource-ref';
@@ -40,6 +41,7 @@ const dataUrlCache = createRuntimeCache<string, CachedResourceDataUrl>({
 const invalidationListeners = new Set<ResourceCacheInvalidationListener>();
 
 export async function queryResourceDataUrls(sessionId: ProjectSessionId, resources: ResourceRef[]): Promise<(string | null)[]> {
+  requireProjectionReady(sessionId);
   const entries = resources.map((resource) => ({ resource, key: resourceCacheKey(sessionId, resource) }));
   const missing = new Map<string, { key: string; resource: ResourceRef }>();
   const pendingLoads: Promise<Map<string, string | null>>[] = [];
@@ -64,6 +66,7 @@ export async function queryResourceDataUrls(sessionId: ProjectSessionId, resourc
   for (const batch of await Promise.all(pendingLoads)) {
     for (const [key, dataUrl] of batch) resolved.set(key, dataUrl);
   }
+  requireProjectionReady(sessionId);
   return entries.map(({ key }) => resolved.get(key) ?? null);
 }
 

@@ -37,6 +37,7 @@ export interface ProjectInvalidation {
 }
 
 export interface ProjectSessionInvalidationResult {
+  projectionRevision: number;
   manifest: ProjectManifest;
   invalidation: ProjectInvalidation;
 }

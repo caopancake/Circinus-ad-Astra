@@ -42,7 +42,7 @@ const props = defineProps<{
   saveFile: (sessionId: string, modRoot: string, current: ConfigFamilyFile, data: RowData) => Promise<SavedConfig<ConfigFamilyFile> | null>;
   deleteEntity: (sessionId: string, modRoot: string, id: string, relPath: string) => Promise<boolean>;
 }>();
-const emit = defineEmits<{ saved: [id: string | null] }>();
+const emit = defineEmits<{ saved: [id: string | null, file?: ConfigFamilyFile] }>();
 
 const feedback = useAppFeedback();
 
@@ -61,7 +61,7 @@ const {
   family: props.family,
   dataRevision: toRef(props, 'dataRevision'),
   modRoot: toRef(props, 'modRoot'),
-  onSaved: (id) => emit('saved', id),
+  onSaved: (id, file) => emit('saved', id, file),
   saveFile: props.saveFile,
   sessionId: toRef(props, 'sessionId'),
   selectedId: toRef(props, 'selectedId'),

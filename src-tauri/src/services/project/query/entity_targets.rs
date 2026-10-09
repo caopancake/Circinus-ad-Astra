@@ -1,6 +1,6 @@
 use super::super::{
     cache::{
-        ensure_registered_table_rows, ensure_session_table_rows, lock_session, session_handle,
+        ensure_registered_table_rows, ensure_session_table_rows, lock_ready_session, session_handle,
     },
     definitions::entity_definitions::entity_definition,
     model::{MISSION_LIST_TABLE_KEY, ProjectSession, string_from_row},
@@ -21,7 +21,7 @@ pub fn query_entity_edit_target(
     id: &str,
 ) -> AppResult<EntityEditInfo> {
     let handle = session_handle(session_id)?;
-    let mut session = lock_session(&handle)?;
+    let mut session = lock_ready_session(&handle)?;
     (entity_definition(kind)?.prepare)(&mut session)?;
     describe_entity_target(&mut session, kind, id)
 }
@@ -53,7 +53,7 @@ pub fn require_csv_version_scope(
     supplied: &[crate::models::FileVersion],
 ) -> AppResult<()> {
     let handle = session_handle(session_id)?;
-    let session = lock_session(&handle)?;
+    let session = lock_ready_session(&handle)?;
     let state = super::super::cache::registered_session_table(&session, table)?;
     let required = version_for_path(&session, &state.path);
     if !supplied.iter().any(|version| {
@@ -70,7 +70,7 @@ pub fn require_csv_version_scope(
 
 pub fn query_file_entity_target(session_id: &str, path: &str) -> AppResult<Option<EntityEditInfo>> {
     let handle = session_handle(session_id)?;
-    let mut session = lock_session(&handle)?;
+    let mut session = lock_ready_session(&handle)?;
     let key = crate::models::windows_path_key(path);
     let mut found = None;
     for (kind, records) in [
@@ -114,7 +114,7 @@ pub fn query_entity_identity_intent(
     next_id: &str,
 ) -> AppResult<crate::models::EntityIdentityIntent> {
     let handle = session_handle(session_id)?;
-    let mut session = lock_session(&handle)?;
+    let mut session = lock_ready_session(&handle)?;
     (entity_definition(source.kind)?.prepare)(&mut session)?;
     let current = describe_entity_target(&mut session, source.kind, &source.id)?;
     if current.target != *source {

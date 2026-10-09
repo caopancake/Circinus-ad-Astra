@@ -4,18 +4,14 @@ import type { AppSettings } from '@/shared/types';
 import type { EditorSpecKind } from '@/shared/types';
 
 export const WINDOW_EVENTS = {
+  committedWriteApplied: 'committed-write-applied',
   windowCloseIntent: 'window-lifecycle-close-requested',
   managedWindowReleased: 'managed-window-released',
   entityTablePrepare: 'entity-table-prepare',
   entityTablePrepared: 'entity-table-prepared',
   entityTableRelease: 'entity-table-release',
-  entityIdentityApplied: 'entity-identity-applied',
-  editorSpecSaved: 'editor-spec-saved',
   editorPreviewDraftUpdated: 'editor-preview-draft-updated',
   fileEditorFocusLine: 'file-editor-focus-line',
-  fileEditorSaved: 'file-editor-saved',
-  fileEditorTextApplied: 'file-editor-text-applied',
-  projectSessionInvalidated: 'project-session-invalidated',
   appSettingsChanged: 'app-settings-changed',
 } as const;
 
@@ -48,7 +44,7 @@ export interface FileEditorFocusLineEvent {
 export interface FileEditorSavedEvent {
   modRoot: string;
   path: string;
-  sessionId: string;
+  sessionId: string | null;
   writeResult: WriteResult;
 }
 
@@ -62,9 +58,12 @@ export interface FileEditorTextAppliedEvent {
 }
 
 export interface ProjectSessionInvalidatedEvent {
+  projectionRevision: number;
   manifest: ProjectManifest;
   invalidation: ProjectInvalidation;
 }
+
+export type { CommittedWriteEvent } from '@/shared/types';
 
 export type AppSettingsChangedEvent = AppSettings;
 

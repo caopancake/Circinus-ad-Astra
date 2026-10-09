@@ -469,6 +469,41 @@ mod tests {
             next.target.state,
             crate::models::EntityTargetState::Existing
         );
+        let undone = crate::services::write_transactions::replay(
+            &manifest.session_id,
+            &manifest.mod_root,
+            FileChangeReplayDirection::Undo,
+            saved.history.undo_stack[0].id,
+            saved.history.revision,
+        )
+        .unwrap();
+        let restored = project::query_entity(&manifest.session_id, EntityKind::Projectile, "core")
+            .unwrap()
+            .unwrap();
+        assert_eq!(restored.data["width"], 4);
+        assert_eq!(
+            restored.target.source.unwrap().source,
+            crate::models::ResourceSource::Core
+        );
+        assert_eq!(
+            restored.target.state,
+            crate::models::EntityTargetState::Create
+        );
+        crate::services::write_transactions::replay(
+            &manifest.session_id,
+            &manifest.mod_root,
+            FileChangeReplayDirection::Redo,
+            undone.history.redo_stack[0].id,
+            undone.history.revision,
+        )
+        .unwrap();
+        assert_eq!(
+            project::query_entity(&manifest.session_id, EntityKind::Projectile, "core")
+                .unwrap()
+                .unwrap()
+                .data["width"],
+            8
+        );
         project::close_project_session(manifest.session_id).unwrap();
         std::fs::remove_dir_all(game).unwrap();
     }

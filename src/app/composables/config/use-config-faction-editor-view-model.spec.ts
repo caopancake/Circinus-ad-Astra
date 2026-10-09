@@ -108,7 +108,7 @@ describe('useConfigFactionEditorViewModel', () => {
     await vi.waitFor(() => expect(vm.draftData.value).not.toEqual({}));
     await vm.save();
     expect(saveFaction).toHaveBeenCalledWith('sess-1', 'M:/mod', 'existing', expect.anything(), { sections: [] }, []);
-    expect(onSaved).toHaveBeenCalledWith('existing');
+    expect(onSaved).toHaveBeenCalledWith('existing', expect.objectContaining({ id: 'existing', receipt: expect.anything() }));
     expect(mocks.feedback.error).not.toHaveBeenCalled();
   });
 

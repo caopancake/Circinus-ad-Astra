@@ -23,6 +23,14 @@ export function invalidateProjectSession(
   return invoke('invalidate_project_session', { payload: { sessionId, changes } });
 }
 
+export function synchronizeCommittedWrite(
+  sessionId: string,
+  modRoot: string,
+  commitId: number,
+): Promise<import('@/shared/types').CommittedSessionUpdate> {
+  return invoke('synchronize_committed_write', { payload: { sessionId, modRoot, commitId } });
+}
+
 export function invalidateCoreCache(starsectorRoot: string): Promise<void> {
   return invoke('invalidate_core_cache', { payload: { starsectorRoot } });
 }

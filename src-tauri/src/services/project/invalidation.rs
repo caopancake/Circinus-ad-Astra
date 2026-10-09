@@ -49,55 +49,32 @@ pub(crate) fn invalidate_session_changes(
     if factions_changed {
         tables.extend(faction_annotated_tables());
     }
-    let mut saved_tables = BTreeMap::new();
-    for table in &content_tables {
-        let state = session
-            .csv_tables
-            .get_mut(table.as_str())
-            .expect("registered CSV table");
-        if state.rows.is_some()
-            && state.saved_text.is_some()
-            && files
-                .iter()
-                .any(|file| file.path == state.path && file.after_text == state.saved_text)
-        {
-            saved_tables.insert(
-                *table,
-                (
-                    state.rows.take().expect("saved CSV rows are loaded"),
-                    state.next_row_seq,
-                ),
-            );
-        }
+    let summary_tables = affected_kinds
+        .iter()
+        .filter_map(|kind| {
+            entity_definitions::entity_definition(*kind)
+                .expect("registered impact kind")
+                .csv_table
+        })
+        .chain(content_tables.iter().copied())
+        .collect::<BTreeSet<_>>();
+    let updates = affected_kinds
+        .into_iter()
+        .map(|kind| (entity_definitions::entity_definition(kind)?.refresh)(session))
+        .collect::<AppResult<Vec<_>>>()?;
+    let mut summaries = session.manifest.entity_summaries.clone();
+    for update in &updates {
+        update.update_summary(&mut summaries);
     }
-    for table in &content_tables {
-        if let Some(state) = session.csv_tables.get_mut(table.as_str()) {
-            state.rows = None;
-        }
-        refresh_table_entity_summary(session, table.as_str())?;
-    }
-    let mod_root = Path::new(&session.manifest.mod_root).to_path_buf();
-    if refresh_mod_info {
-        session.manifest.mod_info = root::read_mod_info(&mod_root)?;
-    }
-    for kind in affected_kinds {
-        let definition = entity_definitions::entity_definition(kind)?;
-        (definition.refresh)(session)?;
-        if let Some(table) = definition.csv_table {
-            refresh_table_entity_summary(session, table.as_str())?;
-        }
-    }
-    for (table, (rows, next_row_seq)) in saved_tables {
-        let state = session
-            .csv_tables
-            .get_mut(table.as_str())
-            .expect("registered CSV table");
-        state.rows = Some(rows);
-        state.next_row_seq = next_row_seq;
-    }
-    if factions_changed {
-        super::cache::refresh_faction_annotations(session);
-    }
+    let mod_info = refresh_mod_info
+        .then(|| root::read_mod_info(Path::new(&session.manifest.mod_root)))
+        .transpose()?;
+    let table_counts = summary_tables
+        .iter()
+        .map(|table| {
+            table_entity_count(session, table.as_str(), &summaries).map(|count| (*table, count))
+        })
+        .collect::<AppResult<Vec<_>>>()?;
     let resources = impacts
         .iter()
         .map(|impact| InvalidatedResourceScope {
@@ -106,7 +83,7 @@ pub(crate) fn invalidate_session_changes(
         })
         .collect::<Vec<_>>();
     let tables = tables.into_iter().collect::<Vec<_>>();
-    Ok(ProjectInvalidation {
+    let invalidation = ProjectInvalidation {
         paths: impacts
             .iter()
             .map(|impact| impact.file.path.clone())
@@ -116,7 +93,40 @@ pub(crate) fn invalidate_session_changes(
         entities,
         resources,
         session: false,
-    })
+    };
+    for table in &content_tables {
+        let state = session
+            .csv_tables
+            .get_mut(table.as_str())
+            .expect("registered CSV table");
+        let retained = state.rows.is_some()
+            && state.saved_text.is_some()
+            && files
+                .iter()
+                .any(|file| file.path == state.path && file.after_text == state.saved_text);
+        if !retained {
+            state.rows = None;
+        }
+    }
+    for update in updates {
+        update.apply(session);
+    }
+    if let Some(mod_info) = mod_info {
+        session.manifest.mod_info = mod_info;
+    }
+    for (table, count) in table_counts {
+        session.manifest.table_entity_summaries.insert(table, count);
+    }
+    session.manifest.warnings = session
+        .variant_warnings
+        .iter()
+        .chain(&session.skin_warnings)
+        .cloned()
+        .collect();
+    if factions_changed {
+        super::cache::refresh_faction_annotations(session);
+    }
+    Ok(invalidation)
 }
 
 #[derive(Default)]
@@ -569,37 +579,123 @@ fn affected_csv_tables(path: &str) -> Vec<CsvTableKey> {
         .collect()
 }
 
-fn refresh_table_entity_summary(session: &mut ProjectSession, table_key: &str) -> AppResult<()> {
+fn table_entity_count(
+    session: &ProjectSession,
+    table_key: &str,
+    summaries: &crate::models::EntitySummaries,
+) -> AppResult<usize> {
     let Some(definition) = table_definitions::csv_table_definition_by_key(table_key) else {
-        return Ok(());
+        return Ok(0);
     };
-    let count = if let Some(count) = table_definitions::csv_table_entity_summary(
+    if let Some(count) = table_definitions::csv_table_entity_summary(definition.spec.key, summaries)
+    {
+        return Ok(count);
+    }
+    let table = &session.csv_tables[table_key];
+    table_definitions::count_valid_csv_entities(
+        Path::new(&session.manifest.mod_root),
         definition.spec.key,
-        &session.manifest.entity_summaries,
-    ) {
-        count
-    } else {
-        let mod_root = Path::new(&session.manifest.mod_root);
-        let rel_path = session
-            .csv_tables
-            .get(table_key)
-            .map(|table| table.path.as_str());
-        if let Some(rel_path) = rel_path {
-            table_definitions::count_valid_csv_entities(mod_root, definition.spec.key, rel_path)?
-        } else {
-            0
-        }
-    };
-    session
-        .manifest
-        .table_entity_summaries
-        .insert(definition.spec.key, count);
-    Ok(())
+        &table.path,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn family_refresh_counts_and_diagnostics_follow_independent_owners() {
+        use super::super::cache::spec_files::take_load_counts;
+        let root = crate::testutil::temp_dir("family_projection_counts");
+        std::fs::create_dir_all(root.join("data/variants")).unwrap();
+        std::fs::create_dir_all(root.join("data/hulls/skins")).unwrap();
+        let variant = r#"{"variantId":"variant","hullId":"hull"}"#;
+        let skin = r#"{"skinHullId":"skin","baseHullId":"hull"}"#;
+        for name in ["a", "b"] {
+            std::fs::write(root.join(format!("data/variants/{name}.variant")), variant).unwrap();
+            std::fs::write(root.join(format!("data/hulls/skins/{name}.skin")), skin).unwrap();
+        }
+        let mut trace = super::super::PerformanceTrace::new("project.openSession");
+        let mut session =
+            super::super::session::build_project_session(&root, None, &mut trace).unwrap();
+        take_load_counts();
+        assert_eq!(session.manifest.warnings.len(), 2);
+        assert!(session.manifest.warnings[0].message.contains("variantId"));
+        assert!(session.manifest.warnings[1].message.contains("skinHullId"));
+        std::fs::remove_file(root.join("data/variants/b.variant")).unwrap();
+        invalidate_session_changes(
+            &mut session,
+            &[file_change(
+                root.join("data/variants/b.variant"),
+                Some(variant),
+                None,
+            )],
+        )
+        .unwrap();
+        assert_eq!(take_load_counts(), (1, 0));
+        assert!(session.variant_warnings.is_empty());
+        assert_eq!(session.skin_warnings.len(), 1);
+        assert_eq!(session.manifest.warnings.len(), 1);
+        std::fs::remove_file(root.join("data/hulls/skins/b.skin")).unwrap();
+        invalidate_session_changes(
+            &mut session,
+            &[file_change(
+                root.join("data/hulls/skins/b.skin"),
+                Some(skin),
+                None,
+            )],
+        )
+        .unwrap();
+        assert_eq!(take_load_counts(), (0, 1));
+        assert!(session.manifest.warnings.is_empty());
+        invalidate_session_changes(
+            &mut session,
+            &[
+                file_change(
+                    root.join("data/variants/a.variant"),
+                    Some(variant),
+                    Some(variant),
+                ),
+                file_change(root.join("data/hulls/skins/a.skin"), Some(skin), Some(skin)),
+            ],
+        )
+        .unwrap();
+        assert_eq!(take_load_counts(), (1, 1));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn failed_projection_keeps_all_previous_family_state() {
+        let root = crate::testutil::temp_dir("atomic_family_projection");
+        std::fs::create_dir_all(root.join("data/variants")).unwrap();
+        std::fs::create_dir_all(root.join("data/hulls/skins")).unwrap();
+        let before = r#"{"variantId":"old","hullId":"hull"}"#;
+        let after = r#"{"variantId":"new","hullId":"hull"}"#;
+        std::fs::write(root.join("data/variants/a.variant"), before).unwrap();
+        let mut trace = super::super::PerformanceTrace::new("project.openSession");
+        let mut session =
+            super::super::session::build_project_session(&root, None, &mut trace).unwrap();
+        std::fs::write(root.join("data/variants/a.variant"), after).unwrap();
+        std::fs::write(root.join("data/hulls/skins/b.skin"), "{").unwrap();
+        assert!(
+            invalidate_session_changes(
+                &mut session,
+                &[
+                    file_change(
+                        root.join("data/variants/a.variant"),
+                        Some(before),
+                        Some(after)
+                    ),
+                    file_change(root.join("data/hulls/skins/b.skin"), None, Some("{"))
+                ]
+            )
+            .is_err()
+        );
+        assert_eq!(session.variant_files[0].variant_id, "old");
+        assert_eq!(session.manifest.entity_summaries.variants, 1);
+        assert!(session.skin_files.is_empty());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn blueprint_metadata_invalidates_tags_for_every_registered_table_and_source_origin() {

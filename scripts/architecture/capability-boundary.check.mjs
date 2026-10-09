@@ -12,6 +12,26 @@ import { rustServiceEdgeBoundaryRule } from './rules/rust-service-edge-boundary.
 import { rustProjectLayerBoundaryRule } from './rules/rust-project-layer-boundary.mjs';
 
 const cases = [
+  [
+    'commit-recovery',
+    'src/orchestrators/project-session-refresh.orchestrator.ts',
+    'src/services/session.service.ts',
+    'synchronizeSessionCommit',
+  ],
+  ['commit-recovery-wire', 'src/services/session.service.ts', 'src/shared/api/session-api.ts', 'synchronizeCommittedWrite'],
+  [
+    'commit-publication',
+    'src/orchestrators/file-history-write.orchestrator.ts',
+    'src/orchestrators/project-session-refresh.orchestrator.ts',
+    'publishCommittedWrite',
+  ],
+  [
+    'projection-pending-owner',
+    'src/orchestrators/project-session-refresh.orchestrator.ts',
+    'src/shared/runtime/project-projection.ts',
+    'markProjectionPending',
+  ],
+  ['projection-read-owner', 'src/services/query-cache.service.ts', 'src/shared/runtime/project-projection.ts', 'requireProjectionReady'],
   ['window-wire', 'src/services/window.service.ts', 'src/shared/api/window-api.ts', 'openManagedWindow'],
   ['window-open', 'src/windows/managed.window.ts', 'src/services/window.service.ts', 'openNativeManagedWindow'],
   ['window-status', 'src/app/composables/use-dirty-window-close-guard.ts', 'src/services/window.service.ts', 'updateNativeWindowStatus'],

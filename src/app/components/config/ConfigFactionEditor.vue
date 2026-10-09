@@ -61,7 +61,7 @@ const props = defineProps<{
   ) => Promise<import('@/shared/types').ConfigSaveIdentity | null>;
   deleteFaction: (sessionId: string, modRoot: string, id: string, deleteFile: boolean) => Promise<boolean>;
 }>();
-const emit = defineEmits<{ saved: [factionId: string | null] }>();
+const emit = defineEmits<{ saved: [factionId: string | null, saved?: import('@/shared/types').ConfigSaveIdentity] }>();
 
 const { getMergedSchema, loadCoreFields } = useCoreSchema();
 loadCoreFields();
@@ -76,7 +76,7 @@ const { crestSrc, displayName, draftData, externalUpdateNotice, hasPendingExtern
     factionVersions: toRef(props, 'factionVersions'),
     identityHandoff: toRef(props, 'identityHandoff'),
     modRoot: toRef(props, 'modRoot'),
-    onSaved: (factionId) => emit('saved', factionId),
+    onSaved: (factionId, saved) => emit('saved', factionId, saved),
     previewRevision: toRef(props, 'previewRevision'),
     queryPreviewImages: props.queryPreviewImages,
     saveFaction: props.saveFaction,

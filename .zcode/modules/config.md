@@ -26,7 +26,7 @@
 
 - Faction、Mission、Skin、Variant 列表必须保留实体 query 返回的 ResourceRef。
 - Rust command 必须校验 `sessionId + modRoot`；后端拥有索引、目标文件、目录、ID、changeset、重命名与删除校验；前端严禁扫描磁盘补实体。
-- domain 拥有默认值、ID/重命名/业务内容规则与 schema source；service 校验 query/write 模型；保存编排串联 write、refreshed entity、文件历史与 ProjectSession refresh。
+- domain 必须拥有默认值、ID、业务内容规则与 schema source；service 必须消费 query/write 模型；保存编排必须串联实际内容、会话基线与完整提交 receipt。
 - 保存只允许写该实体声明的目标文件；dirty 时外部更新必须暂存，严禁覆盖草稿。
 - 势力创建模板必须包含游戏加载所需的 logo、displayNameWithArticle、names、portraits 与 RGBA color，并使用正式 UI 颜色字段。
 - 原版编辑权限由 `AppSettings.allowCoreEditing` 持久化，缺省为关闭；设置镜像必须同步该字段。
@@ -69,6 +69,7 @@
 - `mod_info` 必须使用目标 Draft Session；Skin 与 Variant 的单文件目标、扩展名与 ID 以后端定义为准。
 - 业务 JSON 的顶层键、嵌套字典键与数组对象键必须完整保留；运行时身份、版本与资源投影必须由实体记录承载。
 - 保存必须先提交所属活动输入与动作；实际内容必须在后续同步前接纳为基线，同步失败必须保留该基线并结束等待交接。
+- Faction、Variant 与 Skin 的本地改名必须由编辑会话先接纳目标与实际基线，再共同更新列表及选择，保存期间的新输入必须保持原控件与所属会话。
 - 保存必须提交发起保存时的独立快照；请求期间的新编辑必须保留，base 必须更新为实际写盘版本，dirty 必须按该 base 与当前 draft 比较。
 - 列表图片必须在上下各一个容器高度的预读区内按需解析，资源失效后可见图片必须重新解析。
 - 列表查询结果只允许在捕获身份与请求代次仍有效时接入；卸载必须释放在途结果，失败必须经 AppFeedback 呈现，重试必须使用当前 session。

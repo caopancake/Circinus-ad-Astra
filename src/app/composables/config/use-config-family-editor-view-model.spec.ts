@@ -156,7 +156,7 @@ describe('useConfigFamilyEditorViewModel', () => {
       expect.objectContaining({ relPath: 'data/variants/v1.variant' }),
       expect.objectContaining({ displayName: 'Edited' }),
     );
-    expect(onSaved).toHaveBeenCalledWith('v1');
+    expect(onSaved).toHaveBeenCalledWith('v1', expect.objectContaining({ id: 'v1' }));
     expect(mocks.feedback.error).not.toHaveBeenCalled();
   });
 

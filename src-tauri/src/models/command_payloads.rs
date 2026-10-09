@@ -26,6 +26,14 @@ pub struct SaveCsvPatchPayload {
     pub json_write: JsonWriteOptions,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SynchronizeCommittedWritePayload {
+    pub session_id: String,
+    pub mod_root: String,
+    pub commit_id: u64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenProjectSessionPayload {

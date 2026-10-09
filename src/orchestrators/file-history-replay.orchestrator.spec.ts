@@ -4,14 +4,15 @@ import type { AppFeedback, FileChangeRecord, FileSaveHistoryEntry, WriteResult }
 
 const mocks = vi.hoisted(() => ({
   replayFileChangeSet: vi.fn(),
-  refreshLoadedSessionsAfterWrite: vi.fn(async () => [] as { manifest: { modRoot: string } }[]),
+  publishCommittedWrite: vi.fn(async () => [] as { manifest: { modRoot: string } }[]),
   emitWindowEvent: vi.fn(async () => {}),
   loadFileHistory: vi.fn(),
 }));
 vi.mock('@/services/write.service', () => ({ replayFileChangeSet: mocks.replayFileChangeSet }));
 vi.mock('@/services/file-history.service', () => ({ loadFileHistory: mocks.loadFileHistory }));
 vi.mock('@/orchestrators/project-session-refresh.orchestrator', () => ({
-  refreshLoadedSessionsAfterWrite: mocks.refreshLoadedSessionsAfterWrite,
+  publishCommittedWrite: mocks.publishCommittedWrite,
+  retryPendingWritesForMod: vi.fn(async () => {}),
 }));
 vi.mock('@/windows/tauri.events', () => ({ emitWindowEvent: mocks.emitWindowEvent }));
 import { createFileReplayPlan, executeFileReplayPlan, replayNextFileRedo, replayNextFileUndo } from './file-history-replay.orchestrator';
@@ -55,6 +56,7 @@ function change(): FileChangeRecord {
 }
 function savedResult(): WriteResult {
   return {
+    sessionUpdates: [],
     changes: [change()],
     invalidation: { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false },
     identityChanges: [],
@@ -72,7 +74,7 @@ describe('authoritative file history replay', () => {
     vi.resetAllMocks();
     useFileHistoryStore().applySnapshot(root, { revision: 1, undoStack: [entry()], redoStack: [] });
     mocks.loadFileHistory.mockImplementation(async () => useFileHistoryStore().getHistoryStacks(root));
-    mocks.refreshLoadedSessionsAfterWrite.mockResolvedValue([]);
+    mocks.publishCommittedWrite.mockResolvedValue([]);
     mocks.emitWindowEvent.mockResolvedValue(undefined);
     mocks.replayFileChangeSet.mockResolvedValue(savedResult());
   });
@@ -92,11 +94,11 @@ describe('authoritative file history replay', () => {
     await executeFileReplayPlan(plan, project(), tables());
     expect(mocks.replayFileChangeSet).toHaveBeenCalledWith('s1', root, 'undo', 1, 1);
     expect(useFileHistoryStore().getHistoryStacks(root)).toEqual(savedResult().history);
-    expect(mocks.emitWindowEvent).toHaveBeenCalledWith('file-editor-text-applied', expect.objectContaining({ text: 'A' }));
+    expect(mocks.publishCommittedWrite).toHaveBeenCalledWith(root, savedResult(), 's1', 'undo');
   });
 
   it('keeps committed backend history when refresh fails', async () => {
-    mocks.refreshLoadedSessionsAfterWrite.mockRejectedValue(new Error('parse failed'));
+    mocks.publishCommittedWrite.mockRejectedValue(new Error('parse failed'));
     const plan = createFileReplayPlan(project(), 'undo')!;
     await expect(executeFileReplayPlan(plan, project(), tables())).rejects.toThrow('parse failed');
     expect(useFileHistoryStore().getHistoryStacks(root)).toEqual(savedResult().history);
@@ -161,13 +163,6 @@ describe('authoritative file history replay', () => {
     ];
     mocks.replayFileChangeSet.mockResolvedValue(result);
     await executeFileReplayPlan(createFileReplayPlan(project(), 'undo')!, project(), tables());
-    expect(mocks.emitWindowEvent).toHaveBeenCalledWith(
-      'file-editor-text-applied',
-      expect.objectContaining({ path: expect.stringMatching(/mission[\\/]new\.txt$/), text: 'restored' }),
-    );
-    expect(mocks.emitWindowEvent).toHaveBeenCalledWith(
-      'file-editor-text-applied',
-      expect.objectContaining({ path: expect.stringMatching(/mission[\\/]old\.txt$/), text: '' }),
-    );
+    expect(mocks.publishCommittedWrite).toHaveBeenCalledWith(root, result, 's1', 'undo');
   });
 });

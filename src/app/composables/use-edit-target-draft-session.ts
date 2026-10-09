@@ -241,15 +241,18 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
     if (pendingSave) return pendingSave;
     if (!options.save || !ready.value || disposed) return Promise.resolve(null);
     saving.value = true;
-    const target = deepClone(currentTarget.value!);
-    const key = currentTargetKey.value;
     const life = lifetime;
     const execute = (prepared: TTarget) => submit(prepared, options.targetKey(prepared), life);
-    const operation = pendingSynchronization.value
-      ? synchronizeSaved(pendingSynchronization.value, life)
-      : options.withSavePreparation
-        ? options.withSavePreparation(target, execute)
-        : submit(target, key, life);
+    const operation = (async () => {
+      if (pendingSynchronization.value) {
+        await synchronizeSaved(pendingSynchronization.value, life);
+        if (!dirty.value || disposed || life !== lifetime) return baselineSnapshot.value;
+      }
+      const latestTarget = deepClone(currentTarget.value!);
+      return options.withSavePreparation
+        ? options.withSavePreparation(latestTarget, execute)
+        : submit(latestTarget, currentTargetKey.value, life);
+    })();
     const task = operation.finally(() => {
       saving.value = false;
       pendingSave = null;
@@ -295,6 +298,17 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
       throw withCause('已写盘，后续同步失败', error, 'sync-saved-target');
     }
     return copy(result);
+  }
+
+  function retrySynchronization(): Promise<Snapshot | null> {
+    if (pendingSave) return pendingSave;
+    if (!pendingSynchronization.value) return Promise.resolve(baselineSnapshot.value);
+    saving.value = true;
+    pendingSave = synchronizeSaved(pendingSynchronization.value, lifetime).finally(() => {
+      saving.value = false;
+      pendingSave = null;
+    });
+    return pendingSave;
   }
 
   function loadPendingExternal() {
@@ -363,8 +377,8 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
     setDraft,
     isTargetCurrent: sameTarget,
     waitForSave: () =>
-      pendingSave
-        ? pendingSave.then(
+      pendingSave || pendingSynchronization.value
+        ? retrySynchronization().then(
             (snapshot) => snapshot !== null,
             () => false,
           )

@@ -10,6 +10,7 @@ use crate::{
     },
 };
 use std::path::Path;
+mod committed;
 
 pub struct WriteTransaction {
     root: String,
@@ -20,6 +21,7 @@ pub struct WriteTransaction {
 
 pub fn begin(payload: &impl SessionModScope, base: &[FileVersion]) -> AppResult<WriteTransaction> {
     let mut transaction = acquire(payload.mod_root(), payload.session_id().map(String::as_str))?;
+    super::app_settings::ensure_core_editing_allowed(&transaction.root)?;
     verify_versions(&transaction.root, base)?;
     transaction.base_versions = base.to_vec();
     Ok(transaction)
@@ -30,11 +32,11 @@ fn acquire(root: &str, session_id: Option<&str>) -> AppResult<WriteTransaction> 
     if let Some(session_id) = session_id {
         super::project::ensure_project_session_mod_root(session_id, root)?;
     }
-    super::app_settings::ensure_core_editing_allowed(root)?;
     let root = FsRootBoundary::new(Path::new(root), "write root")?
         .root()
         .to_string_lossy()
         .to_lowercase();
+    committed::synchronize_pending(&root)?;
     Ok(WriteTransaction {
         root,
         session_id: session_id.map(str::to_string),
@@ -116,13 +118,13 @@ impl WriteTransaction {
             result.commit_id = history.revision;
             result.history = snapshot(history);
         }
-        if let Some(session_id) = &self.session_id
-            && !result.changes.is_empty()
-            && let Err(error) =
-                super::project::invalidate_project_session(session_id, result.changes.clone())
-        {
-            crate::diagnostics::record(format!("committed write awaits refresh: {error}"));
-        }
+        result.commit_id = committed::next_commit(&self.root)?;
+        result.session_updates = committed::project_commit(
+            &self.root,
+            result.commit_id,
+            self.session_id.as_deref(),
+            &result.changes,
+        )?;
         if let Some(session_id) = &self.session_id
             && !result.identity_changes.is_empty()
         {
@@ -178,6 +180,7 @@ pub fn replay(
     revision: u64,
 ) -> AppResult<WriteResult> {
     let transaction = acquire(root, Some(session_id))?;
+    super::app_settings::ensure_core_editing_allowed(&transaction.root)?;
     let entry = {
         let histories = lock_histories()?;
         let history = histories
@@ -257,11 +260,13 @@ pub fn replay(
     result.commit_id = history.revision;
     result.history = snapshot(history);
     drop(histories);
-    if let Err(error) =
-        super::project::invalidate_project_session(session_id, result.changes.clone())
-    {
-        crate::diagnostics::record(format!("committed replay awaits refresh: {error}"));
-    }
+    result.commit_id = committed::next_commit(&transaction.root)?;
+    result.session_updates = committed::project_commit(
+        &transaction.root,
+        result.commit_id,
+        Some(session_id),
+        &result.changes,
+    )?;
     if !result.identity_changes.is_empty() {
         let mut versions = Vec::new();
         for identity in &result.identity_changes {
@@ -286,6 +291,19 @@ pub fn replay(
 
 fn versions_for_changes(changes: &[FileChangeRecord]) -> AppResult<Vec<FileVersion>> {
     changes.iter().map(version_after_change).collect()
+}
+
+pub fn synchronize_committed_write(
+    session_id: &str,
+    root: &str,
+    commit_id: u64,
+) -> AppResult<crate::models::CommittedSessionUpdate> {
+    let transaction = acquire(root, Some(session_id))?;
+    committed::synchronize(&transaction.root, session_id, commit_id)
+}
+
+pub fn release_session_commits(session_id: &str) -> AppResult<()> {
+    committed::release(session_id)
 }
 
 fn history_changes(changes: &[FileChangeRecord]) -> Vec<FileChangeRecord> {
@@ -338,6 +356,232 @@ mod tests {
     use super::*;
     use crate::io::file_version;
     use crate::{models::command_payloads::SaveTextFilePayload, testutil::temp_dir};
+
+    #[test]
+    fn committed_projection_is_built_once_per_affected_session_and_reused() {
+        use crate::services::project;
+        let root = temp_dir("commit_projection_once");
+        std::fs::create_dir_all(root.join("data/variants")).unwrap();
+        let path = root.join("data/variants/demo.variant");
+        std::fs::write(&path, r#"{"variantId":"demo","hullId":"hull"}"#).unwrap();
+        let mut trace = project::PerformanceTrace::new("project.openSession");
+        let first = project::open_project_session_traced(&root, None, &mut trace).unwrap();
+        let second = project::open_project_session_traced(&root, None, &mut trace).unwrap();
+        let loaded = project::query_entity_edit_target(
+            &first.session_id,
+            crate::models::EntityKind::Variant,
+            "demo",
+        )
+        .unwrap();
+        let saved = crate::commands::save_variant_entity(
+            crate::models::command_payloads::VariantEntityPayload {
+                session_id: first.session_id.clone(),
+                mod_root: first.mod_root.clone(),
+                base_versions: loaded.base_versions,
+                previous_id: Some("demo".into()),
+                next_id: "next".into(),
+                rel_path: Some(loaded.target.write.rel_path),
+                data: serde_json::json!({"variantId":"next","hullId":"hull"}),
+                json_write: Default::default(),
+                ordered_json: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(saved.session_updates.len(), 2);
+        for update in &saved.session_updates {
+            let crate::models::CommittedProjection::Ready { projection } = &update.projection
+            else {
+                panic!("successful projection is ready")
+            };
+            assert_eq!(projection.projection_revision, 1);
+            assert!(
+                project::query_entity(
+                    &update.session_id,
+                    crate::models::EntityKind::Variant,
+                    "next"
+                )
+                .unwrap()
+                .is_some()
+            );
+            let synchronized =
+                synchronize_committed_write(&update.session_id, &update.mod_root, saved.commit_id)
+                    .unwrap();
+            let crate::models::CommittedProjection::Ready {
+                projection: repeated,
+            } = synchronized.projection
+            else {
+                panic!("completed projection remains ready")
+            };
+            assert_eq!(repeated.projection_revision, 1);
+        }
+        crate::commands::close_project_session(
+            crate::models::command_payloads::CloseProjectSessionPayload {
+                session_id: first.session_id,
+            },
+        )
+        .unwrap();
+        crate::commands::close_project_session(
+            crate::models::command_payloads::CloseProjectSessionPayload {
+                session_id: second.session_id,
+            },
+        )
+        .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn projection_failure_retains_disk_history_and_recovers_exact_commit() {
+        use crate::services::project;
+        let root = temp_dir("commit_projection_pending");
+        std::fs::create_dir_all(root.join("data/variants")).unwrap();
+        let path = root.join("data/variants/demo.variant");
+        std::fs::write(&path, r#"{"variantId":"demo","hullId":"hull"}"#).unwrap();
+        let mut trace = project::PerformanceTrace::new("project.openSession");
+        let manifest = project::open_project_session_traced(&root, None, &mut trace).unwrap();
+        let loaded = project::query_entity_edit_target(
+            &manifest.session_id,
+            crate::models::EntityKind::Variant,
+            "demo",
+        )
+        .unwrap();
+        let bad = root.join("data/variants/broken.variant");
+        std::fs::write(&bad, "{").unwrap();
+        let saved = crate::commands::save_variant_entity(
+            crate::models::command_payloads::VariantEntityPayload {
+                session_id: manifest.session_id.clone(),
+                mod_root: manifest.mod_root.clone(),
+                base_versions: loaded.base_versions,
+                previous_id: Some("demo".into()),
+                next_id: "next".into(),
+                rel_path: Some(loaded.target.write.rel_path),
+                data: serde_json::json!({"variantId":"next","hullId":"hull"}),
+                json_write: Default::default(),
+                ordered_json: None,
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            saved.session_updates[0].projection,
+            crate::models::CommittedProjection::Pending { .. }
+        ));
+        assert_eq!(
+            crate::io::read_json_file(&root.join("data/variants/next.variant")).unwrap()["variantId"],
+            "next"
+        );
+        assert_eq!(saved.history.undo_stack.len(), 1);
+        assert_eq!(
+            project::query_entity(
+                &manifest.session_id,
+                crate::models::EntityKind::Variant,
+                "next"
+            )
+            .unwrap_err()
+            .code(),
+            "session.projection_pending"
+        );
+        assert!(
+            synchronize_committed_write(&manifest.session_id, &manifest.mod_root, saved.commit_id)
+                .is_err()
+        );
+        std::fs::remove_file(bad).unwrap();
+        let synchronized =
+            synchronize_committed_write(&manifest.session_id, &manifest.mod_root, saved.commit_id)
+                .unwrap();
+        let crate::models::CommittedProjection::Ready { projection } = synchronized.projection
+        else {
+            panic!("recovered commit is ready")
+        };
+        assert_eq!(projection.projection_revision, 1);
+        assert!(
+            project::query_entity(
+                &manifest.session_id,
+                crate::models::EntityKind::Variant,
+                "next"
+            )
+            .unwrap()
+            .is_some()
+        );
+        assert_eq!(
+            query_history(&manifest.session_id, &manifest.mod_root)
+                .unwrap()
+                .undo_stack
+                .len(),
+            1
+        );
+        crate::commands::close_project_session(
+            crate::models::command_payloads::CloseProjectSessionPayload {
+                session_id: manifest.session_id,
+            },
+        )
+        .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn committed_projection_recovery_uses_read_authorization_for_core_roots() {
+        use crate::services::project;
+        let fixture = temp_dir("core_projection_read_authority");
+        std::fs::create_dir_all(fixture.join("mods")).unwrap();
+        let root = fixture.join("starsector-core");
+        std::fs::create_dir_all(root.join("data/variants")).unwrap();
+        let path = root.join("data/variants/demo.variant");
+        std::fs::write(&path, r#"{"variantId":"demo","hullId":"hull"}"#).unwrap();
+        let mut trace = project::PerformanceTrace::new("project.openSession");
+        let manifest = project::open_project_session_traced(&root, None, &mut trace).unwrap();
+        assert!(
+            crate::services::app_settings::ensure_core_editing_allowed(&manifest.mod_root).is_err()
+        );
+        let transaction = acquire(&manifest.mod_root, Some(&manifest.session_id)).unwrap();
+        let mut builder = crate::io::FileChangeSetBuilder::new(&root).unwrap();
+        builder
+            .text_file(
+                "data/variants/demo.variant",
+                Some(r#"{"variantId":"demo","hullId":"hull","displayName":"Written"}"#.to_string()),
+            )
+            .unwrap();
+        let changes = builder.apply().unwrap();
+        let broken = root.join("data/variants/broken.variant");
+        std::fs::write(&broken, "{").unwrap();
+        let receipt = transaction
+            .commit(
+                WriteResult::<()>::new(changes, Vec::new(), None),
+                "已写盘 fixture",
+            )
+            .unwrap();
+        assert!(matches!(
+            receipt.session_updates[0].projection,
+            crate::models::CommittedProjection::Pending { .. }
+        ));
+        std::fs::remove_file(broken).unwrap();
+        let restored = synchronize_committed_write(
+            &manifest.session_id,
+            &manifest.mod_root,
+            receipt.commit_id,
+        )
+        .unwrap();
+        assert!(matches!(
+            restored.projection,
+            crate::models::CommittedProjection::Ready { .. }
+        ));
+        assert_eq!(
+            project::query_entity(
+                &manifest.session_id,
+                crate::models::EntityKind::Variant,
+                "demo"
+            )
+            .unwrap()
+            .unwrap()
+            .data["displayName"],
+            "Written"
+        );
+        crate::commands::close_project_session(
+            crate::models::command_payloads::CloseProjectSessionPayload {
+                session_id: manifest.session_id,
+            },
+        )
+        .unwrap();
+        std::fs::remove_dir_all(fixture).unwrap();
+    }
 
     #[test]
     fn mission_rename_history_combines_directory_and_nested_writes() {

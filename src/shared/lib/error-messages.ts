@@ -4,6 +4,9 @@
 const ERROR_MESSAGES: Record<string, string> = {
   'app_paths.resolve_failed': '无法解析工具数据目录',
   'cache.lock_poisoned': '内部缓存状态异常，请重试',
+  'session.projection_pending': '内容已保存，等待项目同步，请重试同步',
+  'write.commit_unknown': '所属提交同步记录已释放，请重新加载项目',
+  'write.sync_lock_poisoned': '提交同步状态异常，请重试',
   'cache.no_parent': '缓存路径缺少父目录',
   'changeset.apply_failed': '变更集应用失败',
   'changeset.missing_content': '变更集缺少文件内容',

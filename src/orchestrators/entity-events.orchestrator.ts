@@ -1,16 +1,19 @@
-import { WINDOW_EVENTS, type EntityIdentityAppliedEvent } from '@/windows/window.events';
-import { emitWindowEvent, listenWindowEvent, type WindowEventHandler } from '@/windows/tauri.events';
-import { recordWindowEventHandlerError } from '@/orchestrators/window-event-errors.orchestrator';
+import type { EntityIdentityAppliedEvent } from '@/windows/window.events';
+import type { WindowEventHandler } from '@/windows/tauri.events';
+import { listenCommittedWrites } from '@/orchestrators/project-session-refresh.orchestrator';
 
-export function emitEntityIdentityApplied(event: EntityIdentityAppliedEvent) {
-  if (
-    event.result.identityChanges.some(
-      (change) => change.before.id !== change.after.id || change.before.write.path !== change.after.write.path,
-    )
-  )
-    return emitWindowEvent(WINDOW_EVENTS.entityIdentityApplied, event);
-  return Promise.resolve();
-}
 export function listenEntityIdentityApplied(handler: WindowEventHandler<EntityIdentityAppliedEvent>) {
-  return listenWindowEvent(WINDOW_EVENTS.entityIdentityApplied, handler, recordWindowEventHandlerError);
+  return listenCommittedWrites(
+    async (event) => {
+      if (
+        event.sessionId &&
+        event.result.identityChanges.some(
+          (change) => change.before.id !== change.after.id || change.before.write.path !== change.after.write.path,
+        )
+      )
+        await handler({ sessionId: event.sessionId, modRoot: event.modRoot, result: event.result });
+    },
+    () => true,
+    'identity',
+  );
 }

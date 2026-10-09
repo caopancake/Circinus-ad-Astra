@@ -4,17 +4,12 @@ import type { useProjectStore } from '@/stores/project.store';
 import type { useTablesStore } from '@/stores/tables.store';
 import { useFileHistoryStore } from '@/stores/file-history.store';
 import { replayFileChangeSet } from '@/services/write.service';
-import { refreshLoadedSessionsAfterWrite } from '@/orchestrators/project-session-refresh.orchestrator';
-import { WINDOW_EVENTS } from '@/windows/window.events';
-import { emitWindowEvent } from '@/windows/tauri.events';
+import { publishCommittedWrite, retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
 import type { FileChangeRecord, FileChangeReplayDirection, FileSaveHistoryEntry } from '@/shared/types';
 import { AppError } from '@/shared/lib/errors';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
-import { joinRootRelativePath, normalizeFsPath } from '@/shared/lib/paths';
-import { useWriteSyncStore } from '@/stores/write-sync.store';
 import { loadFileHistory } from '@/services/file-history.service';
-import { emitEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
 
 type ProjectStore = ReturnType<typeof useProjectStore>;
 type TablesStore = ReturnType<typeof useTablesStore>;
@@ -63,16 +58,14 @@ export function createFileReplayPlan(project: ProjectStore, direction: FileHisto
 }
 
 export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project: ProjectStore, tables: TablesStore): Promise<void> {
+  await retryPendingWritesForMod(plan.modRoot);
   assertReplayPlanStillCurrent(plan, project);
   const result = await replayFileChangeSet(plan.sessionId, plan.modRoot, plan.direction, plan.entry.id, plan.revision);
   if (project.getSessionId(plan.modRoot) !== plan.sessionId) return;
   useFileHistoryStore().applySnapshot(plan.modRoot, result.history);
-  await emitEntityIdentityApplied({ sessionId: plan.sessionId, modRoot: plan.modRoot, result });
-  const invalidatedSessions = await refreshLoadedSessionsAfterWrite(result, plan.modRoot);
-  const sync = useWriteSyncStore().enqueue(plan.modRoot, plan.sessionId, result.changes);
-  await notifyOpenFileEditors(plan.sessionId, plan.modRoot, result.changes, 'redo', result.baseVersions, result.commitId);
-  refreshActiveTableIfAffected(project, tables, plan.modRoot, invalidatedSessions);
-  syncStoreComplete(sync.id);
+  await publishCommittedWrite(plan.modRoot, result, plan.sessionId, plan.direction);
+  if (project.activeModRoot === plan.modRoot && result.sessionUpdates.some((update) => update.modRoot === plan.modRoot))
+    tables.selectRowByKey(null);
   recordLogBestEffort({
     level: 'info',
     code: 'history.replayed',
@@ -88,10 +81,6 @@ export async function executeFileReplayPlan(plan: FileHistoryReplayPlan, project
       changes: result.changes.length,
     }),
   });
-}
-
-function syncStoreComplete(id: number): void {
-  useWriteSyncStore().complete(id);
 }
 
 async function replayNextFileHistoryEntry(
@@ -180,60 +169,4 @@ function replayBehavior(direction: FileHistoryReplayDirection): FileHistoryRepla
     textForChange: (change) => change.afterText ?? null,
     hasBinaryContent: (change) => Boolean(change.afterDataBase64),
   };
-}
-
-async function notifyOpenFileEditors(
-  sessionId: string,
-  modRoot: string,
-  changes: FileChangeRecord[],
-  direction: FileHistoryReplayDirection,
-  baseVersions: import('@/shared/types').FileVersion[],
-  commitId: number,
-): Promise<void> {
-  const behavior = replayBehavior(direction);
-  await Promise.all(
-    changes.map(async (change) => {
-      if (change.kind === 'directory') {
-        const targetFiles = direction === 'undo' ? change.beforeFiles : change.afterFiles;
-        const snapshots = new Map(targetFiles.map((file) => [normalizeFsPath(file.relPath), file]));
-        const paths = new Set([...change.beforeFiles, ...change.afterFiles].map((file) => file.relPath));
-        await Promise.all(
-          [...paths].map(async (relPath) => {
-            const snapshot = snapshots.get(normalizeFsPath(relPath));
-            if (snapshot?.dataBase64) return;
-            await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, {
-              commitId,
-              baseVersions,
-              modRoot,
-              path: joinRootRelativePath(change.afterPath, relPath),
-              sessionId,
-              text: snapshot?.text ?? '',
-            });
-          }),
-        );
-        return;
-      }
-      const text = behavior.textForChange(change);
-      if (text === null && behavior.hasBinaryContent(change)) return;
-      await emitWindowEvent(WINDOW_EVENTS.fileEditorTextApplied, {
-        modRoot,
-        path: change.afterPath,
-        sessionId,
-        text: text ?? '',
-        baseVersions,
-        commitId,
-      });
-    }),
-  );
-}
-
-function refreshActiveTableIfAffected(
-  project: ProjectStore,
-  tables: TablesStore,
-  targetModRoot: string,
-  invalidatedSessions: Awaited<ReturnType<typeof refreshLoadedSessionsAfterWrite>>,
-) {
-  if (!invalidatedSessions.some((event) => event.manifest.modRoot === targetModRoot)) return;
-  if (project.activeModRoot !== targetModRoot) return;
-  tables.selectRowByKey(null);
 }

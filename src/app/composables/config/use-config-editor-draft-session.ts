@@ -25,6 +25,7 @@ export function useConfigEditorDraftSession<TValue, TTarget, TMeta = unknown>(
       targetKey: draftSession.currentTargetKey,
       modRoot: options.modRoot,
       saving: draftSession.saving,
+      pendingSynchronization: draftSession.hasPendingSynchronization,
       waitForSave: draftSession.waitForSave,
     }),
   );

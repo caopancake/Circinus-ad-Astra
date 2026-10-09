@@ -69,6 +69,7 @@ function buildManifest(overrides: Partial<ProjectManifest> = {}): ProjectManifes
 function writeResult(overrides: Partial<WriteResult> = {}): WriteResult {
   const invalidation: ProjectInvalidation = { paths: [], tables: [], entities: [], resources: [], queryScopes: [], session: false };
   return {
+    sessionUpdates: [],
     baseVersions: [],
     commitId: 1,
     history: { revision: 1, undoStack: [], redoStack: [] },
@@ -267,15 +268,12 @@ describe('table-save orchestrator', () => {
       { preserveOriginalJson: false, confirmedSources: [] },
       [],
     );
-    expect(completeSavedWrite).toHaveBeenCalledWith(
-      {
-        modRoot: MOD_ROOT,
-        sessionId: SESSION_ID,
-        label: '保存 ships CSV',
-        result: expect.objectContaining({ changes: expect.any(Array) }),
-      },
-      project,
-    );
+    expect(completeSavedWrite).toHaveBeenCalledWith({
+      modRoot: MOD_ROOT,
+      sessionId: SESSION_ID,
+      label: '保存 ships CSV',
+      result: expect.objectContaining({ changes: expect.any(Array) }),
+    });
     expect(Object.keys(state.dirty.ships).length).toBe(0);
   });
 

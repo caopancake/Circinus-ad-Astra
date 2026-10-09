@@ -281,7 +281,8 @@ pub(super) struct SpecBundle {
     pub projectile_specs: BTreeMap<String, LoadedSpecRecord>,
     pub system_files: BTreeMap<String, LoadedSpecRecord>,
     pub skill_files: BTreeMap<String, LoadedSpecRecord>,
-    pub warnings: Vec<GameScanWarning>,
+    pub variant_warnings: Vec<GameScanWarning>,
+    pub skin_warnings: Vec<GameScanWarning>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -303,6 +304,8 @@ pub(super) struct SessionCsvRow {
 }
 
 pub(super) struct ProjectSession {
+    pub projection_revision: u64,
+    pub projection_pending: bool,
     pub source_versions: BTreeMap<String, crate::models::FileVersion>,
     pub manifest: ProjectManifest,
     pub faction_files: BTreeMap<String, LoadedSpecRecord>,
@@ -311,6 +314,8 @@ pub(super) struct ProjectSession {
     pub ship_files: BTreeMap<String, LoadedSpecRecord>,
     pub variant_files: Vec<VariantFile>,
     pub skin_files: Vec<SkinFile>,
+    pub variant_warnings: Vec<GameScanWarning>,
+    pub skin_warnings: Vec<GameScanWarning>,
     pub weapon_specs: BTreeMap<String, LoadedSpecRecord>,
     pub projectile_specs: BTreeMap<String, LoadedSpecRecord>,
     pub system_files: BTreeMap<String, LoadedSpecRecord>,

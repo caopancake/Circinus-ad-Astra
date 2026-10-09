@@ -1,6 +1,6 @@
 use super::super::{
     cache::{
-        ensure_registered_table_rows, loaded_registered_csv_rows, lock_session,
+        ensure_registered_table_rows, loaded_registered_csv_rows, lock_ready_session,
         registered_session_table, session_handle,
     },
     definitions::table_definitions::{
@@ -22,7 +22,7 @@ pub fn query_csv_table_window(
     faction: CsvFactionFilter,
 ) -> AppResult<CsvTableWindow> {
     let handle = session_handle(session_id)?;
-    let mut session = lock_session(&handle)?;
+    let mut session = lock_ready_session(&handle)?;
     ensure_registered_table_rows(&mut session, table)?;
     let table_data = registered_session_table(&session, table)?;
     let rows_ref = loaded_registered_csv_rows(&session, table)?;
@@ -76,7 +76,7 @@ pub fn query_csv_row_preview(
     row_key: &str,
 ) -> AppResult<CsvRowPreview> {
     let handle = session_handle(session_id)?;
-    let mut session = lock_session(&handle)?;
+    let mut session = lock_ready_session(&handle)?;
     ensure_registered_table_rows(&mut session, table)?;
     let row = loaded_registered_csv_rows(&session, table)?
         .iter()

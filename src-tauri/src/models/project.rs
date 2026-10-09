@@ -155,6 +155,7 @@ pub(crate) fn push_unique_all<T: PartialEq>(target: &mut Vec<T>, values: Vec<T>)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSessionInvalidationResult {
+    pub projection_revision: u64,
     pub manifest: ProjectManifest,
     pub invalidation: ProjectInvalidation,
 }

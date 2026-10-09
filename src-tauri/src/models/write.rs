@@ -265,6 +265,7 @@ pub struct FileSnapshot {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteResult<T = ()> {
+    pub session_updates: Vec<CommittedSessionUpdate>,
     pub identity_changes: Vec<crate::models::EntityIdentityChange>,
     pub changes: Vec<FileChangeRecord>,
     pub invalidation: ProjectInvalidation,
@@ -291,6 +292,7 @@ pub struct IndexedEntityRefresh {
 impl<T> WriteResult<T> {
     pub fn with_refreshed_entity<U>(self, entity: U) -> WriteResult<U> {
         WriteResult {
+            session_updates: self.session_updates,
             identity_changes: self.identity_changes,
             changes: self.changes,
             invalidation: self.invalidation,
@@ -311,6 +313,7 @@ impl<T> WriteResult<T> {
             ..ProjectInvalidation::default()
         };
         Self {
+            session_updates: Vec::new(),
             identity_changes: Vec::new(),
             changes,
             invalidation,
@@ -325,6 +328,34 @@ impl<T> WriteResult<T> {
     pub fn refreshed_entity(&self) -> Option<&T> {
         self.refreshed_entity.as_ref()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SynchronizationError {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum CommittedProjection {
+    Ready {
+        projection: std::sync::Arc<super::ProjectSessionInvalidationResult>,
+    },
+    Pending {
+        error: SynchronizationError,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommittedSessionUpdate {
+    pub session_id: String,
+    pub mod_root: String,
+    pub commit_id: u64,
+    #[serde(flatten)]
+    pub projection: CommittedProjection,
 }
 
 impl WriteResult<()> {
@@ -448,7 +479,8 @@ mod tests {
                 "identityChanges",
                 "invalidation",
                 "keyMap",
-                "refreshedEntity"
+                "refreshedEntity",
+                "sessionUpdates"
             ]
         );
         assert!(serialized.get("invalidation").is_some());

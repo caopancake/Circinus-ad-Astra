@@ -265,14 +265,14 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     }
     if (!saved) return null;
     if (disposed || project.activeManifest?.modRoot !== saveModRoot || project.activeManifest.sessionId !== saveSessionId) return saved;
-    files.value = files.value.map((file) => (idOf(file) === currentId ? saved.entity : file));
     feedback.success(`${family.displayName} "${nextId}" 已保存`);
     return saved;
   }
 
-  function onSaved(id: string | null) {
+  function onSaved(id: string | null, file?: ConfigFamilyFile) {
+    if (file) files.value = [...files.value.filter((candidate) => candidate.id !== selectedId.value && candidate.id !== id), file];
     selectedId.value = id;
-    void loadFiles();
+    if (!file) void loadFiles();
   }
 
   watch([sessionId, modRoot], loadFiles, { immediate: true, flush: 'sync' });

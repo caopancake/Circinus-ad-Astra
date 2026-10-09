@@ -45,17 +45,18 @@ pub(super) fn version_for_path(session: &ProjectSession, path: &str) -> FileVers
         })
 }
 
-pub(super) fn refresh_versions(
-    session: &mut ProjectSession,
+pub(super) fn changed_versions(
+    session: &ProjectSession,
     changes: &[crate::models::FileChangeRecord],
-) -> AppResult<()> {
+) -> AppResult<BTreeMap<String, FileVersion>> {
+    let mut versions = BTreeMap::new();
     let boundary = FsRootBoundary::new(Path::new(&session.manifest.mod_root), "version root")?;
     for change in changes {
         for path in [&change.before_path, &change.after_path] {
             if let Some(relative) =
                 boundary.resolve_changed_path_to_relative(path, "changed version")?
             {
-                session.source_versions.insert(
+                versions.insert(
                     relative.clone(),
                     file_version(&boundary.root().join(&relative))?,
                 );
@@ -65,15 +66,12 @@ pub(super) fn refresh_versions(
                     .filter(|name| *name != "mission_list.csv")
                 {
                     let dir = format!("data/missions/{mission}");
-                    session
-                        .source_versions
-                        .insert(dir.clone(), file_version(&boundary.root().join(dir))?);
+                    versions.insert(dir.clone(), file_version(&boundary.root().join(dir))?);
                 }
             }
         }
     }
-    session.manifest.base_versions = vec![version_for_path(session, "mod_info.json")];
-    Ok(())
+    Ok(versions)
 }
 
 #[cfg(test)]

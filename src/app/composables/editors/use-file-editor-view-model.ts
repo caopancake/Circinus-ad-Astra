@@ -13,14 +13,13 @@ import { useEditTargetDraftSession, type EditTargetDraftSession } from '@/app/co
 import { useSnapshotHistory } from '@/app/composables/use-snapshot-history';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 import { useSaveCommandStore } from '@/stores/save-command.store';
-import { applyCommittedWriteCacheInvalid } from '@/orchestrators/project-session-refresh.orchestrator';
 import {
   createEntitySavePreparation,
   reserveFileIdentityIntent,
   retargetFileWindow,
   releaseCommittedIdentityTargets,
 } from '@/orchestrators/entity-identity.orchestrator';
-import { emitEntityIdentityApplied, listenEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
+import { listenEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
 import type { EntityIdentityAppliedEvent } from '@/windows/window.events';
 import type { EntityIdentityChange } from '@/shared/types';
 import { formatError, extractFileReferenceFromError, errorMessageOf } from '@/shared/lib/errors';
@@ -49,6 +48,7 @@ interface FileEditorTarget {
 }
 
 export function useFileEditorViewModel(params: FileEditorViewModelParams) {
+  const completedLocalWrites = new Set<number>();
   const feedback = useAppFeedback();
   const currentPath = ref(params.filePath);
   let identityPreparation: Awaited<ReturnType<typeof createEntitySavePreparation>> | null = null;
@@ -135,18 +135,19 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
     afterSaved: async (snapshot) => {
       const target = snapshot.target;
       if (target.sessionId) {
-        await identityPreparation?.finish(snapshot.meta.receipt!);
-        if (snapshot.meta.entity) await retargetFileWindow(target.sessionId, target.modRoot, target.filePath, title.value);
-        await releaseCommittedIdentityTargets();
-        await emitEntityIdentityApplied({ sessionId: target.sessionId, modRoot: target.modRoot, result: snapshot.meta.receipt! });
-        applyCommittedWriteCacheInvalid(target.sessionId, snapshot.meta.receipt!);
-        await emitFileEditorSaved({
-          modRoot: target.modRoot,
-          path: target.filePath,
-          sessionId: target.sessionId,
-          writeResult: snapshot.meta.receipt!,
-        });
+        if (!completedLocalWrites.has(snapshot.meta.receipt!.commitId)) {
+          await identityPreparation?.finish(snapshot.meta.receipt!);
+          if (snapshot.meta.entity) await retargetFileWindow(target.sessionId, target.modRoot, target.filePath, title.value);
+          await releaseCommittedIdentityTargets();
+          completedLocalWrites.add(snapshot.meta.receipt!.commitId);
+        }
       }
+      await emitFileEditorSaved({
+        modRoot: target.modRoot,
+        path: target.filePath,
+        sessionId: target.sessionId,
+        writeResult: snapshot.meta.receipt!,
+      });
     },
     targetKey: (target) => fileEditorTargetKey(target),
   });
@@ -167,6 +168,7 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
     targetKey: draftSession.currentTargetKey,
     modRoot: computed(() => params.modRoot),
     saving: draftSession.saving,
+    pendingSynchronization: draftSession.hasPendingSynchronization,
     waitForSave: draftSession.waitForSave,
   });
   const { confirmDiscard } = useFieldInputActions(draftSession.inputs);

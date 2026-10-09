@@ -32,6 +32,8 @@ import { useWorkspaceStore } from '@/stores/workspace.store';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
 import { queryEditorEditInfo } from '@/services/editor.service';
+import { useWriteSyncStore } from '@/stores/write-sync.store';
+import { retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
 
 export function useWorkspaceShellActions(feedback: AppFeedback) {
   const project = useProjectStore();
@@ -47,11 +49,23 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
     }),
     modRoot: computed(() => (tables.saving ? (pendingTableSave()?.target.modRoot ?? null) : null)),
     saving: computed(() => tables.saving),
-    waitForSave: () =>
-      pendingTableSave()?.promise.then(
-        (result) => result.status !== 'cancelled',
-        () => false,
-      ) ?? Promise.resolve(true),
+    pendingSynchronization: computed(() => useWriteSyncStore().pending.length > 0),
+    waitForSave: async () => {
+      const pending = pendingTableSave();
+      if (pending)
+        return pending.promise.then(
+          (result) => result.status !== 'cancelled',
+          () => false,
+        );
+      try {
+        for (const modRoot of new Set(useWriteSyncStore().pending.map((entry) => entry.event.modRoot)))
+          await retryPendingWritesForMod(modRoot);
+        return true;
+      } catch (error) {
+        feedback.error(error, '同步已保存内容失败');
+        return false;
+      }
+    },
   });
   let disposed = false;
   let closeIntent: Promise<void> | null = null;

@@ -57,6 +57,7 @@ function entity(data: RowData, refs: Record<string, ResourceRef> = {}): EntityDa
 
 function writeResultFixture(): WriteResult {
   return {
+    sessionUpdates: [],
     baseVersions: [],
     commitId: 1,
     history: { revision: 1, undoStack: [], redoStack: [] },

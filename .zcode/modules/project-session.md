@@ -13,8 +13,9 @@
 `src-tauri/src/services/project/resources/`：Mod/Core 资源解析 owner。
 `src-tauri/src/services/project/root.rs`：canonical 游戏根与持久化缓存 owner。
 `src-tauri/src/services/project/session.rs`：session 注册表与状态锁 owner，拥有打开、关闭与 session 查询。
+`src-tauri/src/services/write_transactions/committed.rs`：已写盘提交的投影结果、恢复记录和根序号 owner。
 `src-tauri/src/services/project/write/`：写入 owner，返回 changes、结构化 invalidation 与刷新结果。
-`src/orchestrators/project-session-refresh.orchestrator.ts`：写后 refresh 编排 owner，先资源后查询应用失效并广播。
+`src/orchestrators/project-session-refresh.orchestrator.ts`：提交接纳 owner，拥有投影恢复、历史与 manifest 接纳、缓存失效、统一通知及重试进度。
 `src/shared/api/query-api.ts`：query wire API。
 `src/shared/api/session-api.ts`：session 打开/关闭/刷新 wire API。
 `src/stores/project.store.ts`：前端 manifest 与活动 session 缓存 owner。
@@ -23,7 +24,7 @@
 
 - query 严禁写盘；write 严禁重开整个项目；两者只经 `sessionId + modRoot` 身份约束协作。
 - session 关闭只从注册表移除条目；已取得 handle 的在途操作自然完成，关闭后新操作按未知 session 拒绝。
-- session 注册表锁只保护 `sessionId -> Arc<Mutex<ProjectSession>>` 的插入、移除与查找；每个 session 各自持有一把状态锁。
+- session 注册表必须分别登记授权 root 与会话 handle；受影响会话定位只允许消费登记 root，各 session 状态必须分别持锁。
 - 写入锁序必须为根目录事务租约、session 状态、core/sprite/持久化缓存；注册表锁只允许用于短暂句柄访问。
 - 写结果接纳与权威刷新必须分别消费 receipt 的结构化 invalidation，缓存失效必须先资源后查询。
 - 前端 project store 只保存活动 session 与 manifest，严禁读盘、扫描或按完整快照替代 query。
@@ -51,11 +52,18 @@
 
 ### 写后失效
 
-1. 保存编排提交 changeset 后把原始变更交给 refresh 编排。
-2. refresh 请求后端 session 刷新并校验 `sessionId + modRoot`。
-3. 后端应用变更、更新基线并返回新 manifest 与结构化失效。
-4. 前端替换 manifest，先失效资源缓存再失效查询缓存。
-5. 广播失效事件驱动子窗口同步。
+1. FIFO 事务写盘并登记文件历史、提交身份与实际版本。
+2. 事务按路径归属定位已登记会话，构造受影响投影并发布会话更新。
+3. receipt 返回 ready 投影或 pending 提交引用与结构化错误。
+4. 前端接纳历史、manifest 与投影代次，先失效资源缓存再失效查询缓存。
+5. 统一提交事件携带来源窗口、完整 receipt 与保存或回放原因，消费者按身份接纳。
+
+### 提交恢复
+
+1. 手动重试、再次保存或关闭交接取得所属待同步 receipt。
+2. pending 投影经 synchronize_committed_write 消费后端登记的提交记录。
+3. ready 投影进入本窗口接纳，完成状态推进至广播。
+4. 广播成功释放前端 pending；失败保留当前步骤及 receipt。
 
 ### 关闭 session
 
@@ -77,7 +85,15 @@
 - 所有 Mod 缓存与索引必须按 session 隔离，严禁跨 session 复用。
 - 打开时必须对全部索引输入计算内容指纹；路径集合、内容或格式版本任一不一致即丢弃快照。
 - 持久化索引只存于工具私有目录并按 canonical `modRoot` 分片；只保存可由源文件重新推导的规格、阵营、任务和表计数。
-- 持久化缓存必须消费格式版本 4 的来源记录与行记录，并按源指纹和格式标识核对恢复内容。
+- 持久化缓存必须消费格式版本 5 的来源记录、行记录与两族独立诊断，并按源指纹和格式标识核对恢复内容。
+- Variant 与 Skin 必须分别持有索引和诊断，统计必须消费所属记录数量；manifest 诊断必须按 Variant、Skin 顺序聚合。
+- 初始化、缓存恢复和失效重建必须消费同一所属来源构造；每次投影中的受影响族必须去重且各构造一次。
+- 投影构造必须先完成全部受影响索引、诊断、统计与版本，再原子发布；失败必须保留原投影并登记 pending。
+- WriteResult 必须携带 sessionUpdates；每项必须表达 sessionId、modRoot、commitId 与 ready 或 pending，ready 必须携带 manifest、invalidation 和 projectionRevision。
+- 已写盘提交的投影恢复必须经所属 FIFO 根租约；正常 ready 结果只允许直接接纳，广播重试必须复用已完成投影。
+- 提交投影恢复必须消费会话读取归属；Core 写入授权必须归实际写盘和回放入口，投影恢复必须保持已提交内容。
+- 投影 pending 期间的新查询必须返回 session.projection_pending，当前草稿与展示必须保留。
+- manifest 接纳必须核对 session 与单调投影代次；提交接纳与事件消费必须按根、提交序号去重。
 - 缓存损坏或不可写只降级为重建，严禁读取旧快照。
 - 编辑 query 必须随数据返回 baseVersions；派生信息刷新必须保留 CSV 行身份，内容刷新必须按实际写盘方向处理。
 - detail、list 与编辑目标查询必须消费同一目标定义；规格目标必须承载实际来源、所属根、写入目标、加载身份及关联行。

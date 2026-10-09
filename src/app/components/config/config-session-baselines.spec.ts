@@ -82,7 +82,16 @@ vi.mock('@/app/composables/use-schema-runtime-context', () => ({
 vi.mock('@/domain/schema/schema-registry', () => ({
   getSchema: (id: string) => ({
     id,
-    sections: [{ id: 'main', label: 'Fields', fields: [{ key: 'displayName', label: 'Name', type: 'string' }] }],
+    sections: [
+      {
+        id: 'main',
+        label: 'Fields',
+        fields: [
+          { key: 'displayName', label: 'Name', type: 'string' },
+          { key: id === 'variant' ? 'variantId' : 'skinHullId', label: 'ID', type: 'string' },
+        ],
+      },
+    ],
   }),
 }));
 vi.mock('@/app/composables/use-core-assets', () => ({
@@ -92,7 +101,16 @@ vi.mock('@/app/composables/use-core-assets', () => ({
     getMergedSchema: () => ({
       id: 'faction',
       sources: [{ id: 'file', type: 'json-file', path: 'same.faction' }],
-      sections: [{ id: 'main', label: 'Fields', fields: [{ key: 'file.displayName', label: 'Name', type: 'string' }] }],
+      sections: [
+        {
+          id: 'main',
+          label: 'Fields',
+          fields: [
+            { key: 'file.displayName', label: 'Name', type: 'string' },
+            { key: 'file.id', label: 'ID', type: 'string' },
+          ],
+        },
+      ],
     }),
   }),
 }));
@@ -247,6 +265,60 @@ afterEach(() => {
 });
 
 describe('configuration page session baselines', () => {
+  it.each(['variant', 'skin', 'faction'] as const)('%s adopts a local rename without replacing the active control', async (kind) => {
+    await mountPage(kind);
+    const source = kind === 'variant' ? mocks.saveVariant : kind === 'skin' ? mocks.saveSkin : mocks.saveFaction;
+    let release!: (saved: unknown) => void;
+    source.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }) as never,
+    );
+    await input().setValue('submitted');
+    await wrapper!.findAll('.schema-section textarea')[1]!.setValue('next');
+    await wrapper!
+      .findAll('button')
+      .find((button) => button.text() === '保存')!
+      .trigger('click');
+    await flushPromises();
+    expect(source).toHaveBeenCalledOnce();
+    const field = input().element;
+    await input().setValue('later typing');
+    const receipt = savedWriteFixture();
+    receipt.baseVersions = versions('M:/A', 'v2');
+    receipt.identityChanges = [{ before: entityTargetFixture(kind, 'same'), after: entityTargetFixture(kind, 'next') }];
+    if (kind === 'faction') {
+      release({
+        entity: {
+          entityId: 'next',
+          indexPath: 'factions.csv',
+          indexHeader: ['faction'],
+          indexRows: [],
+          baseVersions: receipt.baseVersions,
+          entityData: { file: { id: 'next', displayName: 'submitted' } },
+        },
+        receipt,
+      });
+    } else {
+      const record = kind === 'variant' ? variant('M:/A', 'submitted', 'v2') : skin('M:/A', 'submitted', 'v2');
+      record.file.id = 'next';
+      record.file.target = entityTargetFixture(kind, 'next');
+      record.file.relPath = 'next.file';
+      record.file.data[kind === 'variant' ? 'variantId' : 'skinHullId'] = 'next';
+      release({ entity: record.file, receipt });
+    }
+    await flushPromises();
+    expect(input().element).toBe(field);
+    expect((input().element as HTMLTextAreaElement).value).toBe('later typing');
+    expect(wrapper!.get('.config-entity-list-item.active').text()).toContain(kind === 'faction' ? 'submitted' : 'next');
+    source.mockResolvedValueOnce(null);
+    expect((await save(kind)).data).toMatchObject({ displayName: 'later typing' });
+    const calls = source.mock.calls as unknown[][];
+    expect(kind === 'faction' ? calls.at(-1)![0] : calls.at(-1)![2]).toEqual(
+      kind === 'faction' ? expect.objectContaining({ previousId: 'next' }) : 'next',
+    );
+  });
   it.each(['variant', 'skin', 'faction'] as const)('%s accepts an external rename while retaining the mounted raw field', async (kind) => {
     await mountPage(kind);
     await input().setValue('local typing');

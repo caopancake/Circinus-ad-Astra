@@ -6,6 +6,7 @@ import {
   invalidateProjectSession,
   openProjectSession,
   scanGameOverview,
+  synchronizeCommittedWrite,
 } from '@/shared/api/session-api';
 import type {
   FileChangeRecord,
@@ -44,6 +45,10 @@ export function closeProject(sessionId: string): Promise<void> {
 
 export function requestProjectSessionRefresh(sessionId: string, changes: FileChangeRecord[]): Promise<ProjectSessionInvalidationResult> {
   return invalidateProjectSession(sessionId, changes);
+}
+
+export function synchronizeSessionCommit(sessionId: string, modRoot: string, commitId: number) {
+  return synchronizeCommittedWrite(sessionId, modRoot, commitId);
 }
 
 export function invalidateCoreCacheForRoot(starsectorRoot: string): Promise<void> {

@@ -30,6 +30,7 @@ export function useConfigIdentityReception<T>(options: {
         !disposed && request === sequence && options.target()?.id === target.id && options.target()?.sessionId === target.sessionId;
       receiving.value = true;
       try {
+        await Promise.resolve();
         const saving = useSaveCommandStore().waitForSaves(target.modRoot);
         if (saving && !(await saving)) return;
         if (!current()) return;

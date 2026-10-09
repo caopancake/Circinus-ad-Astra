@@ -15,11 +15,7 @@ import { formatError } from '@/shared/lib/errors';
 import { normalizeFsPath } from '@/shared/lib/paths';
 import { captureIdentityVersions, handoffTableVersions } from '@/domain/editors/entity-identity';
 import { emitEditorSpecSaved, listenEditorPreviewDraftUpdated, listenEditorSpecSaved } from '@/orchestrators/editor-window.orchestrator';
-import {
-  applyCommittedWriteCacheInvalid,
-  applyProjectSessionCacheInvalid,
-  listenProjectSessionInvalidated,
-} from '@/orchestrators/project-session-refresh.orchestrator';
+import { applyProjectSessionCacheInvalid, listenProjectSessionInvalidated } from '@/orchestrators/project-session-refresh.orchestrator';
 import { saveEditorSpecByKind } from '@/services/editor.service';
 import {
   createEntitySavePreparation,
@@ -27,7 +23,7 @@ import {
   retargetEntityWindow,
   releaseCommittedIdentityTargets,
 } from '@/orchestrators/entity-identity.orchestrator';
-import { emitEntityIdentityApplied, listenEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
+import { listenEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
 import type { EntityIdentityAppliedEvent } from '@/windows/window.events';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { hasEntityInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
@@ -61,6 +57,7 @@ export function useEditorWindowViewModel(params: {
   draftSnapshot?: RowData | null;
 }) {
   let previewDraftSnapshot = params.draftSnapshot ?? null;
+  const completedLocalWrites = new Set<number>();
   const currentId = ref(params.id);
   const editorData = ref<EditorEntityBundle | null>(null);
   const feedback = useAppFeedback();
@@ -136,16 +133,17 @@ export function useEditorWindowViewModel(params: {
         }),
       afterSaved: async (snapshot) => {
         const result = snapshot.meta.receipt!;
-        await identityPreparation!.finish(result);
-        await retargetEntityWindow(
-          snapshot.target.sessionId,
-          snapshot.target.modRoot,
-          snapshot.target.kind as EditorSpecKind,
-          snapshot.target.id,
-        );
-        await releaseCommittedIdentityTargets();
-        await emitEntityIdentityApplied({ sessionId: snapshot.target.sessionId, modRoot: snapshot.target.modRoot, result });
-        applyCommittedWriteCacheInvalid(snapshot.target.sessionId, result);
+        if (!completedLocalWrites.has(result.commitId)) {
+          await identityPreparation!.finish(result);
+          await retargetEntityWindow(
+            snapshot.target.sessionId,
+            snapshot.target.modRoot,
+            snapshot.target.kind as EditorSpecKind,
+            snapshot.target.id,
+          );
+          await releaseCommittedIdentityTargets();
+          completedLocalWrites.add(result.commitId);
+        }
         await emitEditorSpecSaved({
           kind: snapshot.target.kind as EditorSpecKind,
           sessionId: snapshot.target.sessionId,
@@ -160,6 +158,7 @@ export function useEditorWindowViewModel(params: {
     targetKey: draftSession.currentTargetKey,
     modRoot: computed(() => params.modRoot),
     saving: draftSession.saving,
+    pendingSynchronization: draftSession.hasPendingSynchronization,
     waitForSave: draftSession.waitForSave,
   });
   const loading = ref(true);

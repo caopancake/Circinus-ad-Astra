@@ -1,6 +1,6 @@
 import type { FileChangeRecord } from '@/shared/types/history.types';
 import type { RowData } from '@/shared/types/json.types';
-import type { ProjectInvalidation } from '@/shared/types/query.types';
+import type { ProjectInvalidation, ProjectSessionInvalidationResult } from '@/shared/types/query.types';
 import type { FileHistorySnapshot } from '@/shared/types/file-history.types';
 
 export interface FileVersion {
@@ -15,6 +15,7 @@ export interface CsvRowKeyMapping {
 }
 
 export interface WriteResult {
+  sessionUpdates: CommittedSessionUpdate[];
   identityChanges: import('@/shared/types/entity-target.types').EntityIdentityChange[];
   changes: FileChangeRecord[];
   invalidation: ProjectInvalidation;
@@ -23,6 +24,18 @@ export interface WriteResult {
   commitId: number;
   baseVersions: FileVersion[];
   history: FileHistorySnapshot;
+}
+
+export type CommittedSessionUpdate = { sessionId: string; modRoot: string; commitId: number } & (
+  { status: 'ready'; projection: ProjectSessionInvalidationResult } | { status: 'pending'; error: { code: string; message: string } }
+);
+
+export interface CommittedWriteEvent {
+  originWindowLabel: string;
+  modRoot: string;
+  sessionId: string | null;
+  reason: 'save' | 'undo' | 'redo';
+  result: WriteResult;
 }
 
 export interface JsonSourceConfirmation {

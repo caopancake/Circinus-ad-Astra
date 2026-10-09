@@ -47,7 +47,7 @@ Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，目标�
 ### 跨层链路
 
 - 实体读取：`组件 -> ViewModel/composable -> service -> shared/api -> Rust command -> project query -> parser/IO/cache`，返回实体数据与资源引用，写入前端按 session 隔离的查询缓存（manifest 由目录打开链路返回）。
-- 保存：`组件动作 -> orchestrator -> write service -> shared/api -> Rust write -> changeset 与后端 File History 原子登记 -> ProjectSession refresh -> 结构化失效 -> 界面同步`；编辑器子窗口保存经结构化事件回主窗口补登记历史与 refresh。
+- 保存：`组件动作 -> orchestrator -> write service -> shared/api -> Rust FIFO 事务 -> changeset、File History 与会话投影 -> receipt 基线接纳 -> 历史、manifest 与缓存接纳 -> 统一提交事件`；待同步结果经原提交恢复入口继续接纳。
 - 目录打开：`组件 -> directory-opening orchestrator -> 后端识别（game-root / mod-in-game / external-mod / unknown 类型化 outcome，边界失败走错误通道）-> 游戏概览或 ProjectSession -> workspace/project 运行态`。
 - 撤销重做：`快捷键命令 -> 主窗口历史分派 -> CSV 草稿历史优先 -> 文件历史回放（强制用户确认，按已加载会话逐一刷新）-> 编辑器同步`。
 - 资源读取：`后端 ResourceRef -> Mod/Core 解析（Core 兜底）-> 批量 data URL -> 前端 query/resource/media 三级缓存与后端 media cache -> 组件`；无上传入口，路径字段只能选择当前 Mod 目录内的文件。

@@ -77,6 +77,7 @@ pub fn run() {
             commands::query_editor_draft_resources,
             commands::query_resource_data_urls,
             commands::invalidate_project_session,
+            commands::synchronize_committed_write,
             commands::invalidate_core_cache,
             commands::detect_directory,
             commands::scan_game_overview,

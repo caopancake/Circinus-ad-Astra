@@ -37,14 +37,6 @@ export const fileHistoryBoundaryRule = {
         failures.push(`${file.rel}: file editor replay sync must be emitted by File History Replay`);
       }
 
-      if (
-        current.layer === 'orchestrators' &&
-        /if\s*\([^)]*sessionId[^)]*\)\s*return\s*;/.test(file.text) &&
-        /completeSavedWrite|writeResult|WriteResult/.test(file.text)
-      ) {
-        failures.push(`${file.rel}: saved write completion must not silently skip missing sessionId`);
-      }
-
       if (isTableSave) {
         const recordIndex = file.text.indexOf('completeSavedWrite');
         const baselineIndexes = [

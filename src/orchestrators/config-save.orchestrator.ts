@@ -14,8 +14,8 @@ import {
 } from '@/services/write.service';
 import { createDefaultSkin, createDefaultVariant, indexedConfigHistoryLabel } from '@/domain/config/config-entities';
 import { indexedConfigEntityData, configFamilyEntityData } from '@/domain/config/config-records';
-import { useProjectStore } from '@/stores/project.store';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
+import { retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { captureConfigIdentityIntent } from '@/services/config-entity.service';
 import { reserveFileIdentityIntent } from '@/orchestrators/entity-identity.orchestrator';
@@ -31,6 +31,7 @@ async function capturedVersions(
   baseVersions: import('@/shared/types').FileVersion[],
   create = false,
 ) {
+  await retryPendingWritesForMod(modRoot);
   const captured = await captureConfigIdentityIntent(sessionId, kind, sourceId, nextId);
   await reserveFileIdentityIntent(sessionId, modRoot, captured.intent);
   const versions = create ? captured.info.baseVersions : baseVersions;
@@ -55,6 +56,7 @@ export async function saveModInfoAction(
   feedback?: AppFeedback,
   baseVersions: import('@/shared/types').FileVersion[] = [],
 ): Promise<WriteResult | null> {
+  await retryPendingWritesForMod(modRoot);
   const result = await runConfirmedJsonWrite(feedback, (options) => writeModInfo(sessionId, modRoot, data, options, baseVersions));
   if (!result) return null;
   return result;
@@ -243,5 +245,5 @@ export async function deleteSkinAction(
 
 export async function completeConfigSave(modRoot: string, sessionId: string, result: WriteResult, label: string) {
   await releaseNativeWindowTargets();
-  if (result.changes.length > 0) await completeSavedWrite({ modRoot, sessionId, result, label }, useProjectStore());
+  await completeSavedWrite({ modRoot, sessionId, result, label });
 }

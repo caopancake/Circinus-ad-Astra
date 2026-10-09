@@ -35,7 +35,7 @@
 ## 硬性调用链
 
 - 页面和组件不直接散写 `invoke()`；固定链路是 `Vue -> ViewModel/composable -> service -> shared/api -> Rust command`。
-- 保存链路固定为 `组件动作 -> orchestrator -> write service -> shared/api -> Rust FIFO 事务 -> changeset 与文件历史 -> ProjectSession refresh -> 界面同步`；链路外的写入路径一律禁止。
+- 保存链路必须为 `组件动作 -> orchestrator -> write service -> shared/api -> Rust FIFO 事务 -> changeset、文件历史与会话投影 -> receipt 接纳 -> 统一提交通知`；待同步恢复必须消费原提交。
 - 撤销重做分派固定为快捷键命令、CSV 草稿历史优先、文件历史回放兜底；命令解析与分发归唯一 owner，严禁组件自建全局键盘监听。
 - 全局启动恢复只由窗口挂载入口协调；页面不得直接调用恢复动作。
 - 缓存失效与派生状态同步必须位于编排事务边界，不在页面局部手补。

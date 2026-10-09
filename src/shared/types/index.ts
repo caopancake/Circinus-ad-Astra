@@ -35,6 +35,8 @@ export type {
   JsonSourceConfirmation,
   JsonWriteOptions,
   WriteResult,
+  CommittedSessionUpdate,
+  CommittedWriteEvent,
   FileVersion,
 } from '@/shared/types/write.types';
 export type {

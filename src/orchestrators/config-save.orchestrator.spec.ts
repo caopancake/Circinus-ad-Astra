@@ -66,6 +66,7 @@ function writeResult(refreshedEntity: Record<string, unknown> | null = null) {
   const id = (refreshedEntity?.variantId ?? refreshedEntity?.skinHullId ?? '') as string;
   const target = entityTargetFixture(kind, id);
   return {
+    sessionUpdates: [],
     baseVersions: [],
     commitId: 1,
     history: { revision: 1, undoStack: [], redoStack: [] },
@@ -127,17 +128,19 @@ describe('config-save orchestrator', () => {
       { preserveOriginalJson: false, confirmedSources: [] },
       [],
     );
-    expect(mocks.completeSavedWrite).toHaveBeenCalledWith(
-      { modRoot: MOD_ROOT, sessionId: SESSION_ID, label: '保存 mod_info.json', result: expect.anything() },
-      expect.anything(),
-    );
+    expect(mocks.completeSavedWrite).toHaveBeenCalledWith({
+      modRoot: MOD_ROOT,
+      sessionId: SESSION_ID,
+      label: '保存 mod_info.json',
+      result: expect.anything(),
+    });
   });
 
   it('does not record file history when a preserved JSON save has no changes', async () => {
     mocks.writeModInfo.mockResolvedValue({ ...writeResult(), changes: [] });
     const result = await saveModInfoAction(SESSION_ID, MOD_ROOT, { id: 'demo' });
     await completeConfigSave(MOD_ROOT, SESSION_ID, result!, '保存 mod_info.json');
-    expect(mocks.completeSavedWrite).not.toHaveBeenCalled();
+    expect(mocks.completeSavedWrite).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ changes: [] }) }));
   });
 
   it('save indexed entity returns the refreshed entity id and records a save label', async () => {
@@ -156,10 +159,12 @@ describe('config-save orchestrator', () => {
 
     expect(entityId?.entity).toMatchObject({ entityId: 'npc_dave', baseVersions: [] });
     await completeConfigSave(MOD_ROOT, SESSION_ID, entityId!.receipt, '保存 npc_dave.faction');
-    expect(mocks.completeSavedWrite).toHaveBeenCalledWith(
-      { modRoot: MOD_ROOT, sessionId: SESSION_ID, label: '保存 npc_dave.faction', result: expect.anything() },
-      expect.anything(),
-    );
+    expect(mocks.completeSavedWrite).toHaveBeenCalledWith({
+      modRoot: MOD_ROOT,
+      sessionId: SESSION_ID,
+      label: '保存 npc_dave.faction',
+      result: expect.anything(),
+    });
   });
 
   it('create indexed entity delegates to the create write and records a create label', async () => {
@@ -179,15 +184,12 @@ describe('config-save orchestrator', () => {
     expect(entityId).toBe('mission_new');
     expect(mocks.writeCreateIndexedConfigEntity).toHaveBeenCalledTimes(1);
     expect(mocks.writeIndexedConfigEntity).not.toHaveBeenCalled();
-    expect(mocks.completeSavedWrite).toHaveBeenCalledWith(
-      {
-        modRoot: MOD_ROOT,
-        sessionId: SESSION_ID,
-        label: indexedConfigHistoryLabel('mission', 'create', 'mission_new'),
-        result: expect.anything(),
-      },
-      expect.anything(),
-    );
+    expect(mocks.completeSavedWrite).toHaveBeenCalledWith({
+      modRoot: MOD_ROOT,
+      sessionId: SESSION_ID,
+      label: indexedConfigHistoryLabel('mission', 'create', 'mission_new'),
+      result: expect.anything(),
+    });
   });
 
   it('delete indexed entity forwards the delete target flag', async () => {

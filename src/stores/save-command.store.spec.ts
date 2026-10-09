@@ -1,9 +1,33 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ref } from 'vue';
 
 import { useSaveCommandStore } from './save-command.store';
 
 describe('useSaveCommandStore', () => {
+  it('waits for pending synchronization and allows the active save to trigger its retry', async () => {
+    const commands = useSaveCommandStore();
+    const pendingSynchronization = ref(true);
+    const retry = vi.fn(async () => {
+      pendingSynchronization.value = false;
+      return true;
+    });
+    commands.registerSaveSession({
+      targetKey: ref('target'),
+      modRoot: ref('M:/mod'),
+      saving: ref(false),
+      pendingSynchronization,
+      waitForSave: retry,
+    });
+    const handler = vi.fn();
+    commands.registerActiveSaveHandler(handler);
+    expect(commands.hasPendingSave('M:/mod')).toBe(true);
+    commands.dispatchSaveCommand();
+    expect(handler).toHaveBeenCalledOnce();
+    await expect(commands.waitForSaves('M:/mod')).resolves.toBe(true);
+    expect(retry).toHaveBeenCalledOnce();
+    expect(commands.hasPendingSave('M:/mod')).toBe(false);
+  });
   beforeEach(() => {
     setActivePinia(createPinia());
   });

@@ -6,9 +6,21 @@ use crate::{
 };
 use std::path::Path;
 
+#[cfg(test)]
+thread_local! { static LOAD_COUNTS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) }; }
+#[cfg(test)]
+pub(in crate::services::project) fn take_load_counts() -> (usize, usize) {
+    LOAD_COUNTS.with(|counts| counts.replace((0, 0)))
+}
+
 pub(crate) fn load_variant_files(
     mod_root: &Path,
 ) -> AppResult<(Vec<VariantFile>, Vec<GameScanWarning>)> {
+    #[cfg(test)]
+    LOAD_COUNTS.with(|counts| {
+        let (variant, skin) = counts.get();
+        counts.set((variant + 1, skin));
+    });
     let dir = mod_root.join("data/variants");
     let mut seen = std::collections::HashMap::new();
     let mut files = Vec::new();
@@ -41,6 +53,11 @@ pub(crate) fn load_variant_files(
 }
 
 pub(crate) fn load_skin_files(mod_root: &Path) -> AppResult<(Vec<SkinFile>, Vec<GameScanWarning>)> {
+    #[cfg(test)]
+    LOAD_COUNTS.with(|counts| {
+        let (variant, skin) = counts.get();
+        counts.set((variant, skin + 1));
+    });
     let dir = mod_root.join("data/hulls/skins");
     let mut seen = std::collections::HashMap::new();
     let mut files = Vec::new();

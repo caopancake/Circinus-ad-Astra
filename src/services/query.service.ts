@@ -10,6 +10,7 @@ import {
   queryEditorDraftResources,
 } from '@/shared/api/query-api';
 import { queryCached } from '@/services/query-cache.service';
+import { requireProjectionReady } from '@/shared/runtime/project-projection';
 import type {
   CsvFactionFilter,
   CsvRowPreview,
@@ -53,8 +54,14 @@ export function querySessionEntity(sessionId: ProjectSessionId, kind: EntityKind
   return queryCached(sessionId, 'entity-detail', { kind, id }, () => queryEntity(sessionId, kind, id));
 }
 
-export const querySessionEntityEditTarget = queryEntityEditTarget;
-export const querySessionEntityIdentityIntent = queryEntityIdentityIntent;
+export function querySessionEntityEditTarget(sessionId: string, kind: EntityKind, id: string) {
+  requireProjectionReady(sessionId);
+  return queryEntityEditTarget(sessionId, kind, id);
+}
+export function querySessionEntityIdentityIntent(sessionId: string, source: import('@/shared/types').EntityEditTarget, nextId: string) {
+  requireProjectionReady(sessionId);
+  return queryEntityIdentityIntent(sessionId, source, nextId);
+}
 
 export function querySessionEntityList(sessionId: ProjectSessionId, kind: EntityKind): Promise<EntityData[]> {
   return queryCached(sessionId, 'entity-list', { kind }, () => queryEntityList(sessionId, kind));
@@ -66,5 +73,6 @@ export function querySessionEditorDraftResources(
   id: string,
   draft: RowData,
 ): Promise<Record<string, ResourceRef>> {
+  requireProjectionReady(sessionId);
   return queryEditorDraftResources(sessionId, kind, id, draft);
 }

@@ -198,6 +198,8 @@ mod tests {
     #[test]
     fn ensure_session_table_rows_rejects_unknown_table() {
         let mut session = ProjectSession {
+            projection_revision: 0,
+            projection_pending: false,
             source_versions: BTreeMap::new(),
             manifest: ProjectManifest {
                 base_versions: Vec::new(),
@@ -218,6 +220,8 @@ mod tests {
             ship_files: BTreeMap::new(),
             variant_files: Vec::new(),
             skin_files: Vec::new(),
+            variant_warnings: Vec::new(),
+            skin_warnings: Vec::new(),
             weapon_specs: BTreeMap::new(),
             projectile_specs: BTreeMap::new(),
             system_files: BTreeMap::new(),
@@ -247,6 +251,8 @@ mod tests {
         )
         .unwrap();
         let mut session = ProjectSession {
+            projection_revision: 0,
+            projection_pending: false,
             source_versions: BTreeMap::new(),
             manifest: ProjectManifest {
                 base_versions: Vec::new(),
@@ -288,6 +294,8 @@ mod tests {
             ship_files: BTreeMap::new(),
             variant_files: Vec::new(),
             skin_files: Vec::new(),
+            variant_warnings: Vec::new(),
+            skin_warnings: Vec::new(),
             weapon_specs: BTreeMap::new(),
             projectile_specs: BTreeMap::new(),
             system_files: BTreeMap::new(),

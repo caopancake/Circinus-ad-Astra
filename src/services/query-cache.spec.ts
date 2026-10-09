@@ -1,7 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import { invalidateQueryCacheByProject, invalidateQueryCacheForSession, queryCached } from '@/services/query-cache.service';
+import { markProjectionPending, markProjectionReady } from '@/shared/runtime/project-projection';
 
 describe('query pending ownership', () => {
+  it('keeps cached values behind the formal pending-projection query gate', async () => {
+    const session = 'projection-gated';
+    const loader = vi.fn(async () => 'loaded');
+    await queryCached(session, 'entity-list', { kind: 'skin' }, loader);
+    markProjectionPending(session, 3);
+    await expect(queryCached(session, 'entity-list', { kind: 'skin' }, loader)).rejects.toMatchObject({
+      action: 'session.projection_pending',
+    });
+    markProjectionReady(session, 2);
+    await expect(queryCached(session, 'entity-list', { kind: 'skin' }, loader)).rejects.toMatchObject({
+      action: 'session.projection_pending',
+    });
+    markProjectionReady(session, 3);
+    await expect(queryCached(session, 'entity-list', { kind: 'skin' }, loader)).resolves.toBe('loaded');
+    expect(loader).toHaveBeenCalledOnce();
+    invalidateQueryCacheForSession(session);
+  });
   it('keeps replacement data after an invalidated request arrives late', async () => {
     const session = 'query-late';
     let resolveOld!: (value: string) => void;

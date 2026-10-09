@@ -158,6 +158,7 @@ describe('useFileEditorViewModel editing', () => {
 
   it('saves through the write service and records history only in session mode', async () => {
     const result = {
+      sessionUpdates: [],
       baseVersions: [],
       commitId: 1,
       history: { revision: 1, undoStack: [], redoStack: [] },
@@ -178,10 +179,11 @@ describe('useFileEditorViewModel editing', () => {
     viewModel.dispose();
   });
 
-  it('keeps recovery mode a side-effect-free write without history', async () => {
+  it('writes recovery credentials and publishes their actual associated session updates', async () => {
     mocks.loadEditableFileData.mockResolvedValue({ path: 'x', text: 'base', baseVersions: [] });
     const viewModel = await initializeViewModel(paramsFixture({ mode: 'recovery', sessionId: null }));
     mocks.writeEditableFileText.mockResolvedValue({
+      sessionUpdates: [],
       baseVersions: [],
       commitId: 1,
       history: { revision: 1, undoStack: [], redoStack: [] },
@@ -194,7 +196,7 @@ describe('useFileEditorViewModel editing', () => {
     viewModel.updateText('recovered');
     await viewModel.saveFile();
     expect(mocks.writeEditableFileText).toHaveBeenCalledWith(null, 'C:/mods/alpha', 'data/hulls/test.file', 'recovered', []);
-    expect(mocks.emitFileEditorSaved).not.toHaveBeenCalled();
+    expect(mocks.emitFileEditorSaved).toHaveBeenCalledWith(expect.objectContaining({ sessionId: null, modRoot: 'C:/mods/alpha' }));
     viewModel.dispose();
   });
 

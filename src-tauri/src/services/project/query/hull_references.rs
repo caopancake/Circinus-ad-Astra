@@ -1,6 +1,6 @@
 use super::super::cache::{
     ensure_registered_table_rows, load_core_csv_table, loaded_csv_rows, loaded_registered_csv_rows,
-    lock_session, session_handle,
+    lock_ready_session, session_handle,
 };
 use super::super::resources::{resource_ref, skin_resource_ref};
 use super::super::{
@@ -21,7 +21,7 @@ pub fn query_hull_references(
     reference_ids: &[String],
 ) -> AppResult<HullReferencesResult> {
     let handle = session_handle(session_id)?;
-    let mut session = lock_session(&handle)?;
+    let mut session = lock_ready_session(&handle)?;
     build_hull_references(&mut session, reference_ids)
 }
 

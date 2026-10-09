@@ -1,37 +1,39 @@
 import { getCurrentWindow, type CloseRequestedEvent } from '@tauri-apps/api/window';
 import type { UnlistenFn } from '@tauri-apps/api/event';
 
-const appWindow = getCurrentWindow();
+function appWindow() {
+  return getCurrentWindow();
+}
 export function currentWindowLabel(): string {
-  return appWindow.label;
+  return appWindow().label;
 }
 
 export async function closeCurrentWindow(): Promise<void> {
-  await appWindow.close();
+  await appWindow().close();
 }
 
 export async function destroyCurrentWindow(): Promise<void> {
-  await appWindow.destroy();
+  await appWindow().destroy();
 }
 
 export function listenCurrentWindowCloseRequest(handler: (event: CloseRequestedEvent) => void | Promise<void>): Promise<UnlistenFn> {
-  return appWindow.onCloseRequested(handler);
+  return appWindow().onCloseRequested(handler);
 }
 
 export async function minimizeCurrentWindow(): Promise<void> {
-  await appWindow.minimize();
+  await appWindow().minimize();
 }
 
 export async function toggleMaximizeCurrentWindow(): Promise<void> {
-  await appWindow.toggleMaximize();
+  await appWindow().toggleMaximize();
 }
 
 export async function isCurrentWindowMaximized(): Promise<boolean> {
-  return appWindow.isMaximized();
+  return appWindow().isMaximized();
 }
 
 export async function startCurrentWindowDrag(): Promise<void> {
-  await appWindow.startDragging();
+  await appWindow().startDragging();
 }
 
 export async function reloadCurrentWindow(): Promise<void> {
@@ -39,5 +41,5 @@ export async function reloadCurrentWindow(): Promise<void> {
 }
 
 export async function showCurrentWindow(): Promise<void> {
-  await appWindow.show();
+  await appWindow().show();
 }

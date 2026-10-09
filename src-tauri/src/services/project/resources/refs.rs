@@ -1,4 +1,4 @@
-use super::super::cache::{lock_registry, lock_session, media, session_handle};
+use super::super::cache::{lock_ready_session, lock_registry, media, session_handle};
 use super::super::model::string_field;
 use super::sprites;
 use crate::errors::{AppError, AppResult};
@@ -19,7 +19,7 @@ pub(in crate::services::project) fn sprite_source_context(
     session_id: &str,
 ) -> AppResult<SpriteSourceContext> {
     let handle = session_handle(session_id)?;
-    let session = lock_session(&handle)?;
+    let session = lock_ready_session(&handle)?;
     Ok(SpriteSourceContext {
         session_id: session_id.to_string(),
         mod_root: session.manifest.mod_root.clone(),

@@ -17,7 +17,7 @@ export function useConfigFactionEditorViewModel(params: {
     Ref<import('@/shared/types').ConfigIdentityHandoff<import('@/domain/config/config-records').ConfigFactionRecord> | null>
   >;
   modRoot: Ref<string | null>;
-  onSaved: (factionId: string | null) => void | Promise<void>;
+  onSaved: (factionId: string | null, saved?: import('@/shared/types').ConfigSaveIdentity) => void | Promise<void>;
   previewRevision: Ref<number>;
   queryPreviewImages: (sessionId: string, factionId: string, draft: RowData) => Promise<{ crestSrc: string; logoSrc: string }>;
   saveFaction: (
@@ -31,6 +31,7 @@ export function useConfigFactionEditorViewModel(params: {
   schema: Ref<FileSchema | null>;
   sessionId: Ref<string | null>;
 }) {
+  const adoptedCommits = new Set<number>();
   const feedback = useAppFeedback();
   function editTarget(id: string): ConfigEditTarget {
     return { sessionId: params.sessionId.value!, modRoot: params.modRoot.value!, kind: 'faction', id, relPath: null };
@@ -64,13 +65,22 @@ export function useConfigFactionEditorViewModel(params: {
     },
     targetKey: (target) => JSON.stringify(target),
     afterSaved: async (snapshot) => {
+      if (!adoptedCommits.has(snapshot.commitId!)) {
+        if (draftSession.isTargetCurrent(snapshot.target))
+          await params.onSaved(snapshot.target.id, {
+            id: snapshot.target.id,
+            data: snapshot.value,
+            baseVersions: snapshot.baseVersions,
+            receipt: snapshot.meta.receipt!,
+          });
+        adoptedCommits.add(snapshot.commitId!);
+      }
       await completeConfigSave(
         snapshot.target.modRoot,
         snapshot.target.sessionId,
         snapshot.meta.receipt!,
         `保存势力 ${snapshot.target.id}`,
       );
-      if (draftSession.isTargetCurrent(snapshot.target)) await params.onSaved(snapshot.target.id);
     },
   });
   const draftData = draftSession.draftValue;

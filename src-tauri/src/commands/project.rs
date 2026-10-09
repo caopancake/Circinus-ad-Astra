@@ -15,8 +15,20 @@ use crate::{
 
 #[tauri::command(async)]
 pub fn close_project_session(payload: CloseProjectSessionPayload) -> Result<(), AppError> {
+    services::write_transactions::release_session_commits(&payload.session_id)?;
     services::project::close_project_session(payload.session_id.clone())?;
     services::windows::release_session(&payload.session_id)
+}
+
+#[tauri::command(async)]
+pub fn synchronize_committed_write(
+    payload: crate::models::command_payloads::SynchronizeCommittedWritePayload,
+) -> Result<crate::models::CommittedSessionUpdate, AppError> {
+    services::write_transactions::synchronize_committed_write(
+        &payload.session_id,
+        &payload.mod_root,
+        payload.commit_id,
+    )
 }
 
 #[tauri::command(async)]

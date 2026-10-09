@@ -1,4 +1,5 @@
 import { recordPerformance } from '@/shared/runtime/performance';
+import { requireProjectionReady } from '@/shared/runtime/project-projection';
 import { createRuntimeCache, type RuntimeCache } from '@/shared/runtime/cache';
 import { stableStringify } from '@/shared/lib/stable-compare';
 import type { EntityKind, InvalidatedQueryScope, ProjectInvalidation } from '@/shared/types';
@@ -55,6 +56,7 @@ export async function queryCached<T>(
   parameters: Record<string, unknown>,
   loader: () => Promise<T>,
 ): Promise<T> {
+  requireProjectionReady(sessionId);
   const cache = cacheFor(queryKind);
   const key = queryCacheKey(sessionId, queryKind, parameters);
   const startedAt = performance.now();
@@ -70,6 +72,7 @@ export async function queryCached<T>(
   }
   const loaded = loader()
     .then((value) => {
+      requireProjectionReady(sessionId);
       if (cache.getPending<PendingQueryEntry>(key)?.promise === loaded) {
         cache.set(key, { queryKind, parameters, sessionId, value });
       }

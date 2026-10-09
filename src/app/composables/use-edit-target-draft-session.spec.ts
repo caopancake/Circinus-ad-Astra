@@ -34,8 +34,22 @@ function createSession(options: Partial<EditTargetDraftSessionOptions<SampleValu
 }
 
 describe('target snapshots', () => {
+  it('waiting a pending synchronization retries its receipt while retaining newer draft edits', async () => {
+    const save = vi.fn((_target: SampleTarget, value: SampleValue) => snapshot(value.a));
+    const afterSaved = vi.fn().mockRejectedValueOnce(new Error('broadcast')).mockResolvedValue(undefined);
+    const session = createSession({ save, afterSaved });
+    session.setDraft({ a: 2 });
+    await expect(session.saveDraft()).rejects.toMatchObject({ action: 'sync-saved-target' });
+    session.setDraft({ a: 3 });
+    await expect(session.waitForSave()).resolves.toBe(true);
+    expect(save).toHaveBeenCalledOnce();
+    expect(session.draftValue.value).toEqual({ a: 3 });
+    expect(session.baselineSnapshot.value?.value).toEqual({ a: 2 });
+    expect(session.hasPendingSynchronization.value).toBe(false);
+    expect(session.dirty.value).toBe(true);
+  });
   it('retries the persisted synchronization receipt while retaining subsequent edits', async () => {
-    const save = vi.fn(() => snapshot(2, 'v2'));
+    const save = vi.fn((_target: SampleTarget, value: SampleValue) => snapshot(value.a, 'v' + value.a));
     const synchronize = vi.fn().mockRejectedValueOnce(new Error('broadcast')).mockResolvedValueOnce(undefined);
     const session = createSession({ save, afterSaved: synchronize });
     session.setDraft({ a: 2 });
@@ -43,11 +57,11 @@ describe('target snapshots', () => {
     expect(session.hasPendingSynchronization.value).toBe(true);
     session.setDraft({ a: 3 });
     await session.saveDraft();
-    expect(save).toHaveBeenCalledOnce();
-    expect(synchronize).toHaveBeenCalledTimes(2);
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(synchronize).toHaveBeenCalledTimes(3);
     expect(session.draftValue.value).toEqual({ a: 3 });
     expect(session.hasPendingSynchronization.value).toBe(false);
-    expect(session.dirty.value).toBe(true);
+    expect(session.dirty.value).toBe(false);
   });
   it('accepts identity credentials and preserves raw fields and current draft in one handoff', () => {
     const session = createSession();

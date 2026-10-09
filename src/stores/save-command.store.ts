@@ -7,6 +7,7 @@ interface SaveSessionHandle {
   targetKey: Readonly<Ref<string | null>>;
   modRoot: Readonly<Ref<string | null>>;
   saving: Readonly<Ref<boolean>>;
+  pendingSynchronization?: Readonly<Ref<boolean>>;
   waitForSave: () => Promise<boolean>;
 }
 
@@ -22,12 +23,14 @@ export const useSaveCommandStore = defineStore('save-command', () => {
     return () => sessions.delete(handle);
   }
   function hasPendingSave(modRoot?: string | null) {
-    return [...sessions].some((handle) => handle.saving.value && (modRoot == null || handle.modRoot.value === modRoot));
+    return [...sessions].some(
+      (handle) => (handle.saving.value || handle.pendingSynchronization?.value) && (modRoot == null || handle.modRoot.value === modRoot),
+    );
   }
   function waitForSaves(modRoot?: string | null, targetKey?: string | null): Promise<boolean> | undefined {
     const pending = [...sessions].filter(
       (handle) =>
-        handle.saving.value &&
+        (handle.saving.value || handle.pendingSynchronization?.value) &&
         (modRoot == null || handle.modRoot.value === modRoot) &&
         (targetKey == null || handle.targetKey.value === targetKey),
     );
@@ -53,7 +56,7 @@ export const useSaveCommandStore = defineStore('save-command', () => {
 
   function dispatchSaveCommand(): boolean {
     if (!activeHandler.value) return false;
-    if (!hasPendingSave()) void activeHandler.value();
+    if (![...sessions].some((handle) => handle.saving.value)) void activeHandler.value();
     return true;
   }
 

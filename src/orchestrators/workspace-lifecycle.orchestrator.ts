@@ -10,6 +10,8 @@ import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { logFields } from '@/shared/lib/log-fields';
 import { useWriteSyncStore } from '@/stores/write-sync.store';
 import { closeNativeSessionWindows } from '@/services/window.service';
+import { retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
+import { markProjectionReady } from '@/shared/runtime/project-projection';
 
 export interface WorkspaceCloseTarget {
   gameOverviewRoot: string | null;
@@ -19,6 +21,7 @@ export interface WorkspaceCloseTarget {
 
 export async function closeWorkspaceWindows(): Promise<boolean> {
   for (const manifest of useProjectStore().manifests.values()) {
+    await retryPendingWritesForMod(manifest.modRoot);
     if (!(await closeNativeSessionWindows(manifest.sessionId))) return false;
   }
   return true;
@@ -57,11 +60,13 @@ export function removeModRuntimeState(modRoot: string) {
 }
 
 export async function removeLoadedModRuntime(modRoot: string) {
+  await retryPendingWritesForMod(modRoot);
   const project = useProjectStore();
   const sessionId = project.getSessionId(modRoot);
   if (sessionId && !(await closeNativeSessionWindows(sessionId))) return false;
 
   if (sessionId) {
+    markProjectionReady(sessionId);
     invalidateQueryCacheForSession(sessionId);
     invalidateResourceCacheForSession(sessionId);
   }

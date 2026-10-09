@@ -122,6 +122,7 @@ function shipBundleFixture(isNew = false): ShipEditorEntityBundle {
 
 function writeResultFixture(refreshedEntity: RowData = { hullId: 'XY' }): WriteResult {
   return {
+    sessionUpdates: [],
     baseVersions: [],
     commitId: 1,
     history: { revision: 1, undoStack: [], redoStack: [] },

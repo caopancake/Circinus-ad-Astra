@@ -54,7 +54,7 @@ pub(in crate::services::project) struct ProjectEntityDefinition {
     pub list: EntityListLoader,
     pub core_list: Option<EntityCoreListLoader>,
     pub resources: fn(&ProjectSession, &str, &Value) -> BTreeMap<String, ResourceRef>,
-    pub refresh: fn(&mut ProjectSession) -> AppResult<()>,
+    pub refresh: fn(&ProjectSession) -> AppResult<EntityRefresh>,
 }
 
 pub(in crate::services::project) fn entity_definition(
@@ -733,106 +733,147 @@ fn mission_icon_resource_ref(session: &ProjectSession, id: &str) -> AppResult<Op
     )))
 }
 
-fn refresh_ship(session: &mut ProjectSession) -> AppResult<()> {
-    let mod_root = Path::new(&session.manifest.mod_root);
-    session.ship_files = super::super::cache::load_spec_records(
-        mod_root,
-        "data/hulls",
-        "ship",
-        "hullId",
-        ResourceSource::Mod,
-    )?;
-    session.manifest.entity_summaries.ships = session.ship_files.len();
-    Ok(())
+pub(in crate::services::project) enum EntityRefresh {
+    Specs {
+        kind: EntityKind,
+        records: BTreeMap<String, crate::models::LoadedSpecRecord>,
+    },
+    Variant {
+        files: Vec<VariantFile>,
+        warnings: Vec<crate::models::GameScanWarning>,
+    },
+    Skin {
+        files: Vec<SkinFile>,
+        warnings: Vec<crate::models::GameScanWarning>,
+    },
+    Faction {
+        files: BTreeMap<String, crate::models::LoadedSpecRecord>,
+        tags: std::collections::HashMap<String, String>,
+    },
+    Mission(usize),
 }
 
-fn refresh_weapon(session: &mut ProjectSession) -> AppResult<()> {
-    let mod_root = Path::new(&session.manifest.mod_root);
-    session.weapon_specs = super::super::cache::load_spec_records(
-        mod_root,
-        "data/weapons",
-        "wpn",
-        "id",
-        ResourceSource::Mod,
-    )?;
-    session.manifest.entity_summaries.weapons = session.weapon_specs.len();
-    Ok(())
+impl EntityRefresh {
+    pub fn update_summary(&self, summary: &mut crate::models::EntitySummaries) {
+        match self {
+            Self::Specs { kind, records } => match kind {
+                EntityKind::Ship => summary.ships = records.len(),
+                EntityKind::Weapon => summary.weapons = records.len(),
+                EntityKind::Projectile => summary.projectiles = records.len(),
+                EntityKind::System => summary.systems = records.len(),
+                EntityKind::Skill => summary.skills = records.len(),
+                _ => unreachable!("spec refresh kinds have a record map"),
+            },
+            Self::Variant { files, .. } => summary.variants = files.len(),
+            Self::Skin { files, .. } => summary.skins = files.len(),
+            Self::Faction { files, .. } => summary.factions = files.len(),
+            Self::Mission(count) => summary.missions = *count,
+        }
+    }
+    pub fn apply(self, session: &mut ProjectSession) {
+        self.update_summary(&mut session.manifest.entity_summaries);
+        match self {
+            Self::Specs { kind, records } => match kind {
+                EntityKind::Ship => session.ship_files = records,
+                EntityKind::Weapon => session.weapon_specs = records,
+                EntityKind::Projectile => session.projectile_specs = records,
+                EntityKind::System => session.system_files = records,
+                EntityKind::Skill => session.skill_files = records,
+                _ => unreachable!("spec refresh kinds have a record map"),
+            },
+            Self::Variant { files, warnings } => {
+                session.variant_files = files;
+                session.variant_warnings = warnings;
+            }
+            Self::Skin { files, warnings } => {
+                session.skin_files = files;
+                session.skin_warnings = warnings;
+            }
+            Self::Faction { files, tags } => {
+                session.faction_files = files;
+                session.tag_map = tags;
+            }
+            Self::Mission(_) => {}
+        }
+    }
 }
 
-fn refresh_projectile(session: &mut ProjectSession) -> AppResult<()> {
-    let mod_root = Path::new(&session.manifest.mod_root);
+fn refresh_spec_records(
+    session: &ProjectSession,
+    kind: EntityKind,
+    directory: &str,
+    extension: &str,
+    id_field: &str,
+) -> AppResult<EntityRefresh> {
+    Ok(EntityRefresh::Specs {
+        kind,
+        records: super::super::cache::load_spec_records(
+            Path::new(&session.manifest.mod_root),
+            directory,
+            extension,
+            id_field,
+            ResourceSource::Mod,
+        )?,
+    })
+}
+fn refresh_ship(session: &ProjectSession) -> AppResult<EntityRefresh> {
+    refresh_spec_records(session, EntityKind::Ship, "data/hulls", "ship", "hullId")
+}
+fn refresh_weapon(session: &ProjectSession) -> AppResult<EntityRefresh> {
+    refresh_spec_records(session, EntityKind::Weapon, "data/weapons", "wpn", "id")
+}
+fn refresh_projectile(session: &ProjectSession) -> AppResult<EntityRefresh> {
     let core = session
         .manifest
         .starsector_root
         .as_deref()
         .map(super::super::cache::load_core_projectile_specs)
         .transpose()?;
-    session.projectile_specs =
-        super::projectiles::load_projectile_specs(mod_root, core.as_deref())?;
-    session.manifest.entity_summaries.projectiles = session.projectile_specs.len();
-    Ok(())
+    let records = super::projectiles::load_projectile_specs(
+        Path::new(&session.manifest.mod_root),
+        core.as_deref(),
+    )?;
+    Ok(EntityRefresh::Specs {
+        kind: EntityKind::Projectile,
+        records,
+    })
 }
-
-fn refresh_system(session: &mut ProjectSession) -> AppResult<()> {
-    let mod_root = Path::new(&session.manifest.mod_root);
-    session.system_files = super::super::cache::load_spec_records(
-        mod_root,
+fn refresh_system(session: &ProjectSession) -> AppResult<EntityRefresh> {
+    refresh_spec_records(
+        session,
+        EntityKind::System,
         "data/shipsystems",
         "system",
         "id",
-        ResourceSource::Mod,
-    )?;
-    session.manifest.entity_summaries.systems = session.system_files.len();
-    Ok(())
+    )
 }
-
-fn refresh_skill(session: &mut ProjectSession) -> AppResult<()> {
-    let mod_root = Path::new(&session.manifest.mod_root);
-    session.skill_files = super::super::cache::load_spec_records(
-        mod_root,
+fn refresh_skill(session: &ProjectSession) -> AppResult<EntityRefresh> {
+    refresh_spec_records(
+        session,
+        EntityKind::Skill,
         "data/characters/skills",
         "skill",
         "id",
-        ResourceSource::Mod,
-    )?;
-    session.manifest.entity_summaries.skills = session.skill_files.len();
-    Ok(())
+    )
 }
-
-fn refresh_faction(session: &mut ProjectSession) -> AppResult<()> {
-    let mod_root = Path::new(&session.manifest.mod_root);
-    session.faction_files = factions::load_faction_files(mod_root)?;
-    session.tag_map = factions::discover_factions(mod_root)?.1;
-    session.manifest.entity_summaries.factions = session.faction_files.len();
-    Ok(())
+fn refresh_faction(session: &ProjectSession) -> AppResult<EntityRefresh> {
+    let root = Path::new(&session.manifest.mod_root);
+    let files = factions::load_faction_files(root)?;
+    let tags = factions::discover_factions(root)?.1;
+    Ok(EntityRefresh::Faction { files, tags })
 }
-
-fn refresh_mission(session: &mut ProjectSession) -> AppResult<()> {
-    let mod_root = Path::new(&session.manifest.mod_root);
-    session.manifest.entity_summaries.missions = root::count_mission_list_entries(mod_root)?;
-    Ok(())
+fn refresh_mission(session: &ProjectSession) -> AppResult<EntityRefresh> {
+    Ok(EntityRefresh::Mission(root::count_mission_list_entries(
+        Path::new(&session.manifest.mod_root),
+    )?))
 }
-
-/// Variant and skin warnings form one merged state, so refreshing either
-/// kind reloads both directories; the variant→skin warning order is canonical.
-fn refresh_variant_and_skin_files(session: &mut ProjectSession) -> AppResult<()> {
-    let mod_root = Path::new(&session.manifest.mod_root);
-    let (variants, variant_warnings) = load_variant_files(mod_root)?;
-    let (skins, skin_warnings) = load_skin_files(mod_root)?;
-    session.variant_files = variants;
-    session.skin_files = skins;
-    session.manifest.entity_summaries.variants = session.variant_files.len();
-    session.manifest.entity_summaries.skins = session.skin_files.len();
-    session.manifest.warnings = variant_warnings.into_iter().chain(skin_warnings).collect();
-    Ok(())
+fn refresh_variant(session: &ProjectSession) -> AppResult<EntityRefresh> {
+    let (files, warnings) = load_variant_files(Path::new(&session.manifest.mod_root))?;
+    Ok(EntityRefresh::Variant { files, warnings })
 }
-
-fn refresh_variant(session: &mut ProjectSession) -> AppResult<()> {
-    refresh_variant_and_skin_files(session)
-}
-
-fn refresh_skin(session: &mut ProjectSession) -> AppResult<()> {
-    refresh_variant_and_skin_files(session)
+fn refresh_skin(session: &ProjectSession) -> AppResult<EntityRefresh> {
+    let (files, warnings) = load_skin_files(Path::new(&session.manifest.mod_root))?;
+    Ok(EntityRefresh::Skin { files, warnings })
 }
 
 pub(in crate::services::project) fn source_option_origin_scopes(

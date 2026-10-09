@@ -19,7 +19,7 @@ export const writeBoundaryRule = {
       if (!frontendFile(file.rel)) continue;
       const current = classifyFrontendPath(file.rel);
       if (current.layer === 'test') continue;
-      if (hasCapabilityBoundary(current)) {
+      if (hasCapabilityBoundary(current, file.rel)) {
         for (const binding of file.exports) {
           if (!binding.typeOnly && !capabilityFor(file.rel, binding.exportedName))
             failures.push(`${file.rel}: ${binding.exportedName}: public runtime exports must declare their capability ownership`);

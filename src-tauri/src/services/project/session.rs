@@ -25,17 +25,12 @@ use std::{
 
 pub fn close_project_session(session_id: String) -> AppResult<()> {
     let removed = cache::lock_registry()?.remove(&session_id);
-    if let Some(handle) = removed {
-        let root = cache::lock_session(&handle)?.manifest.mod_root.clone();
+    if let Some(registered) = removed {
+        let root = registered.root;
         let _lease = crate::io::acquire_root_write_lock(Path::new(&root))?;
-        let remaining = cache::lock_registry()?
+        let same_root = cache::lock_registry()?
             .values()
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut same_root = false;
-        for session in remaining {
-            same_root |= cache::lock_session(&session)?.manifest.mod_root == root;
-        }
+            .any(|registered| registered.root == root);
         if !same_root {
             crate::services::file_history::release_history(&root)?;
         }
@@ -64,13 +59,19 @@ pub fn invalidate_project_session(
 ) -> AppResult<ProjectSessionInvalidationResult> {
     let handle = session_handle(session_id)?;
     let mut session = lock_session(&handle)?;
+    let versions = super::versions::changed_versions(&session, &changes)?;
     let mut invalidation = ProjectInvalidation::default();
     invalidation.merge(super::invalidation::invalidate_session_changes(
         &mut session,
         &changes,
     )?);
-    super::versions::refresh_versions(&mut session, &changes)?;
+    session.source_versions.extend(versions);
+    session.manifest.base_versions =
+        vec![super::versions::version_for_path(&session, "mod_info.json")];
+    session.projection_revision += 1;
+    session.projection_pending = false;
     Ok(ProjectSessionInvalidationResult {
+        projection_revision: session.projection_revision,
         manifest: session.manifest.clone(),
         invalidation,
     })
@@ -78,6 +79,42 @@ pub fn invalidate_project_session(
 
 pub fn invalidate_core_cache(starsector_root: &str) -> AppResult<()> {
     cache::invalidate_core_cache(starsector_root)
+}
+
+pub(crate) fn affected_session_ids(
+    changes: &[FileChangeRecord],
+) -> AppResult<Vec<(String, String)>> {
+    let mut affected = Vec::new();
+    for (session_id, registered) in cache::lock_registry()?.iter() {
+        let root_key = crate::models::windows_path_key(&registered.root);
+        if changes.iter().any(|change| {
+            [&change.before_path, &change.after_path]
+                .iter()
+                .any(|path| {
+                    let key = crate::models::windows_path_key(path);
+                    key == root_key || key.starts_with(&format!("{root_key}/"))
+                })
+        }) {
+            affected.push((session_id.clone(), registered.root.clone()));
+        }
+    }
+    Ok(affected)
+}
+
+pub(crate) fn mark_projection_pending(session_id: &str) -> AppResult<()> {
+    let handle = session_handle(session_id)?;
+    lock_session(&handle)?.projection_pending = true;
+    Ok(())
+}
+
+pub(crate) fn current_projection(session_id: &str) -> AppResult<ProjectSessionInvalidationResult> {
+    let handle = session_handle(session_id)?;
+    let session = cache::lock_ready_session(&handle)?;
+    Ok(ProjectSessionInvalidationResult {
+        manifest: session.manifest.clone(),
+        invalidation: ProjectInvalidation::default(),
+        projection_revision: session.projection_revision,
+    })
 }
 
 pub(crate) fn open_project_session_traced(
@@ -88,7 +125,13 @@ pub(crate) fn open_project_session_traced(
     let session = build_project_session(mod_root, starsector_root_override, trace)?;
     let manifest = session.manifest.clone();
     let mut guard = cache::lock_registry()?;
-    guard.insert(manifest.session_id.clone(), Arc::new(Mutex::new(session)));
+    guard.insert(
+        manifest.session_id.clone(),
+        cache::RegisteredSession {
+            root: manifest.mod_root.clone(),
+            handle: Arc::new(Mutex::new(session)),
+        },
+    );
     drop(guard);
     // Open concentrated cold loads of core assets; persist them once here so
     // the dump never runs inside a query.
@@ -202,9 +245,16 @@ pub(super) fn build_project_session(
         table_summaries,
         table_entity_summaries,
         entity_summaries,
-        warnings: spec_bundle.warnings.clone(),
+        warnings: spec_bundle
+            .variant_warnings
+            .iter()
+            .chain(&spec_bundle.skin_warnings)
+            .cloned()
+            .collect(),
     };
     Ok(ProjectSession {
+        projection_revision: 0,
+        projection_pending: false,
         source_versions,
         manifest,
         faction_files,
@@ -213,6 +263,8 @@ pub(super) fn build_project_session(
         ship_files: spec_bundle.ship_files,
         variant_files: spec_bundle.variant_files,
         skin_files: spec_bundle.skin_files,
+        variant_warnings: spec_bundle.variant_warnings,
+        skin_warnings: spec_bundle.skin_warnings,
         weapon_specs: spec_bundle.weapon_specs,
         projectile_specs: spec_bundle.projectile_specs,
         system_files: spec_bundle.system_files,
@@ -371,7 +423,6 @@ pub(super) fn load_spec_bundle(
             ("warnings", skin_warnings.len().to_string()),
         ],
     );
-    let warnings = variant_warnings.into_iter().chain(skin_warnings).collect();
     let timer = trace.timer();
     let core_projectiles = starsector_root
         .map(|root| cache::load_core_projectile_specs(&root.to_string_lossy()))
@@ -417,7 +468,8 @@ pub(super) fn load_spec_bundle(
         projectile_specs,
         system_files,
         skill_files,
-        warnings,
+        variant_warnings,
+        skin_warnings,
     };
     trace.record_stage(
         "spec_bundle",
@@ -694,6 +746,7 @@ mod tests {
 
     #[test]
     fn persistent_project_index_reuses_matching_sources_and_rebuilds_changed_sources() {
+        use super::cache::spec_files::take_load_counts;
         let root = temp_dir("persistent_project_index");
         let cache_root = temp_dir("persistent_project_index_cache");
         std::fs::create_dir_all(root.join("data/variants")).unwrap();
@@ -702,12 +755,31 @@ mod tests {
             r#"{"variantId":"before","hullId":"hull"}"#,
         )
         .unwrap();
+        std::fs::write(
+            root.join("data/variants/duplicate.variant"),
+            r#"{"variantId":"before","hullId":"hull"}"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("data/hulls/skins")).unwrap();
+        for name in ["first", "second"] {
+            std::fs::write(
+                root.join(format!("data/hulls/skins/{name}.skin")),
+                r#"{"skinHullId":"skin","baseHullId":"hull"}"#,
+            )
+            .unwrap();
+        }
         super::cache::persistent::configure_persistent_index_cache(&cache_root).unwrap();
 
         let mut initial_trace = PerformanceTrace::new("project.openSession");
+        take_load_counts();
         let _ = build_project_session(&root, None, &mut initial_trace).unwrap();
+        assert_eq!(take_load_counts(), (1, 1));
         let mut cached_trace = PerformanceTrace::new("project.openSession");
         let cached = build_project_session(&root, None, &mut cached_trace).unwrap();
+        assert_eq!(take_load_counts(), (0, 0));
+        assert_eq!(cached.variant_warnings.len(), 1);
+        assert_eq!(cached.skin_warnings.len(), 1);
+        assert_eq!(cached.manifest.warnings.len(), 2);
 
         write_utf8_no_bom(
             &root.join("data/variants/demo.variant"),
@@ -716,6 +788,9 @@ mod tests {
         .unwrap();
         let mut changed_trace = PerformanceTrace::new("project.openSession");
         let changed = build_project_session(&root, None, &mut changed_trace).unwrap();
+        assert_eq!(take_load_counts(), (1, 1));
+        assert!(changed.variant_warnings.is_empty());
+        assert_eq!(changed.skin_warnings.len(), 1);
 
         let _ = std::fs::remove_dir_all(root);
         let _ = std::fs::remove_dir_all(cache_root);

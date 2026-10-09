@@ -8,6 +8,7 @@ import { useProjectStore } from '@/stores/project.store';
 import { isLoadedCsvTableRow } from '@/domain/tables/csv-table-rows';
 import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
 import { completeSavedWrite } from '@/orchestrators/file-history-write.orchestrator';
+import { retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
 import { recordLogBestEffort } from '@/services/app-feedback-log.service';
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { commitCsvTableSaveDraft } from '@/domain/tables/csv-table-draft';
@@ -75,6 +76,8 @@ function captureTableSaveTarget({ manifest, table }: TableSaveOptions): Captured
 }
 
 async function saveTarget(target: CapturedTableSaveTarget, options: TableSaveOptions): Promise<TableSaveResult> {
+  const synchronization = retryPendingWritesForMod(target.modRoot);
+  if (synchronization) await synchronization;
   const tables = useTablesStore();
   const state = target.state;
   const pending = tables.getTableInputs(target.modRoot, target.table).commit();
@@ -154,8 +157,7 @@ async function saveTarget(target: CapturedTableSaveTarget, options: TableSaveOpt
   csvEditHistory.commitSaveHistory(modRoot, table, submittedHistory);
   if (Object.keys(state.dirty[table]).length === 0) csvEditHistory.clearCsvEditHistory(modRoot, table);
   await releaseNativeWindowTargets();
-  if (result.changes.length > 0)
-    await completeSavedWrite({ modRoot, result, label: `保存 ${table} CSV`, sessionId: manifest.sessionId }, useProjectStore());
+  await completeSavedWrite({ modRoot, result, label: `保存 ${table} CSV`, sessionId: manifest.sessionId });
   return { status: 'saved', receipt: result };
 }
 

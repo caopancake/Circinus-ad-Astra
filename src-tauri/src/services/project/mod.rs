@@ -23,6 +23,7 @@ pub use query::{
 };
 pub use resources::{resolve_mod_relative_path, scan_core_graphics};
 pub(crate) use session::open_project_session_traced;
+pub(crate) use session::{affected_session_ids, current_projection, mark_projection_pending};
 pub use session::{
     close_project_session, ensure_project_session_mod_root, invalidate_core_cache,
     invalidate_project_session,
