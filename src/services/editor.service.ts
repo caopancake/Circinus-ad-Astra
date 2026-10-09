@@ -153,7 +153,7 @@ const BUNDLE_LOADERS: Record<
 async function queryShipEditorBundle(sessionId: ProjectSessionId, id: string, signal?: AbortSignal): Promise<ShipEditorEntityBundle> {
   const record = await querySessionEntity(sessionId, 'ship', id, signal);
   const ship = record ? cloneQuerySnapshot<EntityData>(record) : null;
-  const info = ship ?? (await queryEditorEditInfo(sessionId, 'ship', id, signal));
+  const info = ship ?? (await querySessionEntityEditTarget(sessionId, 'ship', id, signal));
   const shipSpec = ship ? requireRowData(ship.data, `舰船 ${id} 数据无效`) : createShipSpec(id);
   return {
     kind: 'ship',
@@ -230,7 +230,7 @@ async function queryProjectileEditorBundle(
 ): Promise<ProjectileEditorEntityBundle> {
   const record = await querySessionEntity(sessionId, 'projectile', id, signal);
   const projectile = record ? cloneQuerySnapshot<EntityData>(record) : null;
-  const info = projectile ?? (await queryEditorEditInfo(sessionId, 'projectile', id, signal));
+  const info = projectile ?? (await querySessionEntityEditTarget(sessionId, 'projectile', id, signal));
   const spec = projectile ? requireRowData(projectile.data, `弹体 ${id} 数据无效`) : createProjectileSpec(id);
   return {
     kind: 'projectile',
@@ -245,7 +245,7 @@ async function queryProjectileEditorBundle(
 async function querySystemEditorBundle(sessionId: ProjectSessionId, id: string, signal?: AbortSignal): Promise<SystemEditorEntityBundle> {
   const record = await querySessionEntity(sessionId, 'system', id, signal);
   const system = record ? cloneQuerySnapshot<EntityData>(record) : null;
-  const info = system ?? (await queryEditorEditInfo(sessionId, 'system', id, signal));
+  const info = system ?? (await querySessionEntityEditTarget(sessionId, 'system', id, signal));
   return {
     kind: 'system',
     target: info.target,
@@ -278,9 +278,8 @@ export function queryEditorIdentityIntent(sessionId: string, source: EntityEditT
   );
 }
 export function queryEditorEditInfo(sessionId: string, kind: EntityEditTarget['kind'], id: string, signal?: AbortSignal) {
-  return querySessionEntityEditTarget(sessionId, kind, id, signal).then((info) => cloneQuerySnapshot<EntityEditInfo>(info));
+  return querySessionEntityEditTarget(sessionId, kind, id, signal);
 }
-
 export async function loadImportedSpecFile(kind: EditorSpecKind, path: string): Promise<RowData> {
   return loadImportedEditorSpecFile(kind, path);
 }

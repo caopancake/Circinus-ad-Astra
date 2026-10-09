@@ -63,6 +63,12 @@ export function useEditorWindowViewModel(params: {
   const editorData = ref<EditorEntityBundle | null>(null);
   const feedback = useAppFeedback();
   const reads = createQueryReadOwner();
+  let imageRequestId = 0;
+  let editorDataRequestId = 0;
+  let derivedDataRequestId = 0;
+  let projectileReadId = 0;
+  let projectileOptionsReadId = 0;
+  let previewResourceReadId = 0;
   let identityPreparation: Awaited<ReturnType<typeof createEntitySavePreparation>> | null = null;
   const draftSession: EditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }> =
     useEditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }>({
@@ -173,12 +179,6 @@ export function useEditorWindowViewModel(params: {
   let stopSessionInvalidated: UnlistenFn | null = null;
   let stopQueryInvalidation: (() => void) | null = null;
   let stopResourceInvalidation: (() => void) | null = null;
-  let editorDataRequestId = 0;
-  let derivedDataRequestId = 0;
-  let projectileReadId = 0;
-  let projectileOptionsReadId = 0;
-  let previewResourceReadId = 0;
-  let imageRequestId = 0;
   let disposed = false;
   const relatedCommitIds = new Map<string, number>();
   const resourceRevision = ref(0);
@@ -218,7 +218,9 @@ export function useEditorWindowViewModel(params: {
     const draft = deepClone(draftSession.draftValue.value);
     editorData.value = clearBundleImages(editorData.value);
     try {
-      const images = await reads.read('images', (signal) => queryDraftEditorImages(target.sessionId, kind, target.id, draft, signal));
+      const images = await reads.read('images', { sessionId: target.sessionId, kind, id: target.id, draftKey: key }, (signal) =>
+        queryDraftEditorImages(target.sessionId, kind, target.id, draft, signal),
+      );
       if (
         disposed ||
         requestId !== imageRequestId ||
@@ -291,7 +293,7 @@ export function useEditorWindowViewModel(params: {
             : await draftSession.refreshTarget(target)
           : {
               meta: {
-                bundle: await reads.read('preview', (signal) =>
+                bundle: await reads.read('preview', { sessionId: target.sessionId, kind: params.kind, id: target.id }, (signal) =>
                   queryEditorEntityBundle(target.sessionId, params.kind, target.id, previewDraftSnapshot ?? undefined, signal),
                 ),
               },
@@ -439,9 +441,6 @@ export function useEditorWindowViewModel(params: {
     unlistenIdentity?.();
     unlistenIdentity = null;
     unregisterSave();
-    imageRequestId++;
-    editorDataRequestId++;
-    derivedDataRequestId++;
     unlistenPreviewDraftUpdated?.();
     unlistenPreviewDraftUpdated = null;
     unlistenEditorSpecSaved?.();
@@ -493,8 +492,6 @@ export function useEditorWindowViewModel(params: {
       await retargetEntityWindow(target.sessionId, target.modRoot, target.kind, change.after.id);
       currentId.value = change.after.id;
       previewDraftSnapshot = snapshot ?? null;
-      editorDataRequestId++;
-      derivedDataRequestId++;
       applyLoadedEditorData(data);
       return;
     }
@@ -550,7 +547,6 @@ export function useEditorWindowViewModel(params: {
 
   function applySavedSpec(kind: EditorSpecKind, id: string, data: RowData) {
     if (!editorData.value) return;
-    projectileReadId++;
     const spec = deepClone(data);
     editorData.value = applySavedSpecToBundle(editorData.value, kind, id, spec);
   }
@@ -570,7 +566,7 @@ export function useEditorWindowViewModel(params: {
     const target = editorWindowTarget();
     if (!target || event.sessionId !== target.sessionId) return;
     if (event.scope === 'session') {
-      reads.revoke();
+      reads.revoke('session');
       return;
     }
     if (hasPrimaryDetailInvalidation(event, params.kind, target.id)) {
@@ -592,7 +588,6 @@ export function useEditorWindowViewModel(params: {
     const target = editorWindowTarget();
     if (!target || event.sessionId !== target.sessionId) return;
     if (event.scope === 'session') {
-      reads.revoke();
       return;
     }
     if (params.kind === 'ship' || params.kind === 'weapon') {
@@ -622,22 +617,23 @@ export function useEditorWindowViewModel(params: {
     const specTicket = options.projectileSpecs ? ++projectileReadId : null;
     const optionsTicket = options.projectileOptions ? ++projectileOptionsReadId : null;
     const resourceTicket = options.resources ? ++previewResourceReadId : null;
-    function acceptsSpec() {
-      return specTicket !== null && specTicket === projectileReadId && reference === bundleReferenceKey(editorData.value);
-    }
-    function acceptsOptions() {
-      return optionsTicket !== null && optionsTicket === projectileOptionsReadId;
-    }
-    function acceptsResources() {
-      return resourceTicket !== null && resourceTicket === previewResourceReadId && reference === bundleReferenceKey(editorData.value);
-    }
+    const acceptsSpec = () => specTicket !== null && specTicket === projectileReadId;
+    const acceptsOptions = () => optionsTicket !== null && optionsTicket === projectileOptionsReadId;
+    const acceptsResources = () =>
+      resourceTicket !== null && resourceTicket === previewResourceReadId && reference === bundleReferenceKey(editorData.value);
     try {
       const projectileRefreshed =
         options.projectileSpecs || options.projectileOptions
-          ? await reads.read('projectiles', (signal) => refreshBundleProjectiles(target.sessionId, bundle, options, signal))
+          ? await reads.read(
+              options.projectileOptions && !options.projectileSpecs ? 'projectile-options' : 'projectiles',
+              { sessionId: target.sessionId, target: target.id, reference },
+              (signal) => refreshBundleProjectiles(target.sessionId, bundle, options, signal),
+            )
           : bundle;
       const refreshed = options.resources
-        ? await reads.read('resources', (signal) => refreshBundleResources(target.sessionId, projectileRefreshed, signal))
+        ? await reads.read('resources', { sessionId: target.sessionId, target: target.id, reference }, (signal) =>
+            refreshBundleResources(target.sessionId, projectileRefreshed, signal),
+          )
         : projectileRefreshed;
       if (disposed || epoch !== derivedDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
       const current = editorData.value;
@@ -713,7 +709,6 @@ export function useEditorWindowViewModel(params: {
         ? { ...projected, projectileOptions: editorData.value.projectileOptions }
         : projected;
     resourceRevision.value++;
-    refreshDraftProjectiles();
     refreshDraftProjectiles();
   }
 

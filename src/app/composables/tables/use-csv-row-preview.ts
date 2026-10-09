@@ -15,17 +15,15 @@ export function useCsvRowPreview(options: {
   const reads = useQueryReadOwner();
   const feedback = useAppFeedback();
   const key = computed(() => JSON.stringify(options.target()));
-  let sequence = 0;
   async function load() {
     const target = options.target();
     const captured = key.value;
-    const request = ++sequence;
     if (!target) return;
     try {
-      const value = await reads.read('preview', (signal) => options.query(target, signal));
-      if (request === sequence && captured === key.value) src.value = value;
+      const value = await reads.read('preview', target, (signal) => options.query(target, signal));
+      if (captured === key.value) src.value = value;
     } catch (error) {
-      if (request === sequence && captured === key.value && !isReadInvalidated(error)) feedback.error(error, '加载行预览失败');
+      if (captured === key.value && !isReadInvalidated(error)) feedback.error(error, '加载行预览失败');
     }
   }
   watch(
@@ -41,7 +39,6 @@ export function useCsvRowPreview(options: {
     if (event.sessionId !== options.target()?.sessionId) return;
     if (event.scope === 'session') {
       reads.revoke();
-      sequence++;
       return;
     }
     if (hasQueryInvalidation(event, 'csv-row-preview'))
@@ -53,7 +50,6 @@ export function useCsvRowPreview(options: {
     if (event.sessionId !== options.target()?.sessionId) return;
     if (event.scope === 'session') {
       reads.revoke();
-      sequence++;
       return;
     }
     reads.schedule('preview', () => {
@@ -61,7 +57,6 @@ export function useCsvRowPreview(options: {
     });
   });
   onScopeDispose(() => {
-    sequence++;
     stopQuery();
     stopResource();
   });

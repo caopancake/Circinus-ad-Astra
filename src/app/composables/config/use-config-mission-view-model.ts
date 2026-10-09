@@ -46,7 +46,6 @@ export function useConfigMissionViewModel() {
         : null,
     read: getConfigMissionEditorData,
     accept: (record, id) => {
-      missionsRequestId++;
       replaceMissionRow(identity.handoff.value!.sourceId, record.list);
       missionVersions.value = { ...missionVersions.value, [id]: record.baseVersions };
       selectedMission.value = id;
@@ -54,7 +53,6 @@ export function useConfigMissionViewModel() {
     },
   });
   const missionItems = computed(() => missionItemsFromRows(missionRows.value));
-  let missionsRequestId = 0;
   const savingSessions = new Set<string>();
   let listSessionKey: string | null = null;
   let disposed = false;
@@ -77,7 +75,6 @@ export function useConfigMissionViewModel() {
   }
 
   async function queryMissions() {
-    const requestId = ++missionsRequestId;
     const activeSessionId = sessionId.value;
     const key = sessionKey();
     if (key !== listSessionKey) {
@@ -92,8 +89,10 @@ export function useConfigMissionViewModel() {
     if (!activeSessionId || disposed) return false;
     listLoadStartedAt.value = performance.now();
     try {
-      const records = await reads.read('list', (signal) => listConfigMissionRecords(activeSessionId, signal));
-      if (disposed || requestId !== missionsRequestId || key !== sessionKey()) return false;
+      const records = await reads.read('list', { sessionId: activeSessionId, kind: 'mission' }, (signal) =>
+        listConfigMissionRecords(activeSessionId, signal),
+      );
+      if (disposed || key !== sessionKey()) return false;
       missionRows.value = records.map((record) => record.list);
       missionVersions.value = Object.fromEntries(records.map((record) => [record.id, record.baseVersions]));
       missionIconRefs.value = Object.fromEntries(records.map((record) => [record.id, record.iconRef]));
@@ -101,7 +100,7 @@ export function useConfigMissionViewModel() {
       normalizeSelectedMission();
       return true;
     } catch (error) {
-      if (disposed || requestId !== missionsRequestId || key !== sessionKey() || isReadInvalidated(error)) return false;
+      if (disposed || key !== sessionKey() || isReadInvalidated(error)) return false;
       feedback.error(error, '加载战役失败');
       return false;
     }
@@ -138,7 +137,6 @@ export function useConfigMissionViewModel() {
       changesTarget: true,
       label: `战役 "${id}" 已创建`,
       write: async () => {
-        missionsRequestId++;
         const saved = await createIndexedEntityAction({
           baseVersions: [],
           sessionId: createSessionId,
@@ -201,7 +199,6 @@ export function useConfigMissionViewModel() {
     baseVersions: import('@/shared/types').FileVersion[],
   ) {
     savingSessions.add(activeSessionId);
-    missionsRequestId++;
     let saved;
     try {
       saved = await saveIndexedEntityAction(
@@ -222,7 +219,6 @@ export function useConfigMissionViewModel() {
         feedback,
       );
     } finally {
-      missionsRequestId++;
       savingSessions.delete(activeSessionId);
     }
     if (!saved) return null;
@@ -238,7 +234,6 @@ export function useConfigMissionViewModel() {
       changesTarget: selectedMission.value === id,
       label: `战役 "${id}" 已删除`,
       write: () => {
-        missionsRequestId++;
         return deleteIndexedEntityAction(deleteSessionId, deleteModRoot, 'mission', id, deleteDirectory, missionVersions.value[id]!);
       },
       accept: async () => {
@@ -279,7 +274,6 @@ export function useConfigMissionViewModel() {
   });
   onUnmounted(() => {
     disposed = true;
-    missionsRequestId++;
     stopQueryInvalidation();
     stopResourceInvalidation();
   });

@@ -27,8 +27,6 @@ export function useCsvTableViewModel() {
   const loadedWindowKeys = ref(new Set<string>());
   const loadedSourceOptions = ref(new Map<string, SelectOption[]>());
   const columnWidthOverrides = ref<Record<string, number>>({});
-  let windowRequestId = 0;
-  let sourceOptionsRequestId = 0;
   let lastWidthTarget = '';
   let disposed = false;
   let refreshAfterSave = false;
@@ -91,7 +89,6 @@ export function useCsvTableViewModel() {
     async () => {
       const captured = target.value;
       const identity = targetKey.value;
-      windowRequestId += 1;
       clearLocalQueryState();
       if (!captured) {
         lockedColumnWidths.value = {};
@@ -161,7 +158,6 @@ export function useCsvTableViewModel() {
   watch(
     () => tables.saving || tables.currentTableLocked,
     (saving) => {
-      windowRequestId++;
       loadedWindowKeys.value = new Set();
       if (saving) {
         refreshAfterSave = true;
@@ -183,8 +179,6 @@ export function useCsvTableViewModel() {
   });
   onUnmounted(() => {
     disposed = true;
-    windowRequestId++;
-    sourceOptionsRequestId++;
     stopQueryInvalidation();
     stopResourceInvalidation();
   });
@@ -198,7 +192,6 @@ export function useCsvTableViewModel() {
   async function reloadCurrentTableWindow() {
     const captured = target.value!;
     const identity = targetKey.value;
-    windowRequestId += 1;
     clearLocalQueryState();
     tables.discardTableDraftForReload(captured);
     await loadTableWindow(0, 240);
@@ -247,14 +240,13 @@ export function useCsvTableViewModel() {
     const searchText = tables.searchText;
     const faction = tables.currentFaction;
     const factionOptionValue = tables.currentFactionOptionValue;
-    const requestId = windowRequestId;
     const alignedStart = Math.max(0, Math.floor(start / 80) * 80);
     const windowCount = Math.max(160, Math.ceil(count / 80) * 80);
     const key = stableStringify([sessionId, table, searchText, factionOptionValue, alignedStart, windowCount, generation]);
     if (loadedWindowKeys.value.has(key)) return;
     loadedWindowKeys.value.add(key);
     try {
-      const window = await reads.read(`window:${key}`, (signal) =>
+      const window = await reads.read(`window:${key}`, { sessionId, modRoot, table, key }, (signal) =>
         queryTableWindow(sessionId, table, alignedStart, windowCount, searchText, faction, signal),
       );
       if (tables.saving || tables.currentTableLocked) {
@@ -266,7 +258,6 @@ export function useCsvTableViewModel() {
         identity !== targetKey.value ||
         generation !== tables.tableReadGeneration(modRoot, table) ||
         tableState !== tables.getModTableState(modRoot) ||
-        requestId !== windowRequestId ||
         sessionId !== project.activeSessionId ||
         table !== tables.currentTab ||
         searchText !== tables.searchText ||
@@ -282,7 +273,6 @@ export function useCsvTableViewModel() {
         disposed ||
         identity !== targetKey.value ||
         generation !== tables.tableReadGeneration(modRoot, table) ||
-        requestId !== windowRequestId ||
         sessionId !== project.activeSessionId
       )
         return;
@@ -294,13 +284,14 @@ export function useCsvTableViewModel() {
   async function reloadVisibleSourceOptions() {
     const sessionId = project.activeSessionId;
     if (!sessionId) return;
-    const requestId = ++sourceOptionsRequestId;
     const table = tables.currentTab;
     const sources = [...visibleSourceIds()];
     try {
       const entries = await Promise.all(
         sources.map(async (source) => {
-          const groups = await reads.read(`source:${source}`, (signal) => querySourceOptionCatalog(sessionId, source, signal));
+          const groups = await reads.read(`source:${source}`, { sessionId, table, source }, (signal) =>
+            querySourceOptionCatalog(sessionId, source, signal),
+          );
           const options = groups.map((group) => ({
             type: 'group' as const,
             label: sourceGroupLabel(group.origin),
@@ -315,10 +306,10 @@ export function useCsvTableViewModel() {
           return [source, options] as const;
         }),
       );
-      if (disposed || requestId !== sourceOptionsRequestId || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
+      if (disposed || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
       loadedSourceOptions.value = new Map(entries);
     } catch (error) {
-      if (disposed || requestId !== sourceOptionsRequestId || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
+      if (disposed || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
       if (isReadInvalidated(error)) return;
       feedback.error(error, '加载来源选项失败');
     }

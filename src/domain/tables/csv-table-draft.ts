@@ -5,6 +5,7 @@ import type {
   CsvTableWindow,
   ModTableState,
   CsvDraftRow,
+  RowData,
   TableKey,
 } from '@/shared/types';
 import { cell, deepClone, rowDisplayId } from '@/shared/lib/starsector';
@@ -13,7 +14,6 @@ import { defaultCsvFactionId } from '@/domain/tables/csv-faction-filter';
 import { isLoadedCsvTableRow } from '@/domain/tables/csv-table-rows';
 import { createTableRowKey } from '@/domain/tables/table-row-key';
 import type { DeepReadonly } from '@/shared/types';
-import { cloneQuerySnapshot } from '@/shared/lib/query-snapshot';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
 
 export interface CsvDraftResult {
@@ -40,18 +40,17 @@ export function applyCsvTableWindowDraft(
   record: DeepReadonly<CsvTableWindow>,
   hasPendingInput = false,
 ): CsvDraftResult {
-  const window = cloneQuerySnapshot<CsvTableWindow>(record);
-  const table = window.table;
+  const table = record.table;
   if (hasCsvTableDraftChanges(state, table) || hasPendingInput) {
     const originalRows = new Map(state.originalTables[table].filter(isLoadedCsvTableRow).map((row) => [row.rowKey, row]));
     const sameBaseline =
-      stableDeepEqual(state.baseVersions[table], window.baseVersions) &&
-      window.rows.every((entry) => {
+      stableDeepEqual(state.baseVersions[table], record.baseVersions) &&
+      record.rows.every((entry) => {
         const original = originalRows.get(entry.rowKey);
         return original !== undefined && stableDeepEqual(original.data, entry.data);
       });
     if (sameBaseline) {
-      for (const entry of window.rows) {
+      for (const entry of record.rows) {
         const original = originalRows.get(entry.rowKey)!;
         original.factionId = entry.factionId;
         original.sourceRowIndex = entry.sourceRowIndex;
@@ -66,13 +65,19 @@ export function applyCsvTableWindowDraft(
     state.pendingExternalTableUpdates[table] = true;
     return { changed: false, externalUpdateMarked: true };
   }
-  state.headers[table] = [...window.header];
-  state.baseVersions[table] = window.baseVersions;
-  state.totalRows[table] = window.totalRows;
-  state.filteredRows[table] = window.filteredRows;
-  const rows: CsvDraftRow[] = window.rows.map((entry) => ({ ...deepClone(entry), insertAt: null }));
-  state.tables[table] = mergeWindowRows(state.tables[table], rows, window.start, window.filteredRows);
-  state.originalTables[table] = mergeWindowRows(state.originalTables[table], deepClone(rows), window.start, window.filteredRows);
+  state.headers[table] = [...record.header];
+  state.baseVersions[table] = [...record.baseVersions];
+  state.totalRows[table] = record.totalRows;
+  state.filteredRows[table] = record.filteredRows;
+  const rows: CsvDraftRow[] = record.rows.map((entry) => ({
+    rowKey: entry.rowKey,
+    data: deepClone(entry.data) as RowData,
+    factionId: entry.factionId,
+    sourceRowIndex: entry.sourceRowIndex,
+    insertAt: null,
+  }));
+  state.tables[table] = mergeWindowRows(state.tables[table], rows, record.start, record.filteredRows);
+  state.originalTables[table] = mergeWindowRows(state.originalTables[table], deepClone(rows), record.start, record.filteredRows);
   return { changed: true };
 }
 

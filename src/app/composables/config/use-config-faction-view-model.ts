@@ -49,7 +49,6 @@ export function useConfigFactionViewModel() {
       ? { ...factionVersions.value, [heldFaction.value.id]: heldFaction.value.baseVersions }
       : factionVersions.value,
   );
-  let factionsRequestId = 0;
   const savingSessions = new Set<string>();
   let listSessionKey: string | null = null;
   let disposed = false;
@@ -60,7 +59,6 @@ export function useConfigFactionViewModel() {
         : null,
     read: getConfigFactionRecord,
     accept: (record, id) => {
-      factionsRequestId++;
       const next = { ...factions.value };
       delete next[identity.handoff.value!.sourceId];
       next[id] = record.data;
@@ -76,7 +74,6 @@ export function useConfigFactionViewModel() {
   }
 
   async function loadFactions(options: { reloadEditorData: boolean } = { reloadEditorData: true }) {
-    const requestId = ++factionsRequestId;
     const sessionId = project.activeSessionId;
     const key = sessionKey();
     if (key !== listSessionKey) {
@@ -92,8 +89,8 @@ export function useConfigFactionViewModel() {
     if (!sessionId || disposed) return false;
     listLoadStartedAt.value = performance.now();
     try {
-      const records = await reads.read('list', (signal) => listConfigFactionRecords(sessionId, signal));
-      if (disposed || requestId !== factionsRequestId || key !== sessionKey()) return false;
+      const records = await reads.read('list', { sessionId, kind: 'faction' }, (signal) => listConfigFactionRecords(sessionId, signal));
+      if (disposed || key !== sessionKey()) return false;
       const selected = selectedFaction.value;
       const held = selected ? factions.value[selected] : null;
       const heldVersions = selected ? factionVersions.value[selected] : [];
@@ -109,7 +106,7 @@ export function useConfigFactionViewModel() {
       if (options.reloadEditorData) factionDataRevision.value += 1;
       return true;
     } catch (error) {
-      if (disposed || requestId !== factionsRequestId || key !== sessionKey() || isReadInvalidated(error)) return false;
+      if (disposed || key !== sessionKey() || isReadInvalidated(error)) return false;
       feedback.error(error, '加载势力失败');
       return false;
     }
@@ -142,7 +139,6 @@ export function useConfigFactionViewModel() {
       changesTarget: true,
       label: `势力 "${id}" 已创建`,
       write: async () => {
-        factionsRequestId++;
         const saved = await createIndexedEntityAction({
           baseVersions: [],
           sessionId: createSessionId,
@@ -182,7 +178,6 @@ export function useConfigFactionViewModel() {
       return null;
     }
     savingSessions.add(saveSessionId);
-    factionsRequestId++;
     let saved;
     try {
       saved = await saveIndexedEntityAction(
@@ -199,7 +194,6 @@ export function useConfigFactionViewModel() {
         feedback,
       );
     } finally {
-      factionsRequestId++;
       savingSessions.delete(saveSessionId);
     }
     if (!saved) return null;
@@ -215,7 +209,6 @@ export function useConfigFactionViewModel() {
       changesTarget: selectedFaction.value === id,
       label: `势力 "${id}" 已删除`,
       write: () => {
-        factionsRequestId++;
         return deleteIndexedEntityAction(deleteSessionId, deleteModRoot, 'faction', id, deleteFile, factionVersions.value[id]!);
       },
       accept: async () => {
@@ -248,7 +241,6 @@ export function useConfigFactionViewModel() {
   });
   onUnmounted(() => {
     disposed = true;
-    factionsRequestId++;
     stopQueryInvalidation();
     stopResourceInvalidation();
   });

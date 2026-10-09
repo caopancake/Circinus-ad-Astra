@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createReadRequest, createQueryReadOwner, waitForRead } from './read-request';
+import { createReadTicket, createQueryReadOwner, waitForRead } from './read-request';
 
 describe('read request ownership', () => {
   it('coalesces reload intents and releases scheduled work with its owner', async () => {
@@ -18,14 +18,14 @@ describe('read request ownership', () => {
   });
 
   it('revokes acceptance after transport resolution before consumer publication', async () => {
-    const request = createReadRequest({ sessionId: 'a' }, async () => 7);
+    const request = createReadTicket({ sessionId: 'a' }, async () => 7);
     await request.promise;
     request.invalidate('project');
     expect(() => request.accept()).toThrow(expect.objectContaining({ code: 'query.invalidated' }));
   });
   it('ends invalidated waits before the transport completes', async () => {
     let finish!: (value: number) => void;
-    const request = createReadRequest(
+    const request = createReadTicket(
       { sessionId: 'a' },
       () =>
         new Promise<number>((resolve) => {
@@ -40,7 +40,7 @@ describe('read request ownership', () => {
 
   it('consumer release preserves another consumer of the same transport', async () => {
     let finish!: (value: number) => void;
-    const request = createReadRequest(
+    const request = createReadTicket(
       { sessionId: 'a' },
       () =>
         new Promise<number>((resolve) => {

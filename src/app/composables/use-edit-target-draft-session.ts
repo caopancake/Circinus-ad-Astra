@@ -4,7 +4,7 @@ import { useDraftSession, type DraftSessionOptions } from '@/app/composables/use
 import { deepClone } from '@/shared/lib/starsector';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
 import { withCause } from '@/shared/lib/errors';
-import { isReadInvalidated } from '@/shared/runtime/read-request';
+import { createQueryReadOwner, isReadInvalidated } from '@/shared/runtime/read-request';
 import type { EditContext, FileVersion } from '@/shared/types';
 
 type MaybePromise<T> = T | Promise<T>;
@@ -84,27 +84,25 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
   const context = shallowRef<EditContext | null>(null);
   const savedSnapshot = shallowRef<Snapshot | null>(null);
   const pendingSynchronization = shallowRef<Snapshot | null>(null);
+  const reads = createQueryReadOwner();
   const loading = ref(false);
   const saving = ref(false);
   const baselineSnapshot = computed(() => session.baseValue.value);
   const pendingSnapshot = computed(() => session.pendingExternalValue.value);
   const ready = computed(() => baselineSnapshot.value !== null && sameTarget(baselineSnapshot.value.target));
-  const dirty = computed(() => session.dirty.value || inputs.dirty.value);
+  let pendingDraftBeforeLoad: TValue | null = null;
+  const dirty = computed(() => session.dirty.value || inputs.dirty.value || pendingDraftBeforeLoad !== null);
   let disposed = false;
   let lifetime = 0;
-  let epoch = 0;
-  let readSequence = 0;
   let baselineGeneration = 0;
   let lastCommitId = -1;
   let pendingSave: Promise<Snapshot | null> | null = null;
   let refreshQueued = false;
-  let readController: AbortController | null = null;
+  let activeReadIdentity: object | null = null;
 
   function revokeReads() {
-    readController?.abort();
-    readController = null;
-    epoch++;
-    readSequence++;
+    reads.revoke('consumer');
+    activeReadIdentity = null;
     loading.value = false;
   }
 
@@ -116,7 +114,11 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
   }
   function setDraft(value: TValue) {
     const baseline = baselineSnapshot.value;
-    if (!baseline) return;
+    if (!baseline) {
+      pendingDraftBeforeLoad = clone(value);
+      return;
+    }
+    pendingDraftBeforeLoad = null;
     revokeReads();
     session.setDraft({ ...baseline, value: clone(value) });
   }
@@ -125,13 +127,17 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
     set: setDraft,
   });
 
-  function loadBaseForTarget(snapshot: Snapshot) {
+  function loadBaseForTarget(snapshot: Snapshot, revoke = true) {
     if (!sameTarget(snapshot.target)) lastCommitId = -1;
     lastCommitId = Math.max(lastCommitId, snapshot.commitId ?? -1);
-    revokeReads();
+    if (revoke) revokeReads();
     currentTarget.value = snapshot.target;
     currentTargetKey.value = options.targetKey(snapshot.target);
     session.loadBase(copy(snapshot));
+    if (pendingDraftBeforeLoad !== null) {
+      session.setDraft({ ...copy(snapshot), value: clone(pendingDraftBeforeLoad) });
+      pendingDraftBeforeLoad = null;
+    }
     inputs.cancel();
     publishContext('load');
   }
@@ -194,42 +200,41 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
       lastCommitId = -1;
       revokeReads();
       session.clear(null);
+      pendingDraftBeforeLoad = null;
       inputs.cancel();
       currentTarget.value = target;
       currentTargetKey.value = key;
     }
-    const ticket = { lifetime, epoch, sequence: ++readSequence, key };
-    readController?.abort();
-    const controller = new AbortController();
-    readController = controller;
+    const identity = { targetKey: key, lifetime };
+    activeReadIdentity = identity;
     loading.value = true;
+    let acceptedSynchronously = false;
     try {
-      const snapshot = await options.load(target, controller.signal);
-      if (
-        disposed ||
-        ticket.lifetime !== lifetime ||
-        ticket.epoch !== epoch ||
-        ticket.sequence !== readSequence ||
-        key !== currentTargetKey.value
-      )
-        return null;
+      const snapshot = await reads.read(
+        'target',
+        identity,
+        (signal) => options.load(target, signal),
+        (readySnapshot) => {
+          if (!disposed && mode === 'load' && key === currentTargetKey.value) {
+            acceptedSynchronously = true;
+            loadBaseForTarget(readySnapshot, false);
+          }
+        },
+      );
+      if (disposed || key !== currentTargetKey.value) return null;
+      if (acceptedSynchronously) return copy(snapshot);
       if (mode === 'load') loadBaseForTarget(snapshot);
       else if (applyExternalForTarget(snapshot, fromSaveRefresh) !== 'baseline') return null;
       return copy(snapshot);
     } catch (error) {
       if (isReadInvalidated(error)) return null;
-      if (
-        disposed ||
-        ticket.lifetime !== lifetime ||
-        ticket.epoch !== epoch ||
-        ticket.sequence !== readSequence ||
-        key !== currentTargetKey.value
-      )
-        return null;
+      if (disposed || key !== currentTargetKey.value) return null;
       throw error;
     } finally {
-      if (readController === controller) readController = null;
-      if (ticket.lifetime === lifetime && ticket.sequence === readSequence) loading.value = false;
+      if (activeReadIdentity === identity) {
+        activeReadIdentity = null;
+        loading.value = false;
+      }
     }
   }
   function loadTarget(target: TTarget) {
@@ -337,16 +342,17 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
   }
   function resetDraft() {
     revokeReads();
+    pendingDraftBeforeLoad = null;
     session.resetDraft();
     inputs.cancel();
     publishContext('reset');
   }
   function clearTarget() {
     pendingSynchronization.value = null;
+    pendingDraftBeforeLoad = null;
     lastCommitId = -1;
     lifetime++;
     revokeReads();
-    readSequence++;
     currentTarget.value = null;
     currentTargetKey.value = null;
     context.value = null;

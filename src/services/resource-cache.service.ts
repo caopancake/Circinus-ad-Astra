@@ -11,7 +11,7 @@ import {
   touchMediaBudgetEntry,
   WEBVIEW_MEDIA_BUDGET_BYTES,
 } from '@/shared/runtime/media-budget';
-import { createReadRequest, waitForRead, invalidatedRead, type ReadRequest } from '@/shared/runtime/read-request';
+import { createReadTicket, waitForRead, invalidatedRead, type ReadTicket } from '@/shared/runtime/read-request';
 import type {
   ProjectInvalidation,
   ProjectSessionId,
@@ -30,7 +30,7 @@ interface CachedResourceDataUrl {
 
 interface PendingResource {
   promise: Promise<string | null>;
-  request: ReadRequest<string | null>;
+  request: ReadTicket<string | null>;
   relPath: string;
   resource: ResourceRef;
   sessionId: ProjectSessionId;
@@ -176,7 +176,7 @@ function loadMissingResources(
     },
   );
   return missing.map((entry, index) => {
-    const request = createReadRequest({ sessionId, resource: entry.resource }, () => batch.then((entries) => entries[index]!.dataUrl));
+    const request = createReadTicket({ sessionId, resource: entry.resource }, () => batch.then((entries) => entries[index]!.dataUrl));
     const promise = request.promise
       .then((value) => {
         request.accept();

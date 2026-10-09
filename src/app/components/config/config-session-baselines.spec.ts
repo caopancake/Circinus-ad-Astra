@@ -63,7 +63,7 @@ vi.mock('@/orchestrators/config-save.orchestrator', () => ({
   deleteIndexedEntityAction: vi.fn(),
 }));
 vi.mock('@/services/hull-reference.service', () => ({
-  queryHullPreviewMetadata: async () => ({}),
+  querySessionHullReferences: async () => ({ hullNames: {} }),
   queryHullReferenceOptions: async () => [],
   queryBuiltInWeaponSlotOptions: async () => [],
 }));

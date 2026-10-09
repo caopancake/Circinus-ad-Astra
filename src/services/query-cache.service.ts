@@ -3,7 +3,7 @@ import { requireProjectionReady } from '@/shared/runtime/project-projection';
 import { createRuntimeCache, type RuntimeCache } from '@/shared/runtime/cache';
 import { stableStringify } from '@/shared/lib/stable-compare';
 import { deepClone } from '@/shared/lib/starsector';
-import { createReadRequest, waitForRead, invalidatedRead, type ReadRequest } from '@/shared/runtime/read-request';
+import { createReadTicket, waitForRead, invalidatedRead, type ReadTicket } from '@/shared/runtime/read-request';
 import type { QueryCacheKind, QueryIdentity, QueryKind, QueryValue } from '@/shared/types';
 import type { EntityKind, InvalidatedQueryScope, ProjectInvalidation } from '@/shared/types';
 
@@ -14,7 +14,7 @@ interface QueryCacheEntry {
 
 interface PendingQueryEntry {
   identity: QueryIdentity;
-  request: ReadRequest<unknown>;
+  request: ReadTicket<unknown>;
   promise: Promise<unknown>;
 }
 
@@ -72,7 +72,7 @@ export async function queryCached<K extends QueryCacheKind>(
     recordPerformance('frontend.queryCache', performance.now() - startedAt, { queryKind, hit: true, pending: true });
     return waitForRead(pendingQuery.promise.then(queryValue<K>), identity, signal);
   }
-  const request = createReadRequest(identity, loader);
+  const request = createReadTicket(identity, () => loader());
   const completed = request.promise
     .then((value) => {
       request.accept();
@@ -97,7 +97,7 @@ export async function queryLive<K extends QueryKind>(
   const identity = deepClone(input);
   if (signal?.aborted) throw invalidatedRead(identity, 'consumer');
   requireProjectionReady(identity.sessionId);
-  const request = createReadRequest(identity, loader);
+  const request = createReadTicket(identity, () => loader());
   const entry: PendingQueryEntry = { identity, request, promise: request.promise };
   liveQueries.add(entry);
   const completed = request.promise

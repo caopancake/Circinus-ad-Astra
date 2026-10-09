@@ -41,13 +41,9 @@ export function useConfigMissionEditorViewModel(params: {
 
   const loadedMissionId = ref<string | null>(null);
   const iconSrc = ref('');
-  let editorRequestId = 0;
-  let iconRequestId = 0;
   let disposed = false;
   onScopeDispose(() => {
     disposed = true;
-    editorRequestId++;
-    iconRequestId++;
   });
   const draftSession = useConfigEditorDraftSession<RowData, ConfigEditTarget, { id: string; iconSrc: string; receipt: WriteResult | null }>(
     {
@@ -136,7 +132,6 @@ export function useConfigMissionEditorViewModel(params: {
   );
 
   async function loadConfigMissionEditor() {
-    const requestId = ++editorRequestId;
     const missionId = params.missionId.value;
     const targetSessionId = params.sessionId.value;
     if (!targetSessionId || !missionId) {
@@ -171,34 +166,30 @@ export function useConfigMissionEditorViewModel(params: {
       const snapshot = targetChanged
         ? await draftSession.loadTarget(editTarget(missionId))
         : await draftSession.refreshTarget(editTarget(missionId));
-      if (requestId !== editorRequestId || targetSessionId !== params.sessionId.value || missionId !== params.missionId.value) return;
+      if (targetSessionId !== params.sessionId.value || missionId !== params.missionId.value) return;
       const data = snapshot?.meta ?? null;
       if (!data) return;
       loadedMissionId.value = data.id;
       iconSrc.value = data.iconSrc;
     } catch (error) {
-      if (disposed || requestId !== editorRequestId || targetSessionId !== params.sessionId.value || missionId !== params.missionId.value)
-        return;
+      if (disposed || targetSessionId !== params.sessionId.value || missionId !== params.missionId.value) return;
       feedback.error(error, '加载战役失败');
     }
   }
 
   async function refreshMissionIcon() {
-    const requestId = ++iconRequestId;
     iconSrc.value = '';
     const missionId = loadedMissionId.value;
     const targetSessionId = params.sessionId.value;
     if (!params.modRoot.value || !targetSessionId || !missionId) return;
     try {
-      const icon = await reads.read('icon', (signal) =>
+      const icon = await reads.read('icon', { sessionId: targetSessionId, missionId }, (signal) =>
         params.queryMissionIcon(targetSessionId, missionId, deepClone(draftData.value), signal),
       );
-      if (disposed || requestId !== iconRequestId || targetSessionId !== params.sessionId.value || missionId !== loadedMissionId.value)
-        return;
+      if (disposed || targetSessionId !== params.sessionId.value || missionId !== loadedMissionId.value) return;
       iconSrc.value = icon;
     } catch (error) {
-      if (disposed || requestId !== iconRequestId || targetSessionId !== params.sessionId.value || missionId !== loadedMissionId.value)
-        return;
+      if (disposed || targetSessionId !== params.sessionId.value || missionId !== loadedMissionId.value) return;
       if (isReadInvalidated(error)) return;
       feedback.error(error, '刷新战役图标失败');
     }
@@ -211,6 +202,8 @@ export function useConfigMissionEditorViewModel(params: {
       return;
     }
     try {
+      if (!draftSession.ready.value && params.sessionId.value && params.modRoot.value && params.missionId.value)
+        await draftSession.loadTarget(editTarget(params.missionId.value));
       await draftSession.saveDraft();
     } catch (error) {
       feedback.error(error, '保存战役失败');

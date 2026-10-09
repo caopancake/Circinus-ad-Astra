@@ -31,6 +31,7 @@ import type {
 } from '@/shared/types';
 import type { AssociatedSpecCandidate } from '@/domain/tables/associated-spec-candidates';
 import { deepClone } from '@/shared/lib/starsector';
+import { cloneQuerySnapshot } from '@/shared/lib/query-snapshot';
 
 export async function retargetEntityWindow(sessionId: string, modRoot: string, kind: EditorWindowKind, id: string) {
   const identity: WindowIdentity = { type: 'spec', sessionId, modRoot, kind, id };
@@ -183,7 +184,7 @@ export async function listenEntityTablePreparation(
                   )
                 : null;
             const source = identity?.after ?? request.source;
-            const info = await queryEditorEditInfo(request.sessionId, source.kind, source.id);
+            const info = cloneQuerySnapshot<EntityEditInfo>(await queryEditorEditInfo(request.sessionId, source.kind, source.id));
             if (info.target.id !== source.id || info.target.state !== source.state || info.target.write.path !== source.write.path) {
               throw new AppError('规格目标在表格准备期间发生变化，请接纳外部身份后重试', { action: 'prepare-entity-table' });
             }

@@ -99,11 +99,9 @@ export function useConfigFactionEditorViewModel(params: {
   });
   const logoSrc = ref('');
   const crestSrc = ref('');
-  let previewRequestId = 0;
   let disposed = false;
   onScopeDispose(() => {
     disposed = true;
-    previewRequestId++;
   });
 
   watch(
@@ -156,7 +154,6 @@ export function useConfigFactionEditorViewModel(params: {
   }
 
   async function refreshImagePreviews() {
-    const requestId = ++previewRequestId;
     logoSrc.value = '';
     crestSrc.value = '';
     const factionId = params.factionId.value;
@@ -167,15 +164,14 @@ export function useConfigFactionEditorViewModel(params: {
       return;
     }
     try {
-      const images = await reads.read('images', (signal) =>
+      const images = await reads.read('images', { sessionId, factionId }, (signal) =>
         params.queryPreviewImages(sessionId, factionId, deepClone(factionFile.value), signal),
       );
-      if (disposed || requestId !== previewRequestId || sessionId !== params.sessionId.value || factionId !== params.factionId.value)
-        return;
+      if (disposed || sessionId !== params.sessionId.value || factionId !== params.factionId.value) return;
       logoSrc.value = images.logoSrc;
       crestSrc.value = images.crestSrc;
     } catch (error) {
-      if (disposed || requestId !== previewRequestId || isReadInvalidated(error)) return;
+      if (disposed || isReadInvalidated(error)) return;
       feedback.error(error, '刷新势力预览失败');
     }
   }

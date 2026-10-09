@@ -44,13 +44,14 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
 
   function mediaRef(id: string, resource: ResourceRef | null | undefined) {
     const current = registered.get(id) ?? { element: null, resource: null, visible: false };
+    const previousResource = current.resource;
     const resourceChanged =
       current.resource === null
         ? resource !== null && resource !== undefined
         : resource === null || resource === undefined || !sameResourceRef(current.resource, resource);
     current.resource = resource ?? null;
     registered.set(id, current);
-    releaseInvisible();
+    if (resourceChanged && current.visible && previousResource) releaseResourceIfHidden(previousResource);
     if (resourceChanged && current.visible && current.resource) void ensureVisible([current.resource]);
     let callback = callbacks.get(id);
     if (!callback) {
@@ -92,9 +93,10 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
       observer?.unobserve(entry.element);
       elementEntries.delete(entry.element);
     }
+    const wasVisible = entry.visible;
     entry.element = nextElement;
     entry.visible = false;
-    releaseInvisible();
+    if (wasVisible && entry.resource) releaseResourceIfHidden(entry.resource);
     if (entry.element) {
       elementEntries.set(entry.element, entry);
       observer?.observe(entry.element);
@@ -121,7 +123,7 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
       entry.visible = false;
       if (entry.element) observer.observe(entry.element);
     }
-    releaseInvisible();
+    releaseResourcesIfHidden([...registered.values()].flatMap((entry) => (!entry.visible && entry.resource ? [entry.resource] : [])));
   }
 
   function handleIntersections(entries: IntersectionObserverEntry[]): void {
@@ -132,7 +134,12 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
       entry.visible = observed.isIntersecting;
       if (entry.visible && entry.resource) newlyVisible.push(entry.resource);
     }
-    releaseInvisible();
+    const hiddenResources: ResourceRef[] = [];
+    for (const observed of entries) {
+      const entry = elementEntries.get(observed.target);
+      if (entry && !entry.visible && entry.resource) hiddenResources.push(entry.resource);
+    }
+    releaseResourcesIfHidden(hiddenResources);
     if (newlyVisible.length > 0) void ensureVisible(newlyVisible);
   }
 
@@ -185,14 +192,24 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
     );
   }
 
-  function releaseInvisible() {
+  function releaseResourceIfHidden(resource: ResourceRef) {
+    releaseResourcesIfHidden([resource]);
+  }
+
+  function releaseResourcesIfHidden(resources: readonly ResourceRef[]) {
+    const sessionId = args.sessionId();
+    if (!sessionId) return;
     const visible = visibleKeys();
-    for (const key of uncached.keys()) if (!visible.has(key)) uncached.delete(key);
-    for (const [controller, keys] of reads)
-      if (!keys.some((key) => visible.has(key))) {
-        controller.abort();
-        reads.delete(controller);
-      }
+    const keys = new Set(resources.map((resource) => resourceCacheKey(sessionId, resource)));
+    for (const key of keys) {
+      if (visible.has(key)) continue;
+      uncached.delete(key);
+      for (const [controller, readKeys] of reads)
+        if (readKeys.includes(key) && !readKeys.some((readKey) => visible.has(readKey))) {
+          controller.abort();
+          reads.delete(controller);
+        }
+    }
   }
 
   const stopInvalidation = subscribeResourceMediaInvalidations((event) => {

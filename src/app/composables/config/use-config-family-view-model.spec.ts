@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   deleteSkinAction: vi.fn(),
   listVariantRecords: vi.fn(async (): Promise<Array<{ file: ConfigFamilyFile; spriteRef: null }>> => []),
   listSkinRecords: vi.fn(async (): Promise<Array<{ file: ConfigFamilyFile; spriteRef: null }>> => []),
-  queryHullPreviewMetadata: vi.fn(async () => ({})),
+  querySessionHullReferences: vi.fn(async () => ({ hullNames: {} })),
   queryHullReferenceOptions: vi.fn(async () => []),
   feedback: {
     success: vi.fn(),
@@ -47,7 +47,7 @@ vi.mock('@/services/config-entity.service', () => ({
 }));
 
 vi.mock('@/services/hull-reference.service', () => ({
-  queryHullPreviewMetadata: mocks.queryHullPreviewMetadata,
+  querySessionHullReferences: mocks.querySessionHullReferences,
   queryHullReferenceOptions: mocks.queryHullReferenceOptions,
 }));
 
@@ -149,7 +149,7 @@ describe('useConfigFamilyViewModel loading', () => {
   it('loads variant records with hull names and sprite refs', async () => {
     activateProject();
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v1', 'h1'), variantRecord('v2', 'h1')]);
-    mocks.queryHullPreviewMetadata.mockResolvedValue({ h1: 'Escort' });
+    mocks.querySessionHullReferences.mockResolvedValue({ hullNames: { h1: 'Escort' } });
     const vm = mountViewModel();
     await vm.loadFiles();
     expect(vm.files.value.map((file) => file.id)).toEqual(['v1', 'v2']);

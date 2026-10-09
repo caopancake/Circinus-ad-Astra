@@ -2,7 +2,9 @@ import { AppError, errorCodeOf } from '@/shared/lib/errors';
 
 export type ReadEndReason = 'project' | 'session' | 'consumer';
 
-export interface ReadRequest<T> {
+export interface ReadTicket<T, TIdentity extends object = object> {
+  identity: TIdentity;
+  signal: AbortSignal;
   promise: Promise<T>;
   invalidate(reason: ReadEndReason): void;
   accept(): void;
@@ -20,17 +22,35 @@ export function isReadInvalidated(error: unknown): boolean {
   return errorCodeOf(error) === 'query.invalidated';
 }
 
-export function createReadRequest<T>(identity: object, loader: () => Promise<T>): ReadRequest<T> {
+export function createReadTicket<T, TIdentity extends object>(
+  identity: TIdentity,
+  loader: (signal: AbortSignal) => T | Promise<T>,
+  onReady?: (value: T) => void,
+): ReadTicket<T, TIdentity> {
+  const controller = new AbortController();
   let reject!: (error: unknown) => void;
   let ended: ReadEndReason | null = null;
   const promise = new Promise<T>((resolve, fail) => {
     reject = fail;
-    loader().then(resolve, fail);
+    try {
+      const value = loader(controller.signal);
+      if (value && typeof (value as Promise<T>).then === 'function') (value as Promise<T>).then(resolve, fail);
+      else {
+        onReady?.(value as T);
+        resolve(value as T);
+      }
+    } catch (error) {
+      fail(error);
+    }
   });
   return {
+    identity,
+    signal: controller.signal,
     promise,
     invalidate: (reason) => {
+      if (ended) return;
       ended = reason;
+      controller.abort();
       reject(invalidatedRead(identity, reason));
     },
     accept: () => {
@@ -40,22 +60,33 @@ export function createReadRequest<T>(identity: object, loader: () => Promise<T>)
 }
 
 export function createQueryReadOwner() {
-  const requests = new Map<string, AbortController>();
+  const requests = new Map<string, ReadTicket<unknown>>();
   const scheduled = new Map<string, () => void>();
-  function revoke() {
-    for (const controller of requests.values()) controller.abort();
-    requests.clear();
+  function revoke(reason: ReadEndReason = 'consumer', lane?: string) {
+    const entries = lane ? [[lane, requests.get(lane)] as const] : [...requests.entries()];
+    for (const [key, ticket] of entries) {
+      ticket?.invalidate(reason);
+      requests.delete(key);
+    }
     scheduled.clear();
   }
-  async function read<T>(lane: string, load: (signal: AbortSignal) => Promise<T>): Promise<T> {
-    requests.get(lane)?.abort();
-    const controller = new AbortController();
-    requests.set(lane, controller);
-    try {
-      return await load(controller.signal);
-    } finally {
-      if (requests.get(lane) === controller) requests.delete(lane);
-    }
+  function read<T>(
+    lane: string,
+    identity: object,
+    load: (signal: AbortSignal) => T | Promise<T>,
+    onReady?: (value: T) => void,
+  ): Promise<T> {
+    requests.get(lane)?.invalidate('consumer');
+    const ticket = createReadTicket(identity, load, onReady);
+    requests.set(lane, ticket as ReadTicket<unknown>);
+    return ticket.promise
+      .then((value) => {
+        ticket.accept();
+        return value;
+      })
+      .finally(() => {
+        if (requests.get(lane) === ticket) requests.delete(lane);
+      });
   }
   function schedule(lane: string, callback: () => void) {
     const queued = scheduled.has(lane);
@@ -67,7 +98,10 @@ export function createQueryReadOwner() {
         current?.();
       });
   }
-  return { read, revoke, schedule };
+  function isCurrent(lane: string, identity: object): boolean {
+    return requests.get(lane)?.identity === identity;
+  }
+  return { read, revoke, schedule, isCurrent };
 }
 
 export function waitForRead<T>(promise: Promise<T>, identity: object, signal?: AbortSignal): Promise<T> {

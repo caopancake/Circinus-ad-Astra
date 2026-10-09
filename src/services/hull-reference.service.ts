@@ -23,10 +23,6 @@ export async function queryHullReferenceOptions(sessionId: string, referenceIds:
   );
 }
 
-export async function queryHullPreviewMetadata(sessionId: string, hullIds: readonly string[], signal?: AbortSignal) {
-  return (await querySessionHullReferences(sessionId, hullIds, signal)).hullNames;
-}
-
 export async function queryBuiltInWeaponSlotOptions(sessionId: string, hullId: string, signal?: AbortSignal) {
   return builtInWeaponSlotOptions(await querySessionHullReferences(sessionId, [hullId], signal), hullId);
 }

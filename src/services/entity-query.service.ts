@@ -1,6 +1,5 @@
 import { invokeCommand } from '@/shared/runtime/command.runtime';
 import { queryCached, queryLive } from '@/services/query-cache.service';
-import { deepClone } from '@/shared/lib/starsector';
 import type { EntityKind, EntityEditTarget, EditorResourceKind, RowData } from '@/shared/types';
 import type { QueryValue } from '@/shared/types';
 
@@ -45,7 +44,7 @@ export function querySessionEntityIdentityIntent(
   nextId: string,
   signal?: AbortSignal,
 ): Promise<QueryValue<'entity-identity-intent'>> {
-  const parameters = { source: deepClone(source), nextId };
+  const parameters = { source, nextId };
   return queryLive(
     { sessionId, queryKind: 'entity-identity-intent', parameters },
     () => invokeCommand('query_entity_identity_intent', { payload: { sessionId, ...parameters } }),
@@ -60,7 +59,7 @@ export function querySessionEditorDraftResources(
   draft: RowData,
   signal?: AbortSignal,
 ): Promise<QueryValue<'editor-draft-resources'>> {
-  const parameters = { kind, id, draft: deepClone(draft) };
+  const parameters = { kind, id, draft };
   return queryLive<'editor-draft-resources'>(
     { sessionId, queryKind: 'editor-draft-resources', parameters },
     () => invokeCommand('query_editor_draft_resources', { payload: { sessionId, ...parameters } }),

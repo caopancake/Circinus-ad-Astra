@@ -17,7 +17,7 @@ export function useResourceReference() {
     const selected = await pickImageFileDialog({ defaultPath: options.modRoot, title: options.title ?? '选择贴图文件' });
     if (!selected || !options.accepts()) return null;
     try {
-      const relative = await reads.read('reference', (signal) =>
+      const relative = await reads.read('reference', { sessionId: options.sessionId, modRoot: options.modRoot, selected }, (signal) =>
         resolveModImageReference(options.sessionId, options.modRoot, selected, signal),
       );
       return options.accepts() ? relative : null;

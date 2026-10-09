@@ -17,7 +17,6 @@ export function useSchemaSourceOptions(args: {
   const feedback = useAppFeedback();
   const reads = useQueryReadOwner();
   let disposed = false;
-  let requestId = 0;
   let stopInvalidation: (() => void) | null = null;
 
   // Context identity tracks entity-dependent catalogs; selected values remain ghost options.
@@ -48,12 +47,10 @@ export function useSchemaSourceOptions(args: {
 
   onUnmounted(() => {
     disposed = true;
-    requestId++;
     stopInvalidation?.();
   });
 
   async function reloadSourceOptions() {
-    const activeRequestId = ++requestId;
     const context = args.runtimeContext();
     const sessionId = context?.sessionId ?? null;
     const source = args.field().source ?? null;
@@ -63,13 +60,12 @@ export function useSchemaSourceOptions(args: {
     }
 
     try {
-      const groups = await reads.read('source', async (signal) => context?.querySourceOptions?.(source, signal));
-      if (disposed || activeRequestId !== requestId || sessionId !== args.runtimeContext()?.sessionId || source !== args.field().source)
-        return;
+      const groups = await reads.read('source', { sessionId, source }, async (signal) => context?.querySourceOptions?.(source, signal));
+      if (disposed || sessionId !== args.runtimeContext()?.sessionId || source !== args.field().source) return;
       loadedOptions.value = groups ? mapSourceGroupsToSelectOptions(groups) : [];
     } catch (error) {
       if (isReadInvalidated(error)) return;
-      if (disposed || activeRequestId !== requestId) return;
+      if (disposed) return;
       loadedOptions.value = [];
       feedback.error(error, '加载字段来源失败');
     }

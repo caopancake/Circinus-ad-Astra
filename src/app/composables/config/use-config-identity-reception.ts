@@ -29,15 +29,16 @@ export function useConfigIdentityReception<T>(options: {
       );
       if (!change) return;
       const request = ++sequence;
-      const current = () =>
-        !disposed && request === sequence && options.target()?.id === target.id && options.target()?.sessionId === target.sessionId;
+      const current = () => !disposed && options.target()?.id === target.id && options.target()?.sessionId === target.sessionId;
       receiving.value = true;
       try {
         await Promise.resolve();
         const saving = useSaveCommandStore().waitForSaves(target.modRoot);
         if (saving && !(await saving)) return;
         if (!current()) return;
-        const record = await reads.read('identity', (signal) => options.read(target.sessionId, change.after.id, signal));
+        const record = await reads.read('identity', { sessionId: target.sessionId, kind: target.kind, id: change.after.id }, (signal) =>
+          options.read(target.sessionId, change.after.id, signal),
+        );
         if (!record || !current()) return;
         const preserveDraft = useDraftSessionsStore().hasDirtyDraftForMod(target.modRoot);
         if (preserveDraft) {

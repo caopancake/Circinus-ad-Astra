@@ -8,7 +8,7 @@ export interface SelectOption {
   label: string;
   value: string;
   description?: string | null;
-  resourceRef?: ResourceRef | null;
+  resourceRef?: Readonly<ResourceRef> | null;
   type?: 'group';
   key?: string;
   children?: SelectOption[];
@@ -17,7 +17,7 @@ export interface SelectOption {
 export interface FlatSelectOption {
   description?: string | null;
   label: string;
-  resourceRef?: ResourceRef | null;
+  resourceRef?: Readonly<ResourceRef> | null;
   value: string;
 }
 
