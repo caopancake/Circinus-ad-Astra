@@ -229,7 +229,7 @@ export const useTablesStore = defineStore('tables', () => {
     state.currentFaction = DEFAULT_CSV_FACTION_FILTER;
   }
 
-  function applyTableWindow(target: CsvTableTarget, window: CsvTableWindow) {
+  function applyTableWindow(target: CsvTableTarget, window: import('@/shared/types').DeepReadonly<CsvTableWindow>) {
     const state = stateMap.get(target.modRoot)!;
     applyCsvTableWindowDraft(state, window, getTableInputs(target.modRoot, target.table).dirty.value);
   }

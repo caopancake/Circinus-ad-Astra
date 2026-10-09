@@ -105,7 +105,7 @@ describe('useConfigMissionEditorViewModel', () => {
   it('loads the mission editor data and icon for the selected mission', async () => {
     const { vm, queryMissionEditorData } = mountEditor();
     await vi.waitFor(() => expect(vm.loadedMissionId.value).toBe('m1'));
-    expect(queryMissionEditorData).toHaveBeenCalledWith('sess-1', 'm1');
+    expect(queryMissionEditorData).toHaveBeenCalledWith('sess-1', 'm1', expect.any(AbortSignal));
     expect(vm.iconSrc.value).toBe('data:icon');
     expect(vm.editingMissionId.value).toBe('m1');
   });

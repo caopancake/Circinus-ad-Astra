@@ -1,3 +1,5 @@
+import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { completeConfigSave } from '@/orchestrators/config-save.orchestrator';
 import { warningNotice } from '@/shared/lib/errors';
 import type { ConfigEditTarget } from '@/shared/types';
@@ -15,8 +17,8 @@ export function useConfigMissionEditorViewModel(params: {
   missionId: Ref<string>;
   modRoot: Ref<string | null>;
   onSaved: (missionId: string | null, saved?: import('@/shared/types').ConfigSaveIdentity) => void | Promise<void>;
-  queryMissionEditorData: (sessionId: string, id: string) => Promise<ConfigMissionEditorData | null>;
-  queryMissionIcon: (sessionId: string, id: string, draft: RowData) => Promise<string>;
+  queryMissionEditorData: (sessionId: string, id: string, signal?: AbortSignal) => Promise<ConfigMissionEditorData | null>;
+  queryMissionIcon: (sessionId: string, id: string, draft: RowData, signal?: AbortSignal) => Promise<string>;
   saveMission: (
     sessionId: string,
     modRoot: string,
@@ -31,6 +33,7 @@ export function useConfigMissionEditorViewModel(params: {
   identityHandoff?: Readonly<Ref<import('@/shared/types').ConfigIdentityHandoff<ConfigMissionEditorData> | null>>;
 }) {
   const feedback = useAppFeedback();
+  const reads = useQueryReadOwner();
   const adoptedCommits = new Set<number>();
   function editTarget(id: string): ConfigEditTarget {
     return { sessionId: params.sessionId.value!, modRoot: params.modRoot.value!, kind: 'mission', id, relPath: null };
@@ -50,10 +53,10 @@ export function useConfigMissionEditorViewModel(params: {
     {
       emptyValue: {},
       modRoot: params.modRoot,
-      load: async (target) => {
+      load: async (target, signal) => {
         const missionId = target.id;
         const targetSessionId = target.sessionId;
-        const data = await params.queryMissionEditorData(targetSessionId, missionId);
+        const data = await params.queryMissionEditorData(targetSessionId, missionId, signal);
         const model = data ? configMissionEditorModel(data) : null;
         return {
           target,
@@ -187,13 +190,16 @@ export function useConfigMissionEditorViewModel(params: {
     const targetSessionId = params.sessionId.value;
     if (!params.modRoot.value || !targetSessionId || !missionId) return;
     try {
-      const icon = await params.queryMissionIcon(targetSessionId, missionId, deepClone(draftData.value));
+      const icon = await reads.read('icon', (signal) =>
+        params.queryMissionIcon(targetSessionId, missionId, deepClone(draftData.value), signal),
+      );
       if (disposed || requestId !== iconRequestId || targetSessionId !== params.sessionId.value || missionId !== loadedMissionId.value)
         return;
       iconSrc.value = icon;
     } catch (error) {
       if (disposed || requestId !== iconRequestId || targetSessionId !== params.sessionId.value || missionId !== loadedMissionId.value)
         return;
+      if (isReadInvalidated(error)) return;
       feedback.error(error, '刷新战役图标失败');
     }
   }

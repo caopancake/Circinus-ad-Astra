@@ -1,5 +1,6 @@
 import type { ResourceRef, SourceOptionGroup } from '@/shared/types';
 import type { FieldSchema } from '@/domain/schema/schema.types';
+import type { DeepReadonly } from '@/shared/types';
 import { sourceGroupLabel } from '@/domain/tables/csv-source-options';
 import { schemaArrayStringValues, schemaKeyValueEntries, schemaStringValue, schemaTagValues } from '@/domain/schema/schema-values';
 
@@ -94,7 +95,7 @@ export function fieldSourceCurrentValues(field: FieldSchema, value: unknown): st
   return text ? [text] : [];
 }
 
-export function mapSourceGroupsToSelectOptions(groups: SourceOptionGroup[]): SelectOption[] {
+export function mapSourceGroupsToSelectOptions(groups: DeepReadonly<SourceOptionGroup[]>): SelectOption[] {
   return groups.map((group) => {
     const label = sourceGroupLabel(group.origin);
     return {

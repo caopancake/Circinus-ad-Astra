@@ -62,8 +62,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import { useAppFeedback } from '@/app/composables/use-app-feedback';
+import { computed, watch } from 'vue';
+import { useCsvRowPreview } from '@/app/composables/tables/use-csv-row-preview';
 import { useTablesStore } from '@/stores/tables.store';
 import { useProjectStore } from '@/stores/project.store';
 import { useSettingsStore } from '@/stores/settings.store';
@@ -86,7 +86,7 @@ import type { SelectOption } from '@/domain/schema/schema-options';
 import type { CsvRowPreviewTarget, RowData, TableKey } from '@/shared/types';
 
 const props = defineProps<{
-  queryRowPreview: (target: CsvRowPreviewTarget) => Promise<string>;
+  queryRowPreview: (target: CsvRowPreviewTarget, signal?: AbortSignal) => Promise<string>;
   sourceIndex: CsvSourceIndex;
 }>();
 
@@ -96,8 +96,7 @@ defineEmits<{
 
 const tables = useTablesStore();
 const project = useProjectStore();
-const feedback = useAppFeedback();
-const { schemaSelectSprite, ensureSchemaSelectSprites } = useSchemaSelectMedia();
+const { schemaSelectSprite, ensureSchemaSelectSprites, releaseSchemaSelectSprites } = useSchemaSelectMedia();
 const settings = useSettingsStore();
 const workspace = useWorkspaceStore();
 const showReferenceDecorations = computed(() => settings.editMode === 'smart');
@@ -111,7 +110,13 @@ const selectedDisplayId = computed(() => (tables.selectedRow ? rowDisplayId(tabl
 const isCommentRow = computed(() => isCsvCommentRow(tables.selectedRow, tables.currentTab));
 const hasActions = computed(() => detailActions.value.length > 0);
 const schemaColumns = computed(() => csvColumnSchemasForTable(tables.currentTab));
-const previewSrc = ref('');
+const previewSrc = useCsvRowPreview({
+  target: () =>
+    project.activeSessionId && tables.selectedRowKey && tables.selectedRow && !isCommentRow.value
+      ? { sessionId: project.activeSessionId, table: tables.currentTab, rowKey: tables.selectedRowKey }
+      : null,
+  query: (target, signal) => props.queryRowPreview(target, signal),
+});
 const summaryItems = computed<SchemaPreviewItem[]>(() => {
   const row = tables.selectedRow;
   if (!row) return [];
@@ -170,10 +175,22 @@ const previewState = computed<PreviewState>(() => {
   return noPreview(tables.currentTab);
 });
 
+const summaryResources = computed(() => {
+  const row = tables.selectedRow;
+  return row && showReferenceDecorations.value
+    ? tables.visibleColumns.slice(0, 8).flatMap((column) => {
+        const schema = schemaColumns.value.find((entry) => entry.key === column);
+        const resource =
+          schema && isCsvReferenceControl(schema.control) ? findSourceOption(schema.source, cell(row[column])).option?.resourceRef : null;
+        return resource ? [resource] : [];
+      })
+    : [];
+});
 watch(
-  () => [project.activeSessionId, tables.currentTab, tables.selectedRowKey] as const,
-  () => {
-    void loadPreviewResource();
+  () => [project.activeSessionId, summaryResources.value] as const,
+  ([sessionId, resources]) => {
+    releaseSchemaSelectSprites(sessionId, resources);
+    if (sessionId && resources.length) void ensureSchemaSelectSprites(sessionId, resources);
   },
   { immediate: true },
 );
@@ -194,23 +211,6 @@ function commentPreview(): PreviewState {
     src: '',
     title: '注释行',
   };
-}
-
-async function loadPreviewResource() {
-  previewSrc.value = '';
-  const manifest = project.activeManifest;
-  const row = tables.selectedRow;
-  const rowKey = tables.selectedRowKey;
-  if (!manifest || !row || !rowKey || isCommentRow.value) return;
-  const target = { rowKey, sessionId: manifest.sessionId, table: tables.currentTab };
-  try {
-    const dataUrl = await props.queryRowPreview(target);
-    if (project.activeSessionId === target.sessionId && tables.currentTab === target.table && tables.selectedRowKey === target.rowKey) {
-      previewSrc.value = dataUrl;
-    }
-  } catch (error) {
-    feedback.error(error, '加载行预览失败');
-  }
 }
 
 function schemaPreviewItem(schema: CsvColumnSchema, row: RowData): SchemaPreviewItem {
@@ -234,7 +234,6 @@ function schemaPreviewItem(schema: CsvColumnSchema, row: RowData): SchemaPreview
       base.meta = match.group ? `${csvColumnControlLabel(schema.control)} · ${match.group}` : csvColumnControlLabel(schema.control);
       const sid = project.activeSessionId ?? undefined;
       if (match.option.resourceRef && sid) {
-        void ensureSchemaSelectSprites(sid, [match.option.resourceRef]);
         base.sprite = schemaSelectSprite(sid, match.option.resourceRef) ?? '';
       }
     }

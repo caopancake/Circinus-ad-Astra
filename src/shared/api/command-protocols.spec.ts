@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import * as query from './query-api';
 import * as files from './files-api';
 import * as write from './write-api';
 import { entityTargetFixture } from '@/test/entity-target';
@@ -49,29 +48,6 @@ const deleteFamily: DeleteVariantEntityWrite & DeleteSkinEntityWrite = {
   entityId: id,
 };
 const cases: Array<[string, () => Promise<unknown>, object]> = [
-  [
-    'query_csv_table_window',
-    () => query.queryCsvTableWindow(sessionId, 'ships', 0, 240, null, { kind: 'all' }),
-    { sessionId, table: 'ships', start: 0, count: 240, search: null, faction: { kind: 'all' } },
-  ],
-  ['query_csv_source_options', () => query.queryCsvSourceOptions(sessionId, 'ships'), { sessionId, source: 'ships' }],
-  ['query_csv_row_preview', () => query.queryCsvRowPreview(sessionId, 'ships', 'r1'), { sessionId, table: 'ships', rowKey: 'r1' }],
-  ['query_hull_references', () => query.queryHullReferences(sessionId, [id]), { sessionId, referenceIds: [id] }],
-  ['query_entity', () => query.queryEntity(sessionId, 'ship', id), { sessionId, kind: 'ship', id }],
-  ['query_entity_edit_target', () => query.queryEntityEditTarget(sessionId, 'ship', id), { sessionId, kind: 'ship', id }],
-  [
-    'query_entity_identity_intent',
-    () => query.queryEntityIdentityIntent(sessionId, target, 'next'),
-    { sessionId, source: target, nextId: 'next' },
-  ],
-  ['query_entity_list', () => query.queryEntityList(sessionId, 'ship'), { sessionId, kind: 'ship' }],
-  [
-    'query_editor_draft_resources',
-    () => query.queryEditorDraftResources(sessionId, 'ship', id, data),
-    { sessionId, kind: 'ship', id, draft: data },
-  ],
-  ['query_resource_data_urls', () => query.queryResourceDataUrlBatch(sessionId, []), { sessionId, resources: [] }],
-  ['resolve_mod_relative_path', () => query.resolveModRelativePath(sessionId, modRoot, path), { sessionId, modRoot, absolutePath: path }],
   ['load_editable_file', () => files.loadEditableFile(null, modRoot, path), { sessionId: null, modRoot, path }],
   ['load_imported_editor_spec_file', () => files.loadImportedEditorSpecFile('ship', path), { kind: 'ship', path }],
   ['query_text_identity_intent', () => files.queryTextIdentityIntent(sessionId, target, '{}'), { sessionId, source: target, text: '{}' }],

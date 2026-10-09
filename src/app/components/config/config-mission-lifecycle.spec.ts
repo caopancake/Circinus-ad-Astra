@@ -117,7 +117,7 @@ describe('Mission view, list and editor lifecycle', () => {
   it('loads the list once and selects its first indexed mission', async () => {
     await mountPage();
     expect(mocks.list).toHaveBeenCalledOnce();
-    expect(mocks.detail).toHaveBeenCalledExactlyOnceWith('s1', 'a');
+    expect(mocks.detail).toHaveBeenCalledExactlyOnceWith('s1', 'a', expect.any(AbortSignal));
     expect(wrapper.get('.mission-file-item.active').text()).toContain('a');
   });
 

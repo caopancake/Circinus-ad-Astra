@@ -6,7 +6,15 @@ import {
   type ResourceCacheInvalidationEvent,
 } from '@/services/resource-cache.service';
 import { recordPerformance } from '@/shared/runtime/performance';
-import { mediaBudgetBytes, registerMediaBudgetEntry, removeMediaBudgetEntry, touchMediaBudgetEntry } from '@/shared/runtime/media-budget';
+import {
+  mediaBudgetBytes,
+  registerMediaBudgetEntry,
+  removeMediaBudgetEntry,
+  touchMediaBudgetEntry,
+  WEBVIEW_MEDIA_BUDGET_BYTES,
+} from '@/shared/runtime/media-budget';
+import { invalidatedRead, waitForRead } from '@/shared/runtime/read-request';
+import { requireProjectionReady } from '@/shared/runtime/project-projection';
 import type { ProjectSessionId, ResourceRef } from '@/shared/types';
 
 export const RESOURCE_MEDIA_CACHE_CAPACITY = 512;
@@ -19,13 +27,14 @@ export interface ResourceMediaBatchResult {
   resolved: number;
   failed: number;
   failedResources: ResourceRef[];
+  uncachedDataUrls: ReadonlyMap<string, string>;
 }
 
 interface PendingMedia {
   sessionId: ProjectSessionId;
   resource: ResourceRef;
-  done: Promise<void>;
-  resolve: () => void;
+  done: Promise<string | null>;
+  resolve: (value: string | null) => void;
   reject: (error: unknown) => void;
 }
 
@@ -54,10 +63,14 @@ export async function ensureResourceMedia(
   sessionId: ProjectSessionId,
   resources: ResourceRef[],
   surface: string,
+  signal?: AbortSignal,
 ): Promise<ResourceMediaBatchResult> {
+  if (signal?.aborted) throw invalidatedRead({ sessionId, resources }, 'consumer');
+  requireProjectionReady(sessionId);
   const startedAt = performance.now();
   const unique = new Map(resources.map((resource) => [resourceCacheKey(sessionId, resource), resource]));
-  const waitFor: Promise<void>[] = [];
+  const waitFor: Promise<readonly [string, string | null]>[] = [];
+  const values = new Map<string, string | null>();
   let cacheHits = 0;
   let requested = 0;
 
@@ -66,33 +79,37 @@ export async function ensureResourceMedia(
       cacheHits += 1;
       touchMedia(key);
       touchMediaBudgetEntry(`media:${key}`);
+      values.set(key, media.get(key)!);
       continue;
     }
     const existing = pending.get(key) ?? inFlight.get(key);
     if (existing) {
-      waitFor.push(existing.done);
+      waitFor.push(existing.done.then((value) => [key, value] as const));
       continue;
     }
-    let resolve!: () => void;
+    let resolve!: (value: string | null) => void;
     let reject!: (error: unknown) => void;
-    const done = new Promise<void>((doneResolve, doneReject) => {
+    const done = new Promise<string | null>((doneResolve, doneReject) => {
       resolve = doneResolve;
       reject = doneReject;
     });
     pending.set(key, { sessionId, resource, done, resolve, reject });
-    waitFor.push(done);
+    waitFor.push(done.then((value) => [key, value] as const));
     requested += 1;
   }
 
   scheduleFlush();
   let loadError: unknown = null;
   try {
-    await Promise.all(waitFor);
+    for (const [key, value] of await waitForRead(Promise.all(waitFor), { sessionId, resources }, signal)) values.set(key, value);
   } catch (error) {
     loadError = error;
   }
-  const failedResources = [...unique].flatMap(([key, resource]) => (media.get(key) === null ? [resource] : []));
-  const resolved = [...unique.keys()].filter((key) => media.has(key) && media.get(key) !== null).length;
+  const failedResources = [...unique].flatMap(([key, resource]) => (values.get(key) === null ? [resource] : []));
+  const resolved = [...values.values()].filter((value) => value !== null).length;
+  const uncachedDataUrls = new Map(
+    [...values].flatMap(([key, value]) => (value !== null && !media.has(key) ? [[key, value] as const] : [])),
+  );
   const result = {
     observed: unique.size,
     requested,
@@ -100,6 +117,7 @@ export async function ensureResourceMedia(
     resolved,
     failed: failedResources.length,
     failedResources,
+    uncachedDataUrls,
   };
   recordPerformance('frontend.media.visibleBatch', performance.now() - startedAt, {
     surface,
@@ -147,8 +165,9 @@ async function flushPendingMedia(): Promise<void> {
           group.map(([, item]) => item.resource),
         );
         group.forEach(([key, item], index) => {
-          if (inFlight.get(key) === item) storeMedia(key, dataUrls[index] ?? null);
-          item.resolve();
+          const value = dataUrls[index] ?? null;
+          if (inFlight.get(key) === item) storeMedia(key, value);
+          item.resolve(value);
         });
       } catch (error) {
         group.forEach(([, item]) => item.reject(error));
@@ -163,6 +182,7 @@ async function flushPendingMedia(): Promise<void> {
 }
 
 function storeMedia(key: string, dataUrl: string | null): void {
+  if (mediaBudgetBytes(dataUrl) > WEBVIEW_MEDIA_BUDGET_BYTES) return;
   media.set(key, dataUrl);
   touchMedia(key);
   registerMediaBudgetEntry(`media:${key}`, mediaBudgetBytes(dataUrl), () => removeMediaKey(key));
@@ -186,12 +206,12 @@ function removeMediaKey(key: string): void {
 }
 
 subscribeResourceInvalidations((event) => {
-  if (event.scope === 'session') {
+  if (event.scope === 'session' || event.invalidation?.session) {
     const prefix = JSON.stringify([event.sessionId]).slice(0, -1);
     const keys = new Set([...media.keys(), ...pending.keys(), ...inFlight.keys()]);
     for (const key of keys) {
       if (!key.startsWith(prefix)) continue;
-      invalidateMediaKey(key);
+      invalidateMediaKey(key, event.scope === 'session' ? 'session' : 'project');
     }
   } else {
     for (const resource of event.resources) {
@@ -205,10 +225,10 @@ subscribeResourceInvalidations((event) => {
   for (const listener of invalidationListeners) listener(event);
 });
 
-function invalidateMediaKey(key: string): void {
+function invalidateMediaKey(key: string, reason: 'project' | 'session' = 'project'): void {
   removeMediaKey(key);
-  pending.get(key)?.resolve();
+  pending.get(key)?.reject(invalidatedRead({ key }, reason));
   pending.delete(key);
-  inFlight.get(key)?.resolve();
+  inFlight.get(key)?.reject(invalidatedRead({ key }, reason));
   inFlight.delete(key);
 }

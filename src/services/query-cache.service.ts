@@ -2,24 +2,20 @@ import { recordPerformance } from '@/shared/runtime/performance';
 import { requireProjectionReady } from '@/shared/runtime/project-projection';
 import { createRuntimeCache, type RuntimeCache } from '@/shared/runtime/cache';
 import { stableStringify } from '@/shared/lib/stable-compare';
+import { deepClone } from '@/shared/lib/starsector';
+import { createReadRequest, waitForRead, invalidatedRead, type ReadRequest } from '@/shared/runtime/read-request';
+import type { QueryCacheKind, QueryIdentity, QueryKind, QueryValue } from '@/shared/types';
 import type { EntityKind, InvalidatedQueryScope, ProjectInvalidation } from '@/shared/types';
 
-export type QueryCacheKind =
-  'csv-table-window' | 'csv-source-options' | 'csv-row-preview' | 'hull-references' | 'entity-detail' | 'entity-list';
-
-export interface QueryIdentity {
-  queryKind: QueryCacheKind;
-  parameters: Record<string, unknown>;
-}
-
-interface QueryCacheEntry extends QueryIdentity {
-  sessionId: string;
+interface QueryCacheEntry {
+  identity: QueryIdentity;
   value: unknown;
 }
 
-interface PendingQueryEntry extends QueryIdentity {
+interface PendingQueryEntry {
+  identity: QueryIdentity;
+  request: ReadRequest<unknown>;
   promise: Promise<unknown>;
-  sessionId: string;
 }
 
 export interface QueryCacheInvalidationEvent {
@@ -41,21 +37,27 @@ const LRU_CAPACITY: Record<QueryCacheKind, number> = {
 };
 
 const QUERY_CACHE_KINDS = Object.keys(LRU_CAPACITY) as QueryCacheKind[];
-const caches = new Map<QueryCacheKind, RuntimeCache<string, QueryCacheEntry>>(
-  QUERY_CACHE_KINDS.map((queryKind) => [queryKind, createRuntimeCache<string, QueryCacheEntry>({ capacity: LRU_CAPACITY[queryKind] })]),
+const caches = new Map<QueryCacheKind, RuntimeCache<string, QueryCacheEntry, PendingQueryEntry>>(
+  QUERY_CACHE_KINDS.map((queryKind) => [
+    queryKind,
+    createRuntimeCache<string, QueryCacheEntry, PendingQueryEntry>({ capacity: LRU_CAPACITY[queryKind] }),
+  ]),
 );
+const liveQueries = new Set<PendingQueryEntry>();
 const invalidationListeners = new Set<QueryCacheInvalidationListener>();
 
-function cacheFor(queryKind: QueryCacheKind): RuntimeCache<string, QueryCacheEntry> {
+function cacheFor(queryKind: QueryCacheKind): RuntimeCache<string, QueryCacheEntry, PendingQueryEntry> {
   return caches.get(queryKind)!;
 }
 
-export async function queryCached<T>(
-  sessionId: string,
-  queryKind: QueryCacheKind,
-  parameters: Record<string, unknown>,
-  loader: () => Promise<T>,
-): Promise<T> {
+export async function queryCached<K extends QueryCacheKind>(
+  input: QueryIdentity<K>,
+  loader: () => Promise<QueryValue<NoInfer<K>>>,
+  signal?: AbortSignal,
+): Promise<QueryValue<K>> {
+  const identity = deepClone(input);
+  const { sessionId, queryKind, parameters } = identity;
+  if (signal?.aborted) throw invalidatedRead(identity, 'consumer');
   requireProjectionReady(sessionId);
   const cache = cacheFor(queryKind);
   const key = queryCacheKey(sessionId, queryKind, parameters);
@@ -63,28 +65,49 @@ export async function queryCached<T>(
   const cached = cache.get(key);
   if (cached) {
     recordPerformance('frontend.queryCache', performance.now() - startedAt, { queryKind, hit: true });
-    return cached.value as T;
+    return waitForRead(Promise.resolve(queryValue<K>(cached.value)), identity, signal);
   }
-  const pendingQuery = cache.getPending<PendingQueryEntry>(key);
+  const pendingQuery = cache.getPending(key);
   if (pendingQuery) {
     recordPerformance('frontend.queryCache', performance.now() - startedAt, { queryKind, hit: true, pending: true });
-    return (await pendingQuery.promise) as T;
+    return waitForRead(pendingQuery.promise.then(queryValue<K>), identity, signal);
   }
-  const loaded = loader()
+  const request = createReadRequest(identity, loader);
+  const completed = request.promise
     .then((value) => {
+      request.accept();
       requireProjectionReady(sessionId);
-      if (cache.getPending<PendingQueryEntry>(key)?.promise === loaded) {
-        cache.set(key, { queryKind, parameters, sessionId, value });
-      }
+      if (cache.getPending(key)?.request === request) cache.set(key, { identity, value });
       return value;
     })
     .finally(() => {
-      if (cache.getPending<PendingQueryEntry>(key)?.promise === loaded) cache.deletePending(key);
+      if (cache.getPending(key)?.request === request) cache.deletePending(key);
     });
-  cache.setPending<PendingQueryEntry>(key, { queryKind, parameters, promise: loaded, sessionId });
-  const value = await loaded;
+  cache.setPending(key, { identity, request, promise: completed });
+  const value = await waitForRead(completed, identity, signal);
   recordPerformance('frontend.queryCache', performance.now() - startedAt, { queryKind, hit: false });
   return value;
+}
+
+export async function queryLive<K extends QueryKind>(
+  input: QueryIdentity<K>,
+  loader: () => Promise<QueryValue<NoInfer<K>>>,
+  signal?: AbortSignal,
+): Promise<QueryValue<K>> {
+  const identity = deepClone(input);
+  if (signal?.aborted) throw invalidatedRead(identity, 'consumer');
+  requireProjectionReady(identity.sessionId);
+  const request = createReadRequest(identity, loader);
+  const entry: PendingQueryEntry = { identity, request, promise: request.promise };
+  liveQueries.add(entry);
+  const completed = request.promise
+    .then((value) => {
+      request.accept();
+      requireProjectionReady(identity.sessionId);
+      return value;
+    })
+    .finally(() => liveQueries.delete(entry));
+  return waitForRead(completed, identity, signal);
 }
 
 export function invalidateQueryCacheForSession(sessionId: string) {
@@ -93,17 +116,19 @@ export function invalidateQueryCacheForSession(sessionId: string) {
     const cache = cacheFor(queryKind);
     for (const key of [...cache.keys()]) {
       const entry = cache.peek(key);
-      if (!entry || entry.sessionId !== sessionId) continue;
-      invalidatedQueries.push(queryIdentity(entry));
+      if (!entry || entry.identity.sessionId !== sessionId) continue;
+      invalidatedQueries.push(entry.identity);
       cache.delete(key);
     }
     for (const key of [...cache.pendingKeys()]) {
-      const pendingEntry = cache.getPending<PendingQueryEntry>(key);
-      if (!pendingEntry || pendingEntry.sessionId !== sessionId) continue;
-      invalidatedQueries.push(queryIdentity(pendingEntry));
+      const pendingEntry = cache.getPending(key);
+      if (!pendingEntry || pendingEntry.identity.sessionId !== sessionId) continue;
+      invalidatedQueries.push(pendingEntry.identity);
       cache.deletePending(key);
+      pendingEntry.request.invalidate('session');
     }
   }
+  invalidateLiveQueries(sessionId, null, invalidatedQueries);
   notifyQueryCacheInvalidated(sessionId, invalidatedQueries, 'session', null);
 }
 
@@ -113,19 +138,21 @@ export function invalidateQueryCacheByProject(sessionId: string, invalidation: P
     const cache = cacheFor(queryKind);
     for (const key of [...cache.keys()]) {
       const entry = cache.peek(key);
-      if (!entry || entry.sessionId !== sessionId) continue;
-      if (!shouldInvalidateQuery(entry, invalidation)) continue;
-      invalidatedQueries.push(queryIdentity(entry));
+      if (!entry || entry.identity.sessionId !== sessionId) continue;
+      if (!shouldInvalidateQuery(entry.identity, invalidation)) continue;
+      invalidatedQueries.push(entry.identity);
       cache.delete(key);
     }
     for (const key of [...cache.pendingKeys()]) {
-      const pendingEntry = cache.getPending<PendingQueryEntry>(key);
-      if (!pendingEntry || pendingEntry.sessionId !== sessionId) continue;
-      if (!shouldInvalidateQuery(pendingEntry, invalidation)) continue;
-      invalidatedQueries.push(queryIdentity(pendingEntry));
+      const pendingEntry = cache.getPending(key);
+      if (!pendingEntry || pendingEntry.identity.sessionId !== sessionId) continue;
+      if (!shouldInvalidateQuery(pendingEntry.identity, invalidation)) continue;
+      invalidatedQueries.push(pendingEntry.identity);
       cache.deletePending(key);
+      pendingEntry.request.invalidate('project');
     }
   }
+  invalidateLiveQueries(sessionId, invalidation, invalidatedQueries);
   notifyQueryCacheInvalidated(sessionId, invalidatedQueries, 'paths', invalidation);
 }
 
@@ -176,11 +203,13 @@ export function hasTableInvalidation(event: QueryCacheInvalidationEvent, queryKi
   return event.queries.some((query) => query.queryKind === queryKind && queryParameterText(query.parameters, 'table') === table);
 }
 
-function queryIdentity(query: QueryIdentity): QueryIdentity {
-  return {
-    parameters: query.parameters,
-    queryKind: query.queryKind,
-  };
+function invalidateLiveQueries(sessionId: string, invalidation: ProjectInvalidation | null, identities: QueryIdentity[]) {
+  for (const entry of liveQueries) {
+    if (entry.identity.sessionId !== sessionId || (invalidation && !shouldInvalidateQuery(entry.identity, invalidation))) continue;
+    identities.push(entry.identity);
+    liveQueries.delete(entry);
+    entry.request.invalidate(invalidation ? 'project' : 'session');
+  }
 }
 
 function notifyQueryCacheInvalidated(
@@ -224,6 +253,19 @@ function shouldInvalidateQuery(entry: QueryIdentity, invalidation: ProjectInvali
       const id = queryParameterText(entry.parameters, 'id');
       return invalidation.queryScopes.some((scope) => queryScopeMatchesEntity(scope, 'entity-list', kind, id));
     }
+    case 'entity-edit-target':
+    case 'editor-draft-resources':
+      return invalidation.queryScopes.some((scope) =>
+        queryScopeMatchesEntity(scope, 'entity-detail', entry.parameters.kind, entry.parameters.id),
+      );
+    case 'entity-identity-intent':
+      return invalidation.queryScopes.some(
+        (scope) =>
+          queryScopeMatchesEntity(scope, 'entity-detail', entry.parameters.source.kind, entry.parameters.source.id) ||
+          queryScopeMatchesEntity(scope, 'entity-detail', entry.parameters.source.kind, entry.parameters.nextId),
+      );
+    case 'resource-reference':
+      return false;
   }
 }
 
@@ -257,6 +299,11 @@ function queryScopeMatchesEntity(
   return scope.entity.kind === kind && (!scope.entity.id || !id || scope.entity.id === id);
 }
 
-function queryCacheKey(sessionId: string, queryKind: QueryCacheKind, parameters: Record<string, unknown>) {
+function queryCacheKey(sessionId: string, queryKind: QueryCacheKind, parameters: object) {
   return JSON.stringify([sessionId, queryKind, stableStringify(parameters)]);
+}
+
+// Storage is heterogeneous; the key binds this value to its query kind.
+function queryValue<K extends QueryKind>(value: unknown): QueryValue<K> {
+  return value as QueryValue<K>;
 }

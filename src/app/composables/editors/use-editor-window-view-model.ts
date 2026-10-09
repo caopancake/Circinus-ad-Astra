@@ -1,3 +1,4 @@
+import { createQueryReadOwner, isReadInvalidated } from '@/shared/runtime/read-request';
 import { computed, ref, watch } from 'vue';
 import type { UnlistenFn } from '@/windows/tauri.events';
 import {
@@ -61,12 +62,13 @@ export function useEditorWindowViewModel(params: {
   const currentId = ref(params.id);
   const editorData = ref<EditorEntityBundle | null>(null);
   const feedback = useAppFeedback();
+  const reads = createQueryReadOwner();
   let identityPreparation: Awaited<ReturnType<typeof createEntitySavePreparation>> | null = null;
   const draftSession: EditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }> =
     useEditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }>({
       emptyValue: {},
-      load: async (target) => {
-        const data = await queryEditorEntityBundle(target.sessionId, target.kind, target.id, previewDraftSnapshot ?? undefined);
+      load: async (target, signal) => {
+        const data = await queryEditorEntityBundle(target.sessionId, target.kind, target.id, previewDraftSnapshot ?? undefined, signal);
         return {
           target,
           meta: { bundle: data, receipt: null },
@@ -210,12 +212,13 @@ export function useEditorWindowViewModel(params: {
     const key = draftImageKey.value;
     const target = editorWindowTarget();
     if (disposed || !target || !editorData.value || (params.kind !== 'ship' && params.kind !== 'weapon')) return;
+    const kind = params.kind;
     const requestId = ++imageRequestId;
     const revision = resourceRevision.value;
     const draft = deepClone(draftSession.draftValue.value);
     editorData.value = clearBundleImages(editorData.value);
     try {
-      const images = await queryDraftEditorImages(target.sessionId, params.kind, target.id, draft);
+      const images = await reads.read('images', (signal) => queryDraftEditorImages(target.sessionId, kind, target.id, draft, signal));
       if (
         disposed ||
         requestId !== imageRequestId ||
@@ -229,6 +232,7 @@ export function useEditorWindowViewModel(params: {
       if (editorData.value?.kind === 'weapon')
         editorData.value = { ...editorData.value, resourceRefs: images.resourceRefs, weaponSpriteData: images.weaponSpriteData };
     } catch (error) {
+      if (isReadInvalidated(error)) return;
       if (!disposed && requestId === imageRequestId && revision === resourceRevision.value && key === draftImageKey.value)
         feedback.error(error, '读取草稿贴图失败');
     }
@@ -286,7 +290,11 @@ export function useEditorWindowViewModel(params: {
             ? await draftSession.loadTarget(target)
             : await draftSession.refreshTarget(target)
           : {
-              meta: { bundle: await queryEditorEntityBundle(target.sessionId, params.kind, target.id, previewDraftSnapshot ?? undefined) },
+              meta: {
+                bundle: await reads.read('preview', (signal) =>
+                  queryEditorEntityBundle(target.sessionId, params.kind, target.id, previewDraftSnapshot ?? undefined, signal),
+                ),
+              },
               value: {},
             };
       if (disposed || requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
@@ -304,6 +312,7 @@ export function useEditorWindowViewModel(params: {
       }
     } catch (error) {
       if (disposed || requestId !== editorDataRequestId) return;
+      if (isReadInvalidated(error)) return;
       if (options.showLoading) errorText.value = formatError(error);
       else feedback.error(error, '刷新编辑器失败');
     } finally {
@@ -425,6 +434,7 @@ export function useEditorWindowViewModel(params: {
 
   function disposeEditorWindow() {
     disposed = true;
+    reads.revoke();
     identityPreparation?.dispose();
     unlistenIdentity?.();
     unlistenIdentity = null;
@@ -559,6 +569,10 @@ export function useEditorWindowViewModel(params: {
   function handleQueryCacheInvalidated(event: QueryCacheInvalidationEvent) {
     const target = editorWindowTarget();
     if (!target || event.sessionId !== target.sessionId) return;
+    if (event.scope === 'session') {
+      reads.revoke();
+      return;
+    }
     if (hasPrimaryDetailInvalidation(event, params.kind, target.id)) {
       void queryEditorData({ promptForMissing: false, showLoading: false });
       return;
@@ -577,13 +591,17 @@ export function useEditorWindowViewModel(params: {
   function handleResourceCacheInvalidated(event: ResourceCacheInvalidationEvent) {
     const target = editorWindowTarget();
     if (!target || event.sessionId !== target.sessionId) return;
+    if (event.scope === 'session') {
+      reads.revoke();
+      return;
+    }
     if (params.kind === 'ship' || params.kind === 'weapon') {
       const paths = (params.kind === 'ship' ? ['spriteName'] : WEAPON_SPRITE_FIELDS)
         .map((field) => draftSession.draftValue.value[field])
         .filter((path): path is string => typeof path === 'string')
         .map(normalizeFsPath);
       const resources = event.invalidation?.resources ?? event.resources;
-      if (event.scope === 'session' || resources.some((resource) => paths.includes(normalizeFsPath(resource.relPath))))
+      if (event.invalidation?.session || resources.some((resource) => paths.includes(normalizeFsPath(resource.relPath))))
         resourceRevision.value++;
       return;
     }
@@ -615,8 +633,12 @@ export function useEditorWindowViewModel(params: {
     }
     try {
       const projectileRefreshed =
-        options.projectileSpecs || options.projectileOptions ? await refreshBundleProjectiles(target.sessionId, bundle, options) : bundle;
-      const refreshed = options.resources ? await refreshBundleResources(target.sessionId, projectileRefreshed) : projectileRefreshed;
+        options.projectileSpecs || options.projectileOptions
+          ? await reads.read('projectiles', (signal) => refreshBundleProjectiles(target.sessionId, bundle, options, signal))
+          : bundle;
+      const refreshed = options.resources
+        ? await reads.read('resources', (signal) => refreshBundleResources(target.sessionId, projectileRefreshed, signal))
+        : projectileRefreshed;
       if (disposed || epoch !== derivedDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
       const current = editorData.value;
       if (
@@ -640,6 +662,7 @@ export function useEditorWindowViewModel(params: {
         (!acceptsSpec() && !acceptsOptions() && !acceptsResources())
       )
         return;
+      if (isReadInvalidated(error)) return;
       feedback.error(error, '刷新编辑器派生数据失败');
     }
   }

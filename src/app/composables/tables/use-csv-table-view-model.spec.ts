@@ -30,6 +30,7 @@ vi.mock('@/services/csv-table.service', () => ({
   querySourceOptionCatalog: mocks.querySourceOptionCatalog,
   queryTableRowPreviewDataUrl: mocks.queryTableRowPreviewDataUrl,
 }));
+vi.mock('@/services/source-options.service', () => ({ querySourceOptionCatalog: mocks.querySourceOptionCatalog }));
 
 vi.mock('@/services/query-cache.service', () => ({
   hasSourceInvalidation: vi.fn(() => false),
@@ -160,7 +161,7 @@ describe('useCsvTableViewModel', () => {
     mocks.queryTableWindow.mockResolvedValue(windowFixture(40));
     const vm = mountViewModel();
     await vi.waitFor(() => expect(mocks.queryTableWindow).toHaveBeenCalledTimes(1));
-    expect(mocks.queryTableWindow).toHaveBeenCalledWith('sess-1', 'ships', 0, 240, '', { kind: 'all' });
+    expect(mocks.queryTableWindow).toHaveBeenCalledWith('sess-1', 'ships', 0, 240, '', { kind: 'all' }, expect.any(AbortSignal));
     expect(mocks.queryTableWindow.mock.calls[0]![3]).toBe(240);
 
     await vi.waitFor(() => expect(vm.gridModel.value.rows.some((row) => row.kind === 'row')).toBe(true));

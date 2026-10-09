@@ -20,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watchEffect } from 'vue';
+import { computed, watch } from 'vue';
 import { cell } from '@/shared/lib/starsector';
 import type { CsvRowRecord } from '@/shared/types';
 import type { CsvGridColumn } from '@/domain/tables/csv-grid-model';
@@ -46,7 +46,7 @@ const props = defineProps<{
 const rawValue = computed(() => cell(props.row.data[props.column.key]));
 const mode = useInputEditMode();
 const context = useCsvTableInputs();
-const { schemaSelectSprite, ensureSchemaSelectSprites } = useSchemaSelectMedia();
+const { schemaSelectSprite, ensureSchemaSelectSprites, releaseSchemaSelectSprites } = useSchemaSelectMedia();
 const control = computed(() => csvColumnControl(props.column.schema));
 const isListControl = computed(() => isCsvListControl(control.value));
 const isReferenceControl = computed(() => isCsvReferenceControl(control.value));
@@ -61,12 +61,15 @@ const sprite = computed(() => {
   return schemaSelectSprite(context.target.sessionId, match.option.resourceRef);
 });
 
-watchEffect(() => {
-  const match = referenceMatch.value;
-  const sessionId = context.target.sessionId;
-  if (!sessionId || !match?.option.resourceRef) return;
-  void ensureSchemaSelectSprites(sessionId, [match.option.resourceRef]);
-});
+watch(
+  () => [context.target.sessionId, referenceMatch.value?.option.resourceRef, mode.value] as const,
+  ([sessionId, resource, editMode]) => {
+    const resources = editMode === 'smart' && resource ? [resource] : [];
+    releaseSchemaSelectSprites(sessionId, resources);
+    if (sessionId && resources.length) void ensureSchemaSelectSprites(sessionId, resources);
+  },
+  { immediate: true },
+);
 
 function listValueDescription(value: string): string | undefined {
   return sourceValue(props.sourceIndex, props.column.schema?.source, value)?.option.description ?? undefined;

@@ -1,3 +1,5 @@
+import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { getConfigMissionEditorData, listConfigMissionRecords, queryMissionDraftIcon } from '@/services/config-entity.service';
 import { useProjectStore } from '@/stores/project.store';
@@ -31,6 +33,7 @@ export function useConfigMissionViewModel() {
   const listLoadStartedAt = ref(0);
   const project = useProjectStore();
   const feedback = useAppFeedback();
+  const reads = useQueryReadOwner();
 
   const modRoot = computed(() => project.activeManifest?.modRoot ?? null);
   const sessionId = computed(() => project.activeManifest?.sessionId ?? null);
@@ -78,6 +81,7 @@ export function useConfigMissionViewModel() {
     const activeSessionId = sessionId.value;
     const key = sessionKey();
     if (key !== listSessionKey) {
+      reads.revoke();
       listSessionKey = key;
       missionRows.value = [];
       missionVersions.value = {};
@@ -88,7 +92,7 @@ export function useConfigMissionViewModel() {
     if (!activeSessionId || disposed) return false;
     listLoadStartedAt.value = performance.now();
     try {
-      const records = await listConfigMissionRecords(activeSessionId);
+      const records = await reads.read('list', (signal) => listConfigMissionRecords(activeSessionId, signal));
       if (disposed || requestId !== missionsRequestId || key !== sessionKey()) return false;
       missionRows.value = records.map((record) => record.list);
       missionVersions.value = Object.fromEntries(records.map((record) => [record.id, record.baseVersions]));
@@ -97,7 +101,7 @@ export function useConfigMissionViewModel() {
       normalizeSelectedMission();
       return true;
     } catch (error) {
-      if (disposed || requestId !== missionsRequestId || key !== sessionKey()) return false;
+      if (disposed || requestId !== missionsRequestId || key !== sessionKey() || isReadInvalidated(error)) return false;
       feedback.error(error, '加载战役失败');
       return false;
     }
@@ -110,9 +114,13 @@ export function useConfigMissionViewModel() {
     );
   }
 
-  async function queryMissionEditorData(targetSessionId: string, id: string): Promise<ConfigMissionEditorData | null> {
+  async function queryMissionEditorData(
+    targetSessionId: string,
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<ConfigMissionEditorData | null> {
     if (!id) return null;
-    return getConfigMissionEditorData(targetSessionId, id);
+    return getConfigMissionEditorData(targetSessionId, id, signal);
   }
 
   async function createMission(createSessionId: string, createModRoot: string, id: string): Promise<boolean> {
@@ -254,8 +262,15 @@ export function useConfigMissionViewModel() {
   watch([sessionId, modRoot], queryMissions, { immediate: true, flush: 'sync' });
   const stopQueryInvalidation = subscribeQueryInvalidations((event) => {
     if (event.sessionId !== sessionId.value) return;
+    if (event.scope === 'session') {
+      reads.revoke();
+      return;
+    }
     const missionsChanged = hasEntityInvalidation(event, 'entity-list', 'mission');
-    if (missionsChanged && !savingSessions.has(event.sessionId) && !selection.writing.value) void refreshMissionData();
+    if (missionsChanged && !savingSessions.has(event.sessionId) && !selection.writing.value)
+      reads.schedule('list', () => {
+        void refreshMissionData();
+      });
   });
   const stopResourceInvalidation = subscribeResourceInvalidations((event) => {
     if (event.sessionId !== sessionId.value) return;

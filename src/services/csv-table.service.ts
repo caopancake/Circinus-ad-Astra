@@ -1,21 +1,23 @@
-import {
-  querySessionCsvRowPreview,
-  querySessionSourceOptions,
-  querySessionTableWindow,
-  querySessionEntityEditTarget,
-  querySessionEntityIdentityIntent,
-} from '@/services/query.service';
+import { querySessionEntityEditTarget, querySessionEntityIdentityIntent } from '@/services/entity-query.service';
+import { invokeCommand } from '@/shared/runtime/command.runtime';
+import { queryCached } from '@/services/query-cache.service';
 import { queryResourceDataUrls } from '@/services/resource-cache.service';
-import { recordPerformance } from '@/shared/runtime/performance';
-import type { AssociatedSpecChange, CsvFactionFilter, CsvTableWindow, TableKey } from '@/shared/types';
+import type { AssociatedSpecChange, CsvFactionFilter, TableKey } from '@/shared/types';
+import type { QueryValue } from '@/shared/types';
 import { associatedSpecKind } from '@/domain/tables/associated-specs';
+import { cloneQuerySnapshot } from '@/shared/lib/query-snapshot';
 
 export async function captureAssociatedSpecTarget(sessionId: string, table: TableKey, change: AssociatedSpecChange) {
   const kind = associatedSpecKind(table)!;
   const sourceId = change.action === 'rename' ? change.previousId : change.action === 'delete' ? change.id : change.create.id;
   const nextId = change.action === 'delete' ? change.id : change.create.id;
-  const info = await querySessionEntityEditTarget(sessionId, kind, sourceId);
-  const intent = change.action === 'delete' ? null : await querySessionEntityIdentityIntent(sessionId, info.target, nextId);
+  const info = cloneQuerySnapshot<import('@/shared/types').EntityEditInfo>(await querySessionEntityEditTarget(sessionId, kind, sourceId));
+  const intent =
+    change.action === 'delete'
+      ? null
+      : cloneQuerySnapshot<import('@/shared/types').EntityIdentityIntent>(
+          await querySessionEntityIdentityIntent(sessionId, info.target, nextId),
+        );
   return {
     target: info.target,
     nextWrite: intent?.nextWrite ?? info.target.write,
@@ -30,23 +32,36 @@ export function queryTableWindow(
   count: number,
   search: string | null,
   faction: CsvFactionFilter,
-): Promise<CsvTableWindow> {
-  return querySessionTableWindow(sessionId, table, start, count, search, faction);
+  signal?: AbortSignal,
+): Promise<QueryValue<'csv-table-window'>> {
+  const parameters = { table, start, count, search, faction };
+  return queryCached(
+    { sessionId, queryKind: 'csv-table-window', parameters },
+    () => invokeCommand('query_csv_table_window', { payload: { sessionId, ...parameters } }),
+    signal,
+  );
 }
 
-export async function querySourceOptionCatalog(sessionId: string, source: string) {
-  const startedAt = performance.now();
-  const groups = await querySessionSourceOptions(sessionId, source);
-  recordPerformance('frontend.query.sourceCatalog', performance.now() - startedAt, {
-    source,
-    groups: groups.length,
-    options: groups.reduce((sum, group) => sum + group.options.length, 0),
-  });
-  return groups;
+export function querySessionCsvRowPreview(
+  sessionId: string,
+  table: TableKey,
+  rowKey: string,
+  signal?: AbortSignal,
+): Promise<QueryValue<'csv-row-preview'>> {
+  return queryCached(
+    { sessionId, queryKind: 'csv-row-preview', parameters: { table, rowKey } },
+    () => invokeCommand('query_csv_row_preview', { payload: { sessionId, table, rowKey } }),
+    signal,
+  );
 }
 
-export async function queryTableRowPreviewDataUrl(sessionId: string, table: TableKey, rowKey: string): Promise<string> {
-  const resource = (await querySessionCsvRowPreview(sessionId, table, rowKey)).resourceRef;
+export async function queryTableRowPreviewDataUrl(
+  sessionId: string,
+  table: TableKey,
+  rowKey: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const resource = (await querySessionCsvRowPreview(sessionId, table, rowKey, signal)).resourceRef;
   if (!resource) return '';
-  return (await queryResourceDataUrls(sessionId, [resource]))[0] ?? '';
+  return (await queryResourceDataUrls(sessionId, [resource], signal))[0] ?? '';
 }

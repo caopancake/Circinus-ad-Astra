@@ -12,6 +12,8 @@ import { createCsvDeletedRow, createCsvDirtyCells, csvDirtyCells, hasCsvDirtyCel
 import { defaultCsvFactionId } from '@/domain/tables/csv-faction-filter';
 import { isLoadedCsvTableRow } from '@/domain/tables/csv-table-rows';
 import { createTableRowKey } from '@/domain/tables/table-row-key';
+import type { DeepReadonly } from '@/shared/types';
+import { cloneQuerySnapshot } from '@/shared/lib/query-snapshot';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
 
 export interface CsvDraftResult {
@@ -33,7 +35,12 @@ export function csvRowTargetOf(result: CsvDraftResult): CsvRowTarget | null {
   return { rowKey: operation.rowKey, rowIndex: operation.rowIndex };
 }
 
-export function applyCsvTableWindowDraft(state: ModTableState, window: CsvTableWindow, hasPendingInput = false): CsvDraftResult {
+export function applyCsvTableWindowDraft(
+  state: ModTableState,
+  record: DeepReadonly<CsvTableWindow>,
+  hasPendingInput = false,
+): CsvDraftResult {
+  const window = cloneQuerySnapshot<CsvTableWindow>(record);
   const table = window.table;
   if (hasCsvTableDraftChanges(state, table) || hasPendingInput) {
     const originalRows = new Map(state.originalTables[table].filter(isLoadedCsvTableRow).map((row) => [row.rowKey, row]));

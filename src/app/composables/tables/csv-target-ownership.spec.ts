@@ -17,6 +17,7 @@ vi.mock('@/services/csv-table.service', () => ({
   queryTableRowPreviewDataUrl: async () => '',
 }));
 vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ error: mocks.error }) }));
+vi.mock('@/services/source-options.service', () => ({ querySourceOptionCatalog: async () => [] }));
 let wrapper: VueWrapper;
 const a: CsvTableTarget = { sessionId: 'sA', modRoot: 'M:/A', table: 'ships' };
 const b: CsvTableTarget = { sessionId: 'sB', modRoot: 'M:/B', table: 'ships' };

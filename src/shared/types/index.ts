@@ -1,5 +1,15 @@
 export type { JsonInputShape, JsonInputValue, JsonValue, RowData } from '@/shared/types/json.types';
 export type { EditContext } from '@/shared/types/edit-context.types';
+export type {
+  DeepReadonly,
+  ReadonlyJsonValue,
+  QueryIdentity,
+  QueryKind,
+  QueryCacheKind,
+  QueryParameters,
+  QueryResults,
+  QueryValue,
+} from '@/shared/types/query-cache.types';
 export type { ErrorDiagnostic, ErrorLocation, FeedbackNotice } from '@/shared/types/error.types';
 export type {
   EntityEditTarget,

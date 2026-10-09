@@ -6,15 +6,21 @@
 
 ## 参考
 
+`src-tauri/src/commands/hull_reference.rs`：Hull command 主归属。
+`src-tauri/src/commands/resources.rs`：批量资源与引用 command 主归属。
 `src-tauri/src/services/project/cache/`：资源指纹缓存 owner。
 `src-tauri/src/services/project/resources/`：资源解析与批量 data URL owner。
 `src/app/composables/editors/use-resource-reference.ts`：贴图引用选择 owner。
+`src/app/composables/tables/use-schema-select-media.ts`：当前选项图片、超额结果及菜单释放主归属。
 `src/app/composables/use-visible-resource-media.ts`：可视区媒体解析 owner。
+`src/domain/config/hull-references.ts`：选项及内置槽位的纯投影主归属。
 `src/domain/schema/schema-options.ts`：引用选项与 ResourceRef 消费规则 owner。
+`src/services/hull-reference.service.ts`：Hull 查询及引用投影主归属。
 `src/services/resource-cache.service.ts`：前端资源缓存 service owner。
 `src/services/resource-media.service.ts`：通用媒体服务 owner，资源缓存之上的响应式投影视图。
 `src/services/resource-reference.service.ts`：授权引用解析能力主归属。
-`src/shared/runtime/cache.ts`：统一缓存原语 owner。
+`src/shared/runtime/cache.ts`：资源缓存消费的 LRU 及 pending 原语。
+`src/shared/runtime/media-budget.ts`：共享 WebView 字节预算与逐出回调主归属。
 
 ## 边界
 
@@ -56,12 +62,16 @@
 ## 规范
 
 - Core root 与所有资源路径必须 canonicalize，拒绝 `..` 与已有父链链接或 reparse point。
+- Hull 请求身份必须使用去重排序后的 ID 集合，名称、选项与槽位必须消费所属领域纯投影。
 - Skin 实体贴图必须消费 SkinFile.data.spriteName；内置槽位必须携带最后定义该内置武器的 Mod/Core 来源并据此分组。
 - 列表缩略图只允许解析 observer 预读区内的资源。
 - 前端严禁构造 ResourceRef、拼路径、逐项读图或把 data URL 写入 manifest；缺失 data URL 保持 null。
+- 单个 data URL 超过 64 MiB 时必须返回本次内容并跳过共享缓存；可见消费者必须在隐藏、引用切换、失效和卸载释放暂存结果。
+- 可见元素 ref 再次登记同一 DOM 时必须保持可见身份和当前资源结果。
 - 屏幕外资源严禁发起 data URL 查询；资源失效后可见资源必须重新解析。
 - 引用解析只接受 Mod 根内安全相对路径；绝对路径、`..` 与链接逃逸必须拒绝。
 - 指纹不一致即丢弃快照并重建；缓存损坏或不可写只降级，严禁读取旧快照。
+- 整批返回必须先核对数量、顺序、完整资源身份与 nullable data URL，再发布所属缓存。
 
 ## 陷阱
 

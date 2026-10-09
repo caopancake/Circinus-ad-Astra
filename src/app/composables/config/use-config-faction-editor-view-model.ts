@@ -1,3 +1,5 @@
+import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { completeConfigSave } from '@/orchestrators/config-save.orchestrator';
 import type { ConfigEditTarget } from '@/shared/types';
 import { computed, onScopeDispose, ref, watch, type Ref } from 'vue';
@@ -19,7 +21,12 @@ export function useConfigFactionEditorViewModel(params: {
   modRoot: Ref<string | null>;
   onSaved: (factionId: string | null, saved?: import('@/shared/types').ConfigSaveIdentity) => void | Promise<void>;
   previewRevision: Ref<number>;
-  queryPreviewImages: (sessionId: string, factionId: string, draft: RowData) => Promise<{ crestSrc: string; logoSrc: string }>;
+  queryPreviewImages: (
+    sessionId: string,
+    factionId: string,
+    draft: RowData,
+    signal?: AbortSignal,
+  ) => Promise<{ crestSrc: string; logoSrc: string }>;
   saveFaction: (
     sessionId: string,
     modRoot: string,
@@ -34,6 +41,7 @@ export function useConfigFactionEditorViewModel(params: {
 }) {
   const adoptedCommits = new Set<number>();
   const feedback = useAppFeedback();
+  const reads = useQueryReadOwner();
   function editTarget(id: string): ConfigEditTarget {
     return { sessionId: params.sessionId.value!, modRoot: params.modRoot.value!, kind: 'faction', id, relPath: null };
   }
@@ -159,13 +167,15 @@ export function useConfigFactionEditorViewModel(params: {
       return;
     }
     try {
-      const images = await params.queryPreviewImages(sessionId, factionId, deepClone(factionFile.value));
+      const images = await reads.read('images', (signal) =>
+        params.queryPreviewImages(sessionId, factionId, deepClone(factionFile.value), signal),
+      );
       if (disposed || requestId !== previewRequestId || sessionId !== params.sessionId.value || factionId !== params.factionId.value)
         return;
       logoSrc.value = images.logoSrc;
       crestSrc.value = images.crestSrc;
     } catch (error) {
-      if (disposed || requestId !== previewRequestId) return;
+      if (disposed || requestId !== previewRequestId || isReadInvalidated(error)) return;
       feedback.error(error, '刷新势力预览失败');
     }
   }

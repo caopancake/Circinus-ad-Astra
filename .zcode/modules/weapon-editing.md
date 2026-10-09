@@ -8,12 +8,12 @@
 
 `schemas/spec-defaults.json`：前后端共享的 5 类格式、7 个分支默认模板。
 `scripts/architecture/rules/editor-module-boundary.mjs`：编辑器组件边界规则 owner。
-`src-tauri/src/services/project/write/entity_identity.rs`：武器、弹体及其关联记录的身份保存 owner。
 `src-tauri/src/services/project/query/entities.rs`：草稿武器资源引用 query owner。
+`src-tauri/src/services/project/write/entity_identity.rs`：武器、弹体及其关联记录的身份保存 owner。
 `src/app/components/editors/ProjectileEditor.vue`：弹体编辑器组件 owner，拥有 projectile/missile 分支表单。
 `src/app/components/editors/WeaponEditor.vue`：武器编辑器组件 owner，拥有表单、发射点画布与弹体入口。
 `src/app/components/editors/WeaponFirePreview.vue`：发射预览组件 owner，拥有弹道模拟、光束与播放控制。
-`src/app/composables/editors/use-editor-window-view-model.ts`：窗口 ViewModel owner，维护目标 Draft Session、弹体 bundle 与资源。
+`src/app/composables/editors/use-editor-window-view-model.ts`：消费共享窗口 ViewModel 的目标 Draft Session、弹体 bundle 与资源。
 `src/domain/editors/lib/game-spec-enums.ts`：游戏 spec 正式枚举 owner。
 `src/domain/editors/lib/projectile-fields.ts`：弹体引擎槽完整默认值 owner。
 `src/domain/editors/lib/weapon-sprite-fields.ts`：武器贴图字段、键映射与 origin 比例 owner。
@@ -66,19 +66,19 @@
 - 初次加载、实体刷新、导入和外部版本载入必须以接纳后的当前草稿解析资源；ResourceRef 与媒体必须作为同一查询结果接入。
 - 发射点坐标必须使用吸附步长；角度偏移必须整数化。
 - 发射预览的草稿快照必须同时决定武器贴图资源与 `projectileSpecId` 对应的弹体 bundle。
+- 同 ID 保存必须保留实际文件路径，ID 修改必须保留原目录并完成正式窗口身份交接；只读预览必须跟随所属武器的新身份。
 - 实体刷新、资源失效与窗口释放必须使较早资源结果失效；草稿资源接入必须共同核对目标、资源字段和请求代次。
 - 已存在的预览窗口再次打开时必须接收最新草稿快照并刷新依赖 bundle。
 - 弹体引擎新增必须产生唯一 id、loc、角度、宽高与完整 CUSTOM styleSpec；弹体和导弹选项必须来自游戏正式枚举。
 - 弹体引用变更必须经 `projectileSpecId` 正式字段，严禁按显示名或下标关联。
 - 弹体编辑的引擎槽位只允许在 missile 分支编辑。
+- 武器与弹体必须分别持有实际编辑目标；Core 弹体首次保存必须在当前 Mod 的领域默认路径创建覆盖。
 - 武器与弹体的 JSON 输入必须共用形状化输入控件，对象字段必须声明对象形状，完整弹体规格必须由弹体归一化入口处理。
 - 武器与弹体的新建必须消费共享模板的独立克隆；引用字段必须由用户继续编辑。
 - 武器创建与结构化保存只允许 projectile 和 beam；pulse 原文必须保持可读并允许修正，违规保存必须返回 spec.weapon_class_unsupported 并标明 specClass。
 - 武器类型入口必须备注“pulse 在原版中无法正常处理，武器类型只允许 projectile 和 beam。”。
 - 画布镜像模式按空格开关，仅作用于当前视图的发射点数组；配对只按坐标对称实时计算，检查器数值输入不参与镜像联动。
 - 草稿资源引用必须由后端 query 返回，只允许通过正式资源缓存解析。
-- 武器与弹体必须分别持有实际编辑目标；Core 弹体首次保存必须在当前 Mod 的领域默认路径创建覆盖。
-- 同 ID 保存必须保留实际文件路径，ID 修改必须保留原目录并完成正式窗口身份交接；只读预览必须跟随所属武器的新身份。
 - 规格分支切换必须先交接活动输入，再保留已有业务内容并补入目标分支缺失必读字段；一次切换必须登记为一次编辑动作。
 - 贴图字段为纯引用：浏览只接受 Mod 根内 png 并原样写入字段，Mod 外拒绝，不复制、不改名。
 - 贴图路径变化或资源重新查询必须清空旧媒体投影；查询失败必须经 AppFeedback 呈现，资源或实体刷新必须支持重新查询当前草稿。
@@ -86,8 +86,8 @@
 
 ## 陷阱
 
-- 让预览窗口读取编辑器实时草稿会绕过"只消费已保存数据"的窗口边界。
-- 弹体保存后不刷新武器 bundle 会让引用数据停留在旧值。
 - 两大视图的发射点数组互相配对会让炮塔与固定坐标互相污染。
 - 在预览窗口为缺失弹体构造默认值会掩盖引用错误。
+- 弹体保存后不刷新武器 bundle 会让引用数据停留在旧值。
+- 让预览窗口读取编辑器实时草稿会绕过"只消费已保存数据"的窗口边界。
 - 贴图浏览复制文件或改写路径会破坏纯引用边界。

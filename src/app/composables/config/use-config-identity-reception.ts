@@ -4,16 +4,19 @@ import { useSaveCommandStore } from '@/stores/save-command.store';
 import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { normalizeFsPath } from '@/shared/lib/paths';
+import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 import type { ConfigIdentityHandoff, EntityEditTarget } from '@/shared/types';
 
 export function useConfigIdentityReception<T>(options: {
   target: () => { sessionId: string; modRoot: string; kind: EntityEditTarget['kind']; id: string } | null;
-  read: (sessionId: string, id: string) => Promise<T | null>;
+  read: (sessionId: string, id: string, signal?: AbortSignal) => Promise<T | null>;
   accept: (record: T, id: string) => void;
 }) {
   const receiving = ref(false);
   const handoff = shallowRef<ConfigIdentityHandoff<T> | null>(null);
   const feedback = useAppFeedback();
+  const reads = useQueryReadOwner();
   let stop: (() => void) | null = null;
   let disposed = false;
   let sequence = 0;
@@ -34,7 +37,7 @@ export function useConfigIdentityReception<T>(options: {
         const saving = useSaveCommandStore().waitForSaves(target.modRoot);
         if (saving && !(await saving)) return;
         if (!current()) return;
-        const record = await options.read(target.sessionId, change.after.id);
+        const record = await reads.read('identity', (signal) => options.read(target.sessionId, change.after.id, signal));
         if (!record || !current()) return;
         const preserveDraft = useDraftSessionsStore().hasDirtyDraftForMod(target.modRoot);
         if (preserveDraft) {
@@ -48,7 +51,7 @@ export function useConfigIdentityReception<T>(options: {
         handoff.value = { sourceId: target.id, record, preserveDraft, commitId: event.result.commitId };
         options.accept(record, change.after.id);
       } catch (error) {
-        if (current()) feedback.error(error, '同步配置实体身份失败');
+        if (current() && !isReadInvalidated(error)) feedback.error(error, '同步配置实体身份失败');
       } finally {
         if (request === sequence) receiving.value = false;
       }

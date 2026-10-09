@@ -1,3 +1,5 @@
+import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useProjectStore } from '@/stores/project.store';
@@ -8,7 +10,8 @@ import { csvColumnSchemaFor } from '@/domain/tables/csv-column-schema';
 import { sourceGroupLabel } from '@/domain/tables/csv-source-options';
 import { recordPerformance } from '@/shared/runtime/performance';
 import { stableStringify } from '@/shared/lib/stable-compare';
-import { querySourceOptionCatalog, queryTableRowPreviewDataUrl, queryTableWindow } from '@/services/csv-table.service';
+import { queryTableRowPreviewDataUrl, queryTableWindow } from '@/services/csv-table.service';
+import { querySourceOptionCatalog } from '@/services/source-options.service';
 import type { SelectOption } from '@/domain/schema/schema-options';
 import { hasSourceInvalidation, hasTableInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/services/resource-cache.service';
@@ -20,6 +23,7 @@ export function useCsvTableViewModel() {
   const project = useProjectStore();
   const workspace = useWorkspaceStore();
   const feedback = useAppFeedback();
+  const reads = useQueryReadOwner();
   const loadedWindowKeys = ref(new Set<string>());
   const loadedSourceOptions = ref(new Map<string, SelectOption[]>());
   const columnWidthOverrides = ref<Record<string, number>>({});
@@ -131,6 +135,10 @@ export function useCsvTableViewModel() {
 
   const stopQueryInvalidation = subscribeQueryInvalidations((event) => {
     if (event.sessionId !== project.activeSessionId) return;
+    if (event.scope === 'session') {
+      reads.revoke();
+      return;
+    }
     const tableWindowChanged = hasTableInvalidation(event, 'csv-table-window', tables.currentTab);
     if (tableWindowChanged) {
       if (tables.saving || tables.currentTableLocked) {
@@ -138,13 +146,17 @@ export function useCsvTableViewModel() {
       } else if (tables.hasTableDirtyChanges(tables.currentTab)) {
         tables.markTableExternalUpdate(target.value!);
       } else {
-        void reloadCurrentTableWindow();
+        reads.schedule('window', () => {
+          void reloadCurrentTableWindow();
+        });
       }
     }
     const sources = visibleSourceIds();
     const optionsChanged = [...sources].some((source) => hasSourceInvalidation(event, source));
     if (!optionsChanged) return;
-    void reloadVisibleSourceOptions();
+    reads.schedule('source', () => {
+      void reloadVisibleSourceOptions();
+    });
   });
   watch(
     () => tables.saving || tables.currentTableLocked,
@@ -165,7 +177,9 @@ export function useCsvTableViewModel() {
   const stopResourceInvalidation = subscribeResourceInvalidations((event) => {
     if (event.sessionId !== project.activeSessionId) return;
     if (!hasResourceInvalidation(event, loadedSourceResourceRefs())) return;
-    void reloadVisibleSourceOptions();
+    reads.schedule('source', () => {
+      void reloadVisibleSourceOptions();
+    });
   });
   onUnmounted(() => {
     disposed = true;
@@ -176,6 +190,7 @@ export function useCsvTableViewModel() {
   });
 
   function clearLocalQueryState() {
+    reads.revoke();
     loadedWindowKeys.value = new Set();
     loadedSourceOptions.value = new Map();
   }
@@ -239,7 +254,9 @@ export function useCsvTableViewModel() {
     if (loadedWindowKeys.value.has(key)) return;
     loadedWindowKeys.value.add(key);
     try {
-      const window = await queryTableWindow(sessionId, table, alignedStart, windowCount, searchText, faction);
+      const window = await reads.read(`window:${key}`, (signal) =>
+        queryTableWindow(sessionId, table, alignedStart, windowCount, searchText, faction, signal),
+      );
       if (tables.saving || tables.currentTableLocked) {
         loadedWindowKeys.value.delete(key);
         return;
@@ -269,6 +286,7 @@ export function useCsvTableViewModel() {
         sessionId !== project.activeSessionId
       )
         return;
+      if (isReadInvalidated(error)) return;
       feedback.error(error, '加载表格数据失败');
     }
   }
@@ -282,7 +300,7 @@ export function useCsvTableViewModel() {
     try {
       const entries = await Promise.all(
         sources.map(async (source) => {
-          const groups = await querySourceOptionCatalog(sessionId, source);
+          const groups = await reads.read(`source:${source}`, (signal) => querySourceOptionCatalog(sessionId, source, signal));
           const options = groups.map((group) => ({
             type: 'group' as const,
             label: sourceGroupLabel(group.origin),
@@ -301,6 +319,7 @@ export function useCsvTableViewModel() {
       loadedSourceOptions.value = new Map(entries);
     } catch (error) {
       if (disposed || requestId !== sourceOptionsRequestId || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
+      if (isReadInvalidated(error)) return;
       feedback.error(error, '加载来源选项失败');
     }
   }
@@ -318,8 +337,8 @@ export function useCsvTableViewModel() {
     );
   }
 
-  function querySelectedRowPreview(target: CsvRowPreviewTarget): Promise<string> {
-    return queryTableRowPreviewDataUrl(target.sessionId, target.table, target.rowKey);
+  function querySelectedRowPreview(target: CsvRowPreviewTarget, signal?: AbortSignal): Promise<string> {
+    return queryTableRowPreviewDataUrl(target.sessionId, target.table, target.rowKey, signal);
   }
 
   watch(

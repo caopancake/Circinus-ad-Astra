@@ -9,8 +9,10 @@
 `src-tauri/src/models/window.rs`：规格、文本与恢复窗口的判别身份、Windows 路径比较键与生命周期消息。
 `src-tauri/src/services/windows.rs`：原生窗口能力 owner，拥有身份登记、创建复用、目标占用、实例交接与关闭等待。
 `src/app/EditorWindowContent.vue`：编辑器窗口内容，消费窗口参数并触发保存同步。
-`src/app/composables/editors/use-editor-window-view-model.ts`：编辑器窗口 ViewModel，消费外部保存事件与失效刷新。
+`src/app/composables/editors/use-editor-window-view-model.ts`：共享编辑窗口生命周期主归属，拥有读取票据、外部保存与身份事件接纳。
 `src/app/composables/use-dirty-window-close-guard.ts`：dirty 关闭守卫 owner，在关闭请求上确认放弃并销毁。
+`src/orchestrators/entity-identity.orchestrator.ts`：跨窗口目标准备、占用、身份交接和释放主归属。
+`src/services/editor.service.ts`：共享编辑窗口 bundle、领域依赖与资源装配主归属。
 `src/services/window.service.ts`：窗口 command 的类型化签名与参数装配主归属。
 `src/windows/current.window.ts`：当前窗口生命周期 owner，提供关闭、销毁、关闭请求监听、最小化、最大化、拖拽、重载与显示。
 `src/windows/editor.window.ts`：编辑器窗口请求 owner，组装类型化身份、尺寸与 URL 参数。
@@ -29,6 +31,7 @@
 - 已存在 singleton 时只做显示、聚焦和可选的聚焦事件发送，不重建窗口。
 - 当前窗口关闭、销毁、重载与显示必须经当前窗口生命周期 owner，严禁业务代码直接调用 Tauri API。
 - 窗口身份必须包含完整 session、`modRoot` 和业务目标；字符串拼接或以活动 Mod 补齐身份被禁止。
+- 编辑窗口读取必须把消费者 AbortSignal 传入 bundle、派生数据与草稿贴图能力，窗口释放必须撤销全部读取等待。
 - 重复关闭必须合并为一个等待与确认意图；保存失败、取消或同步失败必须结束当前意图并保持窗口。
 
 ## 链路

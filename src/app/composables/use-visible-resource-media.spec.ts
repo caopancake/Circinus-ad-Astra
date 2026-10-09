@@ -1,5 +1,5 @@
 import { defineComponent, h } from 'vue';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResourceCacheInvalidationEvent } from '@/services/resource-cache.service';
 import type { ResourceRef } from '@/shared/types';
@@ -91,6 +91,7 @@ describe('useVisibleResourceMedia', () => {
       resolved: 0,
       failed: 0,
       failedResources: [],
+      uncachedDataUrls: new Map(),
     });
     mocks.error.mockReset();
     mocks.warning.mockReset();
@@ -166,6 +167,7 @@ describe('useVisibleResourceMedia', () => {
       resolved: 0,
       failed: 1,
       failedResources: [resource(1)],
+      uncachedDataUrls: new Map(),
     });
     const wrapper = mountHarness();
     const row = wrapper.findAll('[data-row]')[0]!.element;
@@ -182,6 +184,57 @@ describe('useVisibleResourceMedia', () => {
     expect(resizeObserver.disconnected).toBe(true);
     expect(mocks.stopInvalidation).toHaveBeenCalledTimes(1);
   });
+
+  it('holds uncached content only while its resource remains visible', async () => {
+    mocks.ensure.mockResolvedValue({
+      observed: 1,
+      requested: 1,
+      cacheHits: 0,
+      resolved: 1,
+      failed: 0,
+      failedResources: [],
+      uncachedDataUrls: new Map([[JSON.stringify(['session-a', 'mod', 'graphics/test/1.png']), 'data:temporary']]),
+    });
+    const wrapper = mountHarness();
+    const row = wrapper.findAll('[data-row]')[0]!.element;
+    activeObserver().trigger([{ target: row, isIntersecting: true }]);
+    await flushPromises();
+    expect(wrapper.get('[data-src]').attributes('data-src')).toBe('data:temporary');
+    activeObserver().trigger([{ target: row, isIntersecting: false }]);
+    await flushPromises();
+    expect(wrapper.get('[data-src]').attributes('data-src')).toBe('');
+    wrapper.unmount();
+  });
+
+  it('ends a session cleanup without initiating a replacement read', async () => {
+    const wrapper = mountHarness();
+    const row = wrapper.findAll('[data-row]')[0]!.element;
+    activeObserver().trigger([{ target: row, isIntersecting: true }]);
+    await flushPromises();
+    mocks.invalidationListener?.({ invalidation: null, resources: [], sessionId: 'session-a', scope: 'session' });
+    await flushPromises();
+    expect(mocks.ensure).toHaveBeenCalledOnce();
+    wrapper.unmount();
+  });
+
+  it('releases a hidden consumer and suppresses its late diagnostics', async () => {
+    let fail!: (error: unknown) => void;
+    mocks.ensure.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
+    const wrapper = mountHarness();
+    const row = wrapper.findAll('[data-row]')[0]!.element;
+    activeObserver().trigger([{ target: row, isIntersecting: true }]);
+    const signal = mocks.ensure.mock.calls[0]![3] as AbortSignal;
+    activeObserver().trigger([{ target: row, isIntersecting: false }]);
+    expect(signal.aborted).toBe(true);
+    fail(new Error('late failure'));
+    await flushPromises();
+    expect(mocks.error).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
 });
 
 function mountHarness() {
@@ -194,6 +247,7 @@ function mountHarness() {
           h('div', { ref: media.setMediaRoot, 'data-root': '' }, [
             h('div', { ref: media.mediaRef('row-1', resource(1)), 'data-row': '1' }),
             h('div', { ref: media.mediaRef('row-2', resource(2)), 'data-row': '2' }),
+            h('span', { 'data-src': media.mediaSrc(resource(1)) }),
           ]);
       },
     }),

@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   loadImportedEditorSpecFile: vi.fn(),
 }));
 
-vi.mock('@/services/query.service', () => ({
+vi.mock('@/services/entity-query.service', () => ({
   querySessionEntityEditTarget: vi.fn(async (_session: string, kind: import('@/shared/types').EntityKind, id: string) => ({
     target: entityTargetFixture(kind, id, 'create'),
     baseVersions: [],
@@ -141,11 +141,17 @@ describe('queryEditorEntityBundle', () => {
     expect(bundle.weapon.projectileSpecId).toBe('proj_b');
     expect(bundle.projectileSpecs).toEqual({ proj_b: { id: 'proj_b', specClass: 'projectile', length: 42 } });
     expect(bundle.weaponSpriteData).toEqual({ turretSprite: 'data:image/png;base64,DRAFT' });
-    expect(mocks.querySessionEditorDraftResources).toHaveBeenCalledWith('s1', 'weapon', 'railgun', {
-      id: 'railgun',
-      projectileSpecId: 'proj_b',
-      turretSprite: 'graphics/draft.png',
-    });
+    expect(mocks.querySessionEditorDraftResources).toHaveBeenCalledWith(
+      's1',
+      'weapon',
+      'railgun',
+      {
+        id: 'railgun',
+        projectileSpecId: 'proj_b',
+        turretSprite: 'graphics/draft.png',
+      },
+      undefined,
+    );
     expect(mocks.queryResourceDataUrls).toHaveBeenCalledTimes(1);
   });
 

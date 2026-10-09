@@ -17,6 +17,7 @@ import { queryEditorIdentityIntent, queryEditorEditInfo } from '@/services/edito
 import { reserveNativeWindowTargets, releaseNativeWindowTargets, retargetNativeWindow } from '@/services/window.service';
 import { editorWindowTitle } from '@/domain/editors/editor-definitions';
 import { AppError, formatError } from '@/shared/lib/errors';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 import type {
   AppFeedback,
   AssociatedSpecChange,
@@ -192,7 +193,9 @@ export async function listenEntityTablePreparation(
             }
           }
         } catch (error) {
-          response = { ...request, status: 'failed', message: formatError(error) };
+          response = isReadInvalidated(error)
+            ? { ...request, status: 'cancelled' }
+            : { ...request, status: 'failed', message: formatError(error) };
         }
         if (response.status !== 'ready') {
           requests.delete(request.requestId);

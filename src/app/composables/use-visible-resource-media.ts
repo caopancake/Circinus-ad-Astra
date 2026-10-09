@@ -1,4 +1,4 @@
-import { nextTick, onUnmounted, watch, type ComponentPublicInstance } from 'vue';
+import { nextTick, onUnmounted, shallowReactive, watch, type ComponentPublicInstance } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { ensureResourceMedia, resourceMediaDataUrl, subscribeResourceMediaInvalidations } from '@/services/resource-media.service';
 import { resourceCacheKey } from '@/services/resource-cache.service';
@@ -6,6 +6,7 @@ import { sameResourceRef } from '@/shared/lib/resource-ref';
 import type { ResourceRef } from '@/shared/types';
 import { recordPerformance } from '@/shared/runtime/performance';
 import { warningNotice } from '@/shared/lib/errors';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 
 interface RegisteredMedia {
   element: Element | null;
@@ -19,6 +20,8 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
   const elementEntries = new Map<Element, RegisteredMedia>();
   const callbacks = new Map<string, (element: Element | ComponentPublicInstance | null) => void>();
   const reportedFailures = new Set<string>();
+  const uncached = shallowReactive(new Map<string, string>());
+  const reads = new Map<AbortController, string[]>();
   let root: HTMLElement | null = null;
   let observer: IntersectionObserver | null = null;
   let resizeObserver: ResizeObserver | null = null;
@@ -42,9 +45,12 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
   function mediaRef(id: string, resource: ResourceRef | null | undefined) {
     const current = registered.get(id) ?? { element: null, resource: null, visible: false };
     const resourceChanged =
-      current.resource !== null && resource !== null && resource !== undefined && !sameResourceRef(current.resource, resource);
+      current.resource === null
+        ? resource !== null && resource !== undefined
+        : resource === null || resource === undefined || !sameResourceRef(current.resource, resource);
     current.resource = resource ?? null;
     registered.set(id, current);
+    releaseInvisible();
     if (resourceChanged && current.visible && current.resource) void ensureVisible([current.resource]);
     let callback = callbacks.get(id);
     if (!callback) {
@@ -55,7 +61,12 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
   }
 
   function mediaSrc(resource: ResourceRef | null | undefined): string {
-    return resourceMediaDataUrl(args.sessionId(), resource) ?? '';
+    const sessionId = args.sessionId();
+    return (
+      (sessionId && resource ? uncached.get(resourceCacheKey(sessionId, resource)) : undefined) ??
+      resourceMediaDataUrl(sessionId, resource) ??
+      ''
+    );
   }
 
   async function recordListFirstFrame(startedAt: number, entities: number): Promise<void> {
@@ -75,12 +86,15 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
   function registerElement(id: string, element: Element | ComponentPublicInstance | null): void {
     const entry = registered.get(id);
     if (!entry) return;
+    const nextElement = element instanceof Element ? element : null;
+    if (entry.element === nextElement) return;
     if (entry.element) {
       observer?.unobserve(entry.element);
       elementEntries.delete(entry.element);
     }
-    entry.element = element instanceof Element ? element : null;
+    entry.element = nextElement;
     entry.visible = false;
+    releaseInvisible();
     if (entry.element) {
       elementEntries.set(entry.element, entry);
       observer?.observe(entry.element);
@@ -107,6 +121,7 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
       entry.visible = false;
       if (entry.element) observer.observe(entry.element);
     }
+    releaseInvisible();
   }
 
   function handleIntersections(entries: IntersectionObserverEntry[]): void {
@@ -117,14 +132,22 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
       entry.visible = observed.isIntersecting;
       if (entry.visible && entry.resource) newlyVisible.push(entry.resource);
     }
+    releaseInvisible();
     if (newlyVisible.length > 0) void ensureVisible(newlyVisible);
   }
 
   async function ensureVisible(resources: ResourceRef[]): Promise<void> {
     const sessionId = args.sessionId();
     if (!sessionId || disposed) return;
+    const controller = new AbortController();
+    reads.set(
+      controller,
+      resources.map((resource) => resourceCacheKey(sessionId, resource)),
+    );
     try {
-      const result = await ensureResourceMedia(sessionId, resources, args.surface);
+      const result = await ensureResourceMedia(sessionId, resources, args.surface, controller.signal);
+      if (disposed || controller.signal.aborted || sessionId !== args.sessionId()) return;
+      for (const [key, value] of result.uncachedDataUrls) if (visibleKeys().has(key)) uncached.set(key, value);
       const newFailures = result.failedResources.filter((resource) => {
         const key = resourceCacheKey(sessionId, resource);
         if (reportedFailures.has(key)) return false;
@@ -140,6 +163,7 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
           ),
         );
     } catch (error) {
+      if (disposed || controller.signal.aborted || sessionId !== args.sessionId() || isReadInvalidated(error)) return;
       const firstUnreported = resources.find((resource) => {
         const key = resourceCacheKey(sessionId, resource);
         if (reportedFailures.has(key)) return false;
@@ -147,14 +171,55 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
         return true;
       });
       if (firstUnreported) feedback.error(error, args.failureLabel);
+    } finally {
+      reads.delete(controller);
     }
+  }
+
+  function visibleKeys(): Set<string> {
+    const sessionId = args.sessionId();
+    return new Set(
+      [...registered.values()].flatMap((entry) =>
+        sessionId && entry.visible && entry.resource ? [resourceCacheKey(sessionId, entry.resource)] : [],
+      ),
+    );
+  }
+
+  function releaseInvisible() {
+    const visible = visibleKeys();
+    for (const key of uncached.keys()) if (!visible.has(key)) uncached.delete(key);
+    for (const [controller, keys] of reads)
+      if (!keys.some((key) => visible.has(key))) {
+        controller.abort();
+        reads.delete(controller);
+      }
   }
 
   const stopInvalidation = subscribeResourceMediaInvalidations((event) => {
     if (event.sessionId !== args.sessionId()) return;
+    if (event.scope === 'session') {
+      for (const controller of reads.keys()) controller.abort();
+      reads.clear();
+      uncached.clear();
+      return;
+    }
+    for (const key of uncached.keys())
+      if (
+        event.invalidation?.session ||
+        [...event.resources, ...(event.invalidation?.resources ?? [])].some(
+          (resource) => resourceCacheKey(event.sessionId, resource) === key,
+        )
+      )
+        uncached.delete(key);
     const affected = [...registered.values()].flatMap((entry) => {
       if (!entry.visible || !entry.resource) return [];
-      if (event.scope !== 'session' && !event.resources.some((resource) => sameResourceRef(resource, entry.resource!))) return [];
+      if (
+        !event.invalidation?.session &&
+        ![...event.resources, ...(event.invalidation?.resources ?? [])].some(
+          (resource) => resourceCacheKey(event.sessionId, resource) === resourceCacheKey(event.sessionId, entry.resource!),
+        )
+      )
+        return [];
       reportedFailures.delete(resourceCacheKey(event.sessionId, entry.resource));
       return [entry.resource];
     });
@@ -165,12 +230,18 @@ export function useVisibleResourceMedia(args: { sessionId: () => string | null |
     () => args.sessionId(),
     () => {
       reportedFailures.clear();
+      for (const controller of reads.keys()) controller.abort();
+      reads.clear();
+      uncached.clear();
       rebuildObserver();
     },
   );
 
   onUnmounted(() => {
     disposed = true;
+    for (const controller of reads.keys()) controller.abort();
+    reads.clear();
+    uncached.clear();
     observer?.disconnect();
     resizeObserver?.disconnect();
     stopInvalidation();

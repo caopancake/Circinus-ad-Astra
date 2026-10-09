@@ -15,7 +15,7 @@ vi.mock('@/orchestrators/config-save.orchestrator', () => ({ completeConfigSave:
 
 vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ error: vi.fn(), warning: vi.fn(), success: vi.fn() }) }));
 vi.mock('@/app/composables/use-schema-runtime-context', () => ({ createSchemaRuntimeContext: () => ({}) }));
-vi.mock('@/services/config-resource.service', () => ({ queryBuiltInWeaponSlotOptions: vi.fn(async () => []) }));
+vi.mock('@/services/hull-reference.service', () => ({ queryBuiltInWeaponSlotOptions: vi.fn(async () => []) }));
 
 const missionSchema: FileSchema = {
   id: 'mission',

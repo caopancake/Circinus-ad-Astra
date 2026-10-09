@@ -1,18 +1,18 @@
 /**
- * Runtime cache primitive: insertion-order LRU capacity eviction, per-key version
- * counters, pending deduplication and full reset. Semantic layers (invalidation
+ * Runtime cache primitive: access-order LRU capacity eviction,
+ * typed pending storage and full reset. Semantic layers (invalidation
  * matching, batch loading, performance instrumentation) are implemented on top by the
  * individual cache services. State is plain data held in a closure; caches needing
  * reactive views (such as the media projection) handle that in their own service layer,
  * keeping this primitive framework-agnostic.
  */
 
-export interface RuntimeCacheOptions {
+export interface RuntimeCacheOptions<TKey> {
   capacity: number;
-  onEvict?: (key: string) => void;
+  onEvict?: (key: TKey) => void;
 }
 
-export interface RuntimeCache<TKey extends string, TValue> {
+export interface RuntimeCache<TKey extends string, TValue, TPending> {
   readonly size: number;
   get(key: TKey): TValue | undefined;
   peek(key: TKey): TValue | undefined;
@@ -21,22 +21,19 @@ export interface RuntimeCache<TKey extends string, TValue> {
   delete(key: TKey): void;
   keys(): IterableIterator<TKey>;
   pendingKeys(): IterableIterator<TKey>;
-  versionOf(key: TKey): number;
-  bumpVersion(key: TKey): void;
-  deleteVersion(key: TKey): void;
-  hasPending(key: TKey): boolean;
-  getPending<TPending = unknown>(key: TKey): TPending | undefined;
-  setPending<TPending>(key: TKey, pending: TPending): void;
+  getPending(key: TKey): TPending | undefined;
+  setPending(key: TKey, pending: TPending): void;
   deletePending(key: TKey): void;
   reset(): void;
 }
 
-export function createRuntimeCache<TKey extends string, TValue>(options: RuntimeCacheOptions): RuntimeCache<TKey, TValue> {
+export function createRuntimeCache<TKey extends string, TValue, TPending = never>(
+  options: RuntimeCacheOptions<TKey>,
+): RuntimeCache<TKey, TValue, TPending> {
   const { capacity } = options;
   const onEvict = options.onEvict;
   const cache = new Map<TKey, TValue>();
-  const versions = new Map<TKey, number>();
-  const pending = new Map<TKey, unknown>();
+  const pending = new Map<TKey, TPending>();
 
   function touchKey(key: TKey): void {
     const value = cache.get(key);
@@ -50,7 +47,6 @@ export function createRuntimeCache<TKey extends string, TValue>(options: Runtime
       const oldest = cache.keys().next().value as TKey | undefined;
       if (oldest === undefined) return;
       cache.delete(oldest);
-      versions.delete(oldest);
       onEvict?.(oldest);
     }
   }
@@ -72,12 +68,12 @@ export function createRuntimeCache<TKey extends string, TValue>(options: Runtime
       return cache.has(key);
     },
     set(key, value) {
+      cache.delete(key);
       cache.set(key, value);
       evictOverCapacity();
     },
     delete(key) {
       cache.delete(key);
-      versions.delete(key);
     },
     keys() {
       return cache.keys();
@@ -85,22 +81,10 @@ export function createRuntimeCache<TKey extends string, TValue>(options: Runtime
     pendingKeys() {
       return pending.keys();
     },
-    versionOf(key) {
-      return versions.get(key) ?? 0;
+    getPending(key) {
+      return pending.get(key);
     },
-    bumpVersion(key) {
-      versions.set(key, (versions.get(key) ?? 0) + 1);
-    },
-    deleteVersion(key) {
-      versions.delete(key);
-    },
-    hasPending(key) {
-      return pending.has(key);
-    },
-    getPending<TPending>(key: TKey) {
-      return pending.get(key) as TPending | undefined;
-    },
-    setPending<TPending>(key: TKey, value: TPending) {
+    setPending(key, value) {
       pending.set(key, value);
     },
     deletePending(key: TKey) {
@@ -108,7 +92,6 @@ export function createRuntimeCache<TKey extends string, TValue>(options: Runtime
     },
     reset() {
       cache.clear();
-      versions.clear();
       pending.clear();
     },
   };

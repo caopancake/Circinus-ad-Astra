@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResourceCacheInvalidationEvent } from '@/services/resource-cache.service';
 import type { ResourceRef } from '@/shared/types';
 import { ensureResourceMedia, RESOURCE_MEDIA_CACHE_CAPACITY, resourceMediaDataUrl } from '@/services/resource-media.service';
+import { WEBVIEW_MEDIA_BUDGET_BYTES } from '@/shared/runtime/media-budget';
 
 const mocks = vi.hoisted(() => ({
   invalidationListener: null as ((event: ResourceCacheInvalidationEvent) => void) | null,
@@ -26,6 +27,18 @@ describe('resource media service', () => {
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('returns oversized content as consumer-owned temporary data', async () => {
+    const target = resource(990);
+    const oversized = 'x'.repeat(WEBVIEW_MEDIA_BUDGET_BYTES + 1);
+    mocks.query.mockResolvedValueOnce([oversized]);
+    const loading = ensureResourceMedia('oversized', [target], 'test');
+    await vi.runAllTimersAsync();
+    const result = await loading;
+    expect(result.resolved).toBe(1);
+    expect(result.uncachedDataUrls.get(JSON.stringify(['oversized', 'mod', target.relPath]))).toBe(oversized);
+    expect(resourceMediaDataUrl('oversized', target)).toBeUndefined();
+  });
 
   it('batches overlapping requests and keeps sessions isolated', async () => {
     const first = ensureResourceMedia('session-a', [resource(0), resource(1)], 'test');
@@ -78,8 +91,9 @@ describe('resource media service', () => {
   it('releases queued requests when their session closes before the flush', async () => {
     const target = resource(801);
     const queued = ensureResourceMedia('queued-close', [target], 'test');
+    const ended = expect(queued).rejects.toMatchObject({ code: 'query.invalidated' });
     mocks.invalidationListener?.({ invalidation: null, resources: [], sessionId: 'queued-close', scope: 'session' });
-    await queued;
+    await ended;
     await vi.runAllTimersAsync();
     expect(mocks.query).not.toHaveBeenCalled();
     expect(resourceMediaDataUrl('queued-close', target)).toBeUndefined();
@@ -94,9 +108,10 @@ describe('resource media service', () => {
       }),
     );
     const old = ensureResourceMedia('inflight-close', [target], 'test');
+    const ended = expect(old).rejects.toMatchObject({ code: 'query.invalidated' });
     await vi.advanceTimersByTimeAsync(25);
     mocks.invalidationListener?.({ invalidation: null, resources: [target], sessionId: 'inflight-close', scope: 'resources' });
-    await old;
+    await ended;
     const current = ensureResourceMedia('inflight-close', [target], 'test');
     await vi.advanceTimersByTimeAsync(25);
     await current;

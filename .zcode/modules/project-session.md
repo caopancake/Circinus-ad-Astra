@@ -18,8 +18,8 @@
 `src-tauri/src/services/project_session.rs`：游戏根与 Mod 根授权、建立会话及性能记录主归属。
 `src-tauri/src/services/write_transactions/committed.rs`：已写盘提交的投影结果、恢复记录和根序号 owner。
 `src/orchestrators/project-session-refresh.orchestrator.ts`：提交接纳 owner，拥有投影恢复、历史与 manifest 接纳、缓存失效、统一通知及重试进度。
+`src/services/entity-query.service.ts`：实体查询能力交接。
 `src/services/project-session.service.ts`：session 打开、关闭、刷新与恢复协议主归属。
-`src/shared/api/query-api.ts`：query wire API。
 `src/stores/project.store.ts`：前端 manifest 与活动 session 缓存 owner。
 
 ## 边界
@@ -47,8 +47,8 @@
 
 ### 按需 query
 
-1. 组件请求触发 ViewModel 调用 query service。
-2. query service 经 wire API 调用后端 session query。
+1. 组件请求触发 ViewModel 调用所属实体、CSV、source、Hull 或资源能力。
+2. 所属能力经 command.runtime 调用后端 session query。
 3. 后端从懒加载缓存取数并返回实体与资源引用。
 4. 前端写入按 session 隔离的查询缓存并驱动渲染。
 

@@ -8,7 +8,7 @@ import WeaponEditor from '@/app/components/editors/WeaponEditor.vue';
 import { installCanvas2DStub } from '@/test/canvas-stub';
 import { editorUiStubs } from '@/test/ui-stubs';
 import { invalidateQueryCacheByProject } from '@/services/query-cache.service';
-import { invalidateResourceCacheForSession } from '@/services/resource-cache.service';
+import { invalidateResourceCacheForSession, invalidateResourceCacheByProject } from '@/services/resource-cache.service';
 import type { EditorEntityBundle, ShipEditorEntityBundle } from '@/services/editor.service';
 import { listenEditorPreviewDraftUpdated } from '@/orchestrators/editor-window.orchestrator';
 import type { WriteResult } from '@/shared/types';
@@ -271,10 +271,16 @@ describe('useEditorWindowViewModel save gating', () => {
       draft: { id: 'XY', projectileSpecId: 'proj_b' },
     });
     await vi.waitFor(() =>
-      expect(mocks.queryEditorEntityBundle).toHaveBeenLastCalledWith('s1', 'weapon-preview', 'XY', {
-        id: 'XY',
-        projectileSpecId: 'proj_b',
-      }),
+      expect(mocks.queryEditorEntityBundle).toHaveBeenLastCalledWith(
+        's1',
+        'weapon-preview',
+        'XY',
+        {
+          id: 'XY',
+          projectileSpecId: 'proj_b',
+        },
+        expect.any(AbortSignal),
+      ),
     );
     viewModel.disposeEditorWindow();
   });
@@ -750,7 +756,7 @@ describe.each(['ship', 'weapon'] as const)('%s draft resource lifecycle', (kind)
     expectImage(vm, 'new.png');
     expect(vm.draftDirty.value).toBe(true);
     expect(vm.externalUpdateNotice.value).toBe('');
-    expect(mocks.queryDraftEditorImages).toHaveBeenLastCalledWith('s1', kind, 'XY', spec('new.png'));
+    expect(mocks.queryDraftEditorImages).toHaveBeenLastCalledWith('s1', kind, 'XY', spec('new.png'), expect.any(AbortSignal));
   });
 
   it('uses edits made during a detail query and ignores its older image response', async () => {
@@ -787,7 +793,14 @@ describe.each(['ship', 'weapon'] as const)('%s draft resource lifecycle', (kind)
     expect(vm.editorData.value).toMatchObject({ resourceRefs: [] });
     expect(kind === 'ship' ? vm.shipSpriteForEditor.value : (vm.weaponEditorData.value!.weaponSpriteData[field] ?? '')).toBe('');
     expect(mocks.feedback.error).toHaveBeenCalledTimes(1);
-    invalidateResourceCacheForSession('s1');
+    invalidateResourceCacheByProject('s1', {
+      paths: [],
+      tables: [],
+      entities: [],
+      queryScopes: [],
+      resources: [{ source: 'mod', relPath: 'new.png' }],
+      session: false,
+    });
     await flushPromises();
     expectImage(vm, 'new.png');
   });

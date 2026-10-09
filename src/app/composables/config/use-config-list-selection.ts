@@ -6,6 +6,7 @@ import { useWriteSyncStore } from '@/stores/write-sync.store';
 import { completeConfigSave } from '@/orchestrators/config-save.orchestrator';
 import { retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
 import type { WriteResult } from '@/shared/types';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 
 interface ListHandoff {
   sessionId: string;
@@ -175,7 +176,7 @@ export function useConfigListSelection(options: {
         return true;
       } catch (error) {
         await acceptHandoff();
-        if (current()) feedback.error(error, `${params.label}失败`);
+        if (current() && !isReadInvalidated(error)) feedback.error(error, `${params.label}失败`);
         return false;
       } finally {
         locked.value = false;

@@ -3,9 +3,10 @@ import { createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SelectOption } from '@/domain/schema/schema-options';
 import CsvCellPicker from './CsvCellPicker.vue';
+vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ error: vi.fn() }) }));
 
 vi.mock('@/services/resource-media.service', () => ({
-  ensureResourceMedia: vi.fn().mockResolvedValue(undefined),
+  ensureResourceMedia: vi.fn().mockResolvedValue({ uncachedDataUrls: new Map() }),
   resourceMediaDataUrl: vi.fn().mockReturnValue(undefined),
 }));
 

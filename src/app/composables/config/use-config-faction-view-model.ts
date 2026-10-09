@@ -1,3 +1,5 @@
+import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { listConfigFactionRecords, queryFactionPreviewImages, getConfigFactionRecord } from '@/services/config-entity.service';
 import { useConfigIdentityReception } from '@/app/composables/config/use-config-identity-reception';
@@ -30,6 +32,7 @@ export function useConfigFactionViewModel() {
   const listLoadStartedAt = ref(0);
   const project = useProjectStore();
   const feedback = useAppFeedback();
+  const reads = useQueryReadOwner();
   const schemaRuntimeContext = useSchemaRuntimeContext(() => project.activeManifest);
   const modRoot = computed(() => project.activeManifest?.modRoot ?? null);
   const sessionId = computed(() => project.activeManifest?.sessionId ?? null);
@@ -77,6 +80,7 @@ export function useConfigFactionViewModel() {
     const sessionId = project.activeSessionId;
     const key = sessionKey();
     if (key !== listSessionKey) {
+      reads.revoke();
       listSessionKey = key;
       factions.value = {};
       factionVersions.value = {};
@@ -88,7 +92,7 @@ export function useConfigFactionViewModel() {
     if (!sessionId || disposed) return false;
     listLoadStartedAt.value = performance.now();
     try {
-      const records = await listConfigFactionRecords(sessionId);
+      const records = await reads.read('list', (signal) => listConfigFactionRecords(sessionId, signal));
       if (disposed || requestId !== factionsRequestId || key !== sessionKey()) return false;
       const selected = selectedFaction.value;
       const held = selected ? factions.value[selected] : null;
@@ -105,7 +109,7 @@ export function useConfigFactionViewModel() {
       if (options.reloadEditorData) factionDataRevision.value += 1;
       return true;
     } catch (error) {
-      if (disposed || requestId !== factionsRequestId || key !== sessionKey()) return false;
+      if (disposed || requestId !== factionsRequestId || key !== sessionKey() || isReadInvalidated(error)) return false;
       feedback.error(error, '加载势力失败');
       return false;
     }
@@ -227,8 +231,15 @@ export function useConfigFactionViewModel() {
   watch([sessionId, modRoot], () => void loadFactions({ reloadEditorData: true }), { immediate: true, flush: 'sync' });
   const stopQueryInvalidation = subscribeQueryInvalidations((event) => {
     if (event.sessionId !== project.activeSessionId) return;
+    if (event.scope === 'session') {
+      reads.revoke();
+      return;
+    }
     const factionsChanged = hasEntityInvalidation(event, 'entity-list', 'faction');
-    if (factionsChanged && !savingSessions.has(event.sessionId) && !selection.writing.value) void loadFactions({ reloadEditorData: true });
+    if (factionsChanged && !savingSessions.has(event.sessionId) && !selection.writing.value)
+      reads.schedule('list', () => {
+        void loadFactions({ reloadEditorData: true });
+      });
   });
   const stopResourceInvalidation = subscribeResourceInvalidations((event) => {
     if (event.sessionId !== project.activeSessionId) return;
@@ -242,8 +253,8 @@ export function useConfigFactionViewModel() {
     stopResourceInvalidation();
   });
 
-  async function queryPreviewImages(targetSessionId: string, factionId: string, draft: RowData) {
-    return queryFactionPreviewImages(targetSessionId, factionId, draft);
+  async function queryPreviewImages(targetSessionId: string, factionId: string, draft: RowData, signal?: AbortSignal) {
+    return queryFactionPreviewImages(targetSessionId, factionId, draft, signal);
   }
 
   return {

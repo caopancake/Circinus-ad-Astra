@@ -1,5 +1,7 @@
 import { requireRowData } from '@/shared/lib/row-data';
 import { AppError } from '@/shared/lib/errors';
+import { cloneQuerySnapshot } from '@/shared/lib/query-snapshot';
+import type { DeepReadonly } from '@/shared/types';
 import type {
   ConfigMissionEditorData,
   EntityData,
@@ -34,7 +36,8 @@ export interface ConfigFamilyRecord {
   spriteRef: ResourceRef | null;
 }
 
-export function toConfigFactionRecord(entity: EntityData): ConfigFactionRecord {
+export function toConfigFactionRecord(record: DeepReadonly<EntityData>): ConfigFactionRecord {
+  const entity = cloneQuerySnapshot<EntityData>(record);
   return {
     baseVersions: entity.baseVersions,
     crestRef: entity.resourceRefs.crest ?? null,
@@ -43,7 +46,8 @@ export function toConfigFactionRecord(entity: EntityData): ConfigFactionRecord {
   };
 }
 
-export function toConfigMissionRecord(entity: EntityData): ConfigMissionRecord {
+export function toConfigMissionRecord(record: DeepReadonly<EntityData>): ConfigMissionRecord {
+  const entity = cloneQuerySnapshot<EntityData>(record);
   const data = requireRowData(entity.data, `战役 ${entity.id} 数据无效`);
   return {
     baseVersions: entity.baseVersions,
@@ -53,14 +57,16 @@ export function toConfigMissionRecord(entity: EntityData): ConfigMissionRecord {
   };
 }
 
-export function toConfigFamilyRecord(entity: EntityData): ConfigFamilyRecord {
+export function toConfigFamilyRecord(record: DeepReadonly<EntityData>): ConfigFamilyRecord {
+  const entity = cloneQuerySnapshot<EntityData>(record);
   return {
     file: familyFile(entity.target, entity.baseVersions, requireRowData(entity.data, '实体族文件内容无效')),
     spriteRef: entity.resourceRefs.sprite ?? null,
   };
 }
 
-export function missionEditorDataFromEntity(entity: EntityData, iconSrc: string): ConfigMissionEditorData {
+export function missionEditorDataFromEntity(record: DeepReadonly<EntityData>, iconSrc: string): ConfigMissionEditorData {
+  const entity = cloneQuerySnapshot<EntityData>(record);
   const data = requireRowData(entity.data, `战役 ${entity.id} 数据无效`);
   return {
     baseVersions: entity.baseVersions,

@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watchEffect } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue';
 import { groupSelectOptions, type SelectOption } from '@/domain/schema/schema-options';
 import { useSchemaSelectMedia } from '@/app/composables/tables/use-schema-select-media';
 import { useCsvFloatingPanel } from '@/app/composables/tables/use-csv-floating-panel';
@@ -54,20 +54,11 @@ const emit = defineEmits<{
   update: [values: string[]];
 }>();
 
-const { schemaSelectSprite, ensureSchemaSelectSprites } = useSchemaSelectMedia();
+const { schemaSelectSprite, ensureSchemaSelectSprites, releaseSchemaSelectSprites } = useSchemaSelectMedia();
 
 function optionSprite(option: SelectOption): string | undefined {
   return schemaSelectSprite(props.sessionId, option.resourceRef);
 }
-
-watchEffect(
-  () => {
-    const sid = props.sessionId;
-    const resources = props.options.flatMap((option) => (option.resourceRef ? [option.resourceRef] : []));
-    if (resources.length > 0) void ensureSchemaSelectSprites(sid, resources);
-  },
-  { flush: 'post' },
-);
 
 const query = ref('');
 const customMode = ref(false);
@@ -90,6 +81,16 @@ const filteredGroups = computed(() => {
     }))
     .filter((group) => group.options.length > 0);
 });
+
+watch(
+  () => [props.sessionId, filteredGroups.value] as const,
+  ([sid, groups]) => {
+    const resources = groups.flatMap((group) => group.options.flatMap((option) => (option.resourceRef ? [option.resourceRef] : [])));
+    releaseSchemaSelectSprites(sid, resources);
+    if (resources.length > 0) void ensureSchemaSelectSprites(sid, resources);
+  },
+  { immediate: true, flush: 'post' },
+);
 
 onMounted(() => {
   document.addEventListener('mousedown', handleDocumentMouseDown, true);

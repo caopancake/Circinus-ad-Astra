@@ -46,7 +46,7 @@ vi.mock('@/services/config-entity.service', () => ({
   listSkinRecords: mocks.listSkinRecords,
 }));
 
-vi.mock('@/services/config-resource.service', () => ({
+vi.mock('@/services/hull-reference.service', () => ({
   queryHullPreviewMetadata: mocks.queryHullPreviewMetadata,
   queryHullReferenceOptions: mocks.queryHullReferenceOptions,
 }));

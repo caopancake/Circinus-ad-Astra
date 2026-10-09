@@ -7,6 +7,7 @@
 ## 参考
 
 `schemas/*.schema.json`、`schemas/csv/*.schema.json`、`schemas/well-known-labels.json`：schema 资产本体。
+`src-tauri/src/commands/source_options.rs`：来源目录 command 主归属。
 `src-tauri/src/domain/well_known_labels.rs`：well-known 标签资产唯一加载入口，编译期内嵌并校验版本头。
 `src/app/components/schema/SchemaFieldRenderer.vue`：字段渲染 owner。
 `src/app/components/schema/SchemaFormRenderer.vue`：表单渲染 owner。
@@ -18,6 +19,7 @@
 `src/domain/schema/schema-sections.ts`：section 投影与折叠标识 owner。
 `src/domain/schema/schema-values.ts`：字段值转换 owner，拥有解析、格式化、kv 条目与宽松 JSON 文本规则。
 `src/domain/schema/schema.types.ts`：schema 输出类型 owner，拥有字段/控件闭合枚举与 FileSchema/FieldSchema/列 schema 形状。
+`src/services/source-options.service.ts`：来源目录协议、查询身份与性能记录主归属。
 `src/shared/lib/input-number.ts`：完整有限浮点与安全整数解析 owner。
 `src/shared/ui/JsonFieldEditor.vue`：额外字段结构化编辑 owner。
 `src/shared/ui/JsonValueInput.vue`：JSON 原始输入 owner，按声明形状解析并提交。
@@ -65,6 +67,7 @@
 ## 规范
 
 - Bundled schema 注册时必须校验每个 `csv:` source 的表名属于正式 CSV 表注册表或实体注册表的 source 声明，无效 source 必须阻止注册。
+- Core 根切换必须立即清空所属字段与图形投影；静态 schema 合并必须消费当前根字段，失败时必须保留静态 schema。
 - Plain 数字、布尔与 Smart 数字必须登记原文；非法输入必须保留正式字段类型并阻止提交，可选具名字段清空必须删除键，必填字段清空必须定位为错误。
 - Smart 下拉的选项菜单与已选标签必须共用同一 SelectOption。
 - plain editMode 只允许文本或 JSON 文本；smart editMode 才允许增强控件；含换行字符串必须使用 textarea。
@@ -78,7 +81,6 @@
 - 数组元素清理必须消费所属删除项动作；字段删除必须按稳定行身份取消所属输入子树。
 - 未知字段与额外字段必须按正式 JSON 边界保留，严禁丢弃。
 - 来源查询目标变化必须清理旧目录，失败必须经 AppFeedback 呈现一次并允许重试；Core 资源门面必须返回响应式 refs。
-- Core 根切换必须立即清空所属字段与图形投影；静态 schema 合并必须消费当前根字段，失败时必须保留静态 schema。
 - 模式替换涉及待提交输入时必须确认放弃；取消必须保留当前输入面，确认必须取消输入并采用最新设置模式。
 - 路径字段必须消费 pathBase；Mod 路径必须相对 Mod 根，Mission icon 必须相对任务目录，候选目录和选择器必须服从同一基准。
 - 颜色文本与面板调整必须登记为同一字段输入；保存必须提交有效颜色，取消必须恢复已提交颜色。
@@ -88,8 +90,8 @@
 
 ## 陷阱
 
-- 用字符串替换或正则修复 JSON 会产生不可解释的结构错误。
-- 按下标渲染 kv 行并在删除时手工平移下拉状态会让展开态错行。
-- 让字段挂载即批量解析贴图会造成 IPC 风暴。
-- 把目录外手输值替换为空会让坏引用被静默清除。
 - 在渲染组件内二次解析 schema 资产会让形状校验被绕过。
+- 把目录外手输值替换为空会让坏引用被静默清除。
+- 按下标渲染 kv 行并在删除时手工平移下拉状态会让展开态错行。
+- 用字符串替换或正则修复 JSON 会产生不可解释的结构错误。
+- 让字段挂载即批量解析贴图会造成 IPC 风暴。

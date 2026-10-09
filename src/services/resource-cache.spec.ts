@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ResourceDataUrlBatchEntry, ResourceDataUrlBatchResult, ResourceRef } from '@/shared/types';
 import * as resourceCacheService from '@/services/resource-cache.service';
+import { WEBVIEW_MEDIA_BUDGET_BYTES } from '@/shared/runtime/media-budget';
 
 const { queryResourceDataUrls: queryResources } = resourceCacheService;
 const { RESOURCE_DATA_URL_CACHE_CAPACITY } = resourceCacheService;
@@ -21,9 +22,37 @@ const mocks = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock('@/shared/api/query-api', () => ({ queryResourceDataUrlBatch: mocks.queryBatch }));
+vi.mock('@/shared/runtime/command.runtime', () => ({
+  invokeCommand: (_command: string, args: { payload: { sessionId: string; resources: ResourceRef[] } }) =>
+    mocks.queryBatch(args.payload.sessionId, args.payload.resources),
+}));
 
 describe('resource data URL cache', () => {
+  it('validates the whole batch before caching any result', async () => {
+    const first = resource(950),
+      second = resource(951);
+    mocks.queryBatch.mockResolvedValueOnce({
+      entries: [
+        { ...first, dataUrl: 'data:bad-batch' },
+        { ...second, ownerId: 'wrong', dataUrl: null },
+      ],
+    });
+    await expect(queryResources('atomic-resource', [first, second])).rejects.toMatchObject({ action: 'query-resource-data-urls' });
+    expect(await queryResources('atomic-resource', [first])).toEqual(['data:graphics/test/950.png']);
+    expect(mocks.queryBatch).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns oversized content and leaves ordinary cached content retained', async () => {
+    const first = resource(952),
+      second = resource(953);
+    await queryResources('oversized-resource', [first]);
+    const oversized = 'x'.repeat(WEBVIEW_MEDIA_BUDGET_BYTES + 1);
+    mocks.queryBatch.mockResolvedValueOnce({ entries: [{ ...second, dataUrl: oversized }] });
+    expect((await queryResources('oversized-resource', [second]))[0]).toBe(oversized);
+    expect(await queryResources('oversized-resource', [first])).toEqual(['data:graphics/test/952.png']);
+    expect(await queryResources('oversized-resource', [second])).toEqual(['data:graphics/test/953.png']);
+    expect(mocks.queryBatch).toHaveBeenCalledTimes(3);
+  });
   it('holds 512 physical resources and refreshes LRU order on access', async () => {
     const sessionId = 'resource-cache-lru';
     const initial = Array.from({ length: RESOURCE_DATA_URL_CACHE_CAPACITY }, (_, index) => resource(index));
@@ -59,10 +88,11 @@ describe('resource data URL cache', () => {
       }),
     );
     const old = queryResources(sessionId, [target]);
+    const ended = expect(old).rejects.toMatchObject({ code: 'query.invalidated' });
     resourceCacheService.invalidateResourceCacheForSession(sessionId);
+    await ended;
     await queryResources(sessionId, [target]);
     resolveOld({ entries: [{ ...target, dataUrl: 'data:stale' }] });
-    await old;
     expect(await queryResources(sessionId, [target])).toEqual(['data:graphics/test/901.png']);
     expect(mocks.queryBatch).toHaveBeenCalledTimes(2);
   });

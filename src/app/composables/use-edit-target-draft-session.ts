@@ -4,6 +4,7 @@ import { useDraftSession, type DraftSessionOptions } from '@/app/composables/use
 import { deepClone } from '@/shared/lib/starsector';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
 import { withCause } from '@/shared/lib/errors';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 import type { EditContext, FileVersion } from '@/shared/types';
 
 type MaybePromise<T> = T | Promise<T>;
@@ -19,7 +20,7 @@ export interface EditTargetSnapshot<TValue, TTarget = unknown, TMeta = unknown> 
 
 export interface EditTargetDraftSessionOptions<TValue, TTarget, TMeta = unknown> extends DraftSessionOptions<TValue> {
   emptyValue: TValue;
-  load: (target: TTarget) => MaybePromise<EditTargetSnapshot<TValue, TTarget, TMeta>>;
+  load: (target: TTarget, signal?: AbortSignal) => MaybePromise<EditTargetSnapshot<TValue, TTarget, TMeta>>;
   save?: (target: TTarget, draft: TValue, baseVersions: FileVersion[]) => MaybePromise<EditTargetSnapshot<TValue, TTarget, TMeta> | void>;
   targetKey: (target: TTarget) => string;
   afterSaved?: (snapshot: EditTargetSnapshot<TValue, TTarget, TMeta>) => MaybePromise<void>;
@@ -97,8 +98,11 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
   let lastCommitId = -1;
   let pendingSave: Promise<Snapshot | null> | null = null;
   let refreshQueued = false;
+  let readController: AbortController | null = null;
 
   function revokeReads() {
+    readController?.abort();
+    readController = null;
     epoch++;
     readSequence++;
     loading.value = false;
@@ -195,9 +199,12 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
       currentTargetKey.value = key;
     }
     const ticket = { lifetime, epoch, sequence: ++readSequence, key };
+    readController?.abort();
+    const controller = new AbortController();
+    readController = controller;
     loading.value = true;
     try {
-      const snapshot = await options.load(target);
+      const snapshot = await options.load(target, controller.signal);
       if (
         disposed ||
         ticket.lifetime !== lifetime ||
@@ -210,6 +217,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
       else if (applyExternalForTarget(snapshot, fromSaveRefresh) !== 'baseline') return null;
       return copy(snapshot);
     } catch (error) {
+      if (isReadInvalidated(error)) return null;
       if (
         disposed ||
         ticket.lifetime !== lifetime ||
@@ -220,6 +228,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
         return null;
       throw error;
     } finally {
+      if (readController === controller) readController = null;
       if (ticket.lifetime === lifetime && ticket.sequence === readSequence) loading.value = false;
     }
   }
@@ -253,11 +262,16 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
         ? options.withSavePreparation(latestTarget, execute)
         : submit(latestTarget, currentTargetKey.value, life);
     })();
-    const task = operation.finally(() => {
-      saving.value = false;
-      pendingSave = null;
-      refreshQueued = false;
-    });
+    const task = operation
+      .catch((error: unknown) => {
+        if (isReadInvalidated(error)) return null;
+        throw error;
+      })
+      .finally(() => {
+        saving.value = false;
+        pendingSave = null;
+        refreshQueued = false;
+      });
     pendingSave = task;
     return task;
   }

@@ -21,7 +21,7 @@ const SETTINGS = {
 
 vi.mock('@/services/resource-media.service', () => ({
   resourceMediaDataUrl: vi.fn(() => 'data:image/png;base64,x'),
-  ensureResourceMedia: vi.fn(async () => {}),
+  ensureResourceMedia: vi.fn(async () => ({ uncachedDataUrls: new Map() })),
 }));
 
 vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ choose: vi.fn(), error: vi.fn() }) }));
@@ -33,7 +33,7 @@ afterEach(() => {
   wrapper = null;
 });
 
-const spriteRef = { key: 'icon', source: 'mod', path: 'graphics/icon.png' } as unknown as ResourceRef;
+const spriteRef: ResourceRef = { key: 'icon', source: 'mod', relPath: 'graphics/icon.png', ownerKind: 'weapon', ownerId: 'railgun' };
 
 function sourceIndexFixture(): CsvSourceIndex {
   const options = [{ label: 'Railgun', value: 'railgun', resourceRef: spriteRef }];

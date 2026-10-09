@@ -65,6 +65,7 @@
 - [新建 Mod](modules/mod-creation.md)：说明 Mod 父目录、最小目录骨架、`mod_info.json` renderer 与创建后的受信 session 打开。
 - [工作区运行态与持久化](modules/workspace.md)：说明多 Mod 页签、导航上下文、workspace 快照、启动恢复、移除 Mod 与活动 Mod 同步。
 - [项目会话与清单缓存](modules/project-session.md)：说明 `sessionId + modRoot`、实体来源、两族诊断、原子投影、提交恢复与代次接纳。
+- [项目查询与缓存](modules/project-query-cache.md)：说明类型化 query identity、缓存容量、读取票据、失效、只读记录和 pending gate。
 - [文本与格式解析器](modules/text-parsers.md)：说明 CSV-like 与 JSON-like 解析、UTF-8 无 BOM、CP1252 规范化和格式错误上下文。
 - [表格编辑](modules/csv-tables.md)：说明窗口化表格 query、tables store、行身份、选择、列 schema 渲染与 dirty。
 - [表格草稿历史](modules/csv-edit-history.md)：说明按 Mod/表隔离的内存 operation、CSV undo/redo、rowKey 映射和 history limit。

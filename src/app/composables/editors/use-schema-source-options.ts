@@ -5,6 +5,8 @@ import { mapSourceGroupsToSelectOptions, type SelectOption } from '@/domain/sche
 import { isCsvSource } from '@/domain/tables/csv-source-options';
 import type { ResourceRef } from '@/shared/types';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
+import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
+import { isReadInvalidated } from '@/shared/runtime/read-request';
 
 export function useSchemaSourceOptions(args: {
   field: () => FieldSchema;
@@ -13,6 +15,7 @@ export function useSchemaSourceOptions(args: {
 }) {
   const loadedOptions = ref<SelectOption[]>([]);
   const feedback = useAppFeedback();
+  const reads = useQueryReadOwner();
   let disposed = false;
   let requestId = 0;
   let stopInvalidation: (() => void) | null = null;
@@ -35,7 +38,9 @@ export function useSchemaSourceOptions(args: {
       const source = args.field().source ?? '';
       stopInvalidation =
         context?.subscribeSourceOptionInvalidation?.(source, loadedSourceResourceRefs, () => {
-          void reloadSourceOptions();
+          reads.schedule('source', () => {
+            void reloadSourceOptions();
+          });
         }) ?? null;
     },
     { immediate: true },
@@ -58,11 +63,12 @@ export function useSchemaSourceOptions(args: {
     }
 
     try {
-      const groups = await context?.querySourceOptions?.(source);
+      const groups = await reads.read('source', async (signal) => context?.querySourceOptions?.(source, signal));
       if (disposed || activeRequestId !== requestId || sessionId !== args.runtimeContext()?.sessionId || source !== args.field().source)
         return;
       loadedOptions.value = groups ? mapSourceGroupsToSelectOptions(groups) : [];
     } catch (error) {
+      if (isReadInvalidated(error)) return;
       if (disposed || activeRequestId !== requestId) return;
       loadedOptions.value = [];
       feedback.error(error, '加载字段来源失败');

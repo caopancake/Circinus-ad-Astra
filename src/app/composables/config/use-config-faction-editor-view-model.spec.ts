@@ -136,7 +136,7 @@ describe('useConfigFactionEditorViewModel', () => {
     const { vm, queryPreviewImages, factionId } = mountEditor();
     await vi.waitFor(() => expect(vm.logoSrc.value).toBe('data:logo'));
     expect(vm.crestSrc.value).toBe('data:crest');
-    expect(queryPreviewImages).toHaveBeenCalledWith('sess-1', 'existing', expect.anything());
+    expect(queryPreviewImages).toHaveBeenCalledWith('sess-1', 'existing', expect.anything(), expect.any(AbortSignal));
 
     queryPreviewImages.mockResolvedValue({ logoSrc: 'data:new', crestSrc: 'data:new' });
     factionId.value = 'other';

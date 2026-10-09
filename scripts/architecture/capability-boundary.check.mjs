@@ -56,8 +56,8 @@ const cases = [
   ['window-reserve', 'src/orchestrators/entity-identity.orchestrator.ts', 'src/services/window.service.ts', 'reserveNativeWindowTargets'],
   ['window-release', 'src/orchestrators/table-save.orchestrator.ts', 'src/services/window.service.ts', 'releaseNativeWindowTargets'],
   ['window-retarget', 'src/orchestrators/entity-identity.orchestrator.ts', 'src/services/window.service.ts', 'retargetNativeWindow'],
-  ['entity-target-query', 'src/services/editor.service.ts', 'src/services/query.service.ts', 'querySessionEntityEditTarget'],
-  ['entity-intent-query', 'src/services/editor.service.ts', 'src/services/query.service.ts', 'querySessionEntityIdentityIntent'],
+  ['entity-target-query', 'src/services/editor.service.ts', 'src/services/entity-query.service.ts', 'querySessionEntityEditTarget'],
+  ['entity-intent-query', 'src/services/editor.service.ts', 'src/services/entity-query.service.ts', 'querySessionEntityIdentityIntent'],
   ['config-write', 'src/orchestrators/config-save.orchestrator.ts', 'src/services/write.service.ts', 'writeModFiles'],
   ['table-write', 'src/orchestrators/table-save.orchestrator.ts', 'src/services/write.service.ts', 'writeCsvPatch'],
   ['spec-write', 'src/services/editor.service.ts', 'src/services/write.service.ts', 'writeEditorSpec'],
@@ -67,12 +67,20 @@ const cases = [
   ['write-wire', 'src/services/write.service.ts', 'src/shared/api/write-api.ts', 'saveCsvPatch'],
   ['history-read-wire', 'src/services/file-history.service.ts', 'src/shared/api/write-api.ts', 'queryFileHistory'],
   ['history-clear-wire', 'src/services/file-history.service.ts', 'src/shared/api/write-api.ts', 'clearFileHistory'],
-  ['query-cache-load', 'src/services/query.service.ts', 'src/services/query-cache.service.ts', 'queryCached'],
+  ['query-cache-load', 'src/services/entity-query.service.ts', 'src/services/query-cache.service.ts', 'queryCached'],
+  ['live-query-load', 'src/services/entity-query.service.ts', 'src/services/query-cache.service.ts', 'queryLive'],
+  ['source-query', 'src/app/composables/use-sample.ts', 'src/services/source-options.service.ts', 'querySourceOptionCatalog'],
+  ['hull-query', 'src/app/composables/use-sample.ts', 'src/services/hull-reference.service.ts', 'queryHullReferenceOptions'],
+  [
+    'resource-reference',
+    'src/app/composables/editors/use-resource-reference.ts',
+    'src/services/resource-reference.service.ts',
+    'resolveModImageReference',
+  ],
   ['query-observe', 'src/app/composables/use-sample.ts', 'src/services/query-cache.service.ts', 'subscribeQueryInvalidations'],
   ['resource-observe', 'src/app/composables/use-sample.ts', 'src/services/resource-cache.service.ts', 'hasResourceInvalidation'],
   ['resource-key', 'src/app/composables/use-sample.ts', 'src/services/resource-cache.service.ts', 'resourceCacheKey'],
   ['resource-read', 'src/services/editor.service.ts', 'src/services/resource-cache.service.ts', 'queryResourceDataUrls'],
-  ['resource-wire', 'src/services/resource-cache.service.ts', 'src/shared/api/query-api.ts', 'queryResourceDataUrlBatch'],
   [
     'query-project-invalidate',
     'src/orchestrators/project-session-refresh.orchestrator.ts',
@@ -366,8 +374,8 @@ test('a pure domain with the same semantic name retains its own ownership', () =
 test('command-domain purity has one dependency owner', () => {
   const files = architectureFixtures({
     'src/domain/workspace/commands.ts':
-      "import { querySessionEntity } from '@/services/query.service'; export function shortcutCommandFromKeyEvent() {}",
-    'src/services/query.service.ts': 'export function querySessionEntity() {}',
+      "import { querySessionEntity } from '@/services/entity-query.service'; export function shortcutCommandFromKeyEvent() {}",
+    'src/services/entity-query.service.ts': 'export function querySessionEntity() {}',
   });
   assert.equal(
     rules.flatMap((rule) => rule.check(files)).filter((failure) => failure.includes('src/domain/workspace/commands.ts')).length,

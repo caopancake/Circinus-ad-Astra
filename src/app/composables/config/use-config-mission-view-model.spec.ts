@@ -262,7 +262,7 @@ describe('useConfigMissionViewModel', () => {
     });
     const vm = mountViewModel();
     const data = await vm.queryMissionEditorData('sess-1', 'm1');
-    expect(mocks.getConfigMissionEditorData).toHaveBeenCalledWith('sess-1', 'm1');
+    expect(mocks.getConfigMissionEditorData).toHaveBeenCalledWith('sess-1', 'm1', undefined);
     expect(data).not.toBeNull();
     expect(vm.isValidMissionId('m1')).toBe(true);
     expect(vm.isValidMissionId('bad id')).toBe(false);

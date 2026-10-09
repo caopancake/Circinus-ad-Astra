@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   ]),
 }));
 
-vi.mock('@/services/config-resource.service', () => ({ queryBuiltInWeaponSlotOptions: mocks.slotOptions }));
+vi.mock('@/services/hull-reference.service', () => ({ queryBuiltInWeaponSlotOptions: mocks.slotOptions }));
 
 vi.mock('@/app/composables/use-app-feedback', () => ({
   useAppFeedback: () => mocks.feedback,
@@ -136,7 +136,7 @@ describe('useConfigFamilyEditorViewModel', () => {
     const next = await vm.schemaRuntimeContext.value!.querySourceOptions!('hull:builtInWeaponSlots');
     expect(vm.schemaRuntimeContext.value!.sourceContextKey).toBe('h2');
     expect(next[0]!.options[0]!.value).toBe('h2_slot');
-    expect(mocks.slotOptions).toHaveBeenLastCalledWith('sess-1', 'h2');
+    expect(mocks.slotOptions).toHaveBeenLastCalledWith('sess-1', 'h2', undefined);
   });
 
   it('loads the selected file data into the draft', async () => {

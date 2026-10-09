@@ -7,7 +7,7 @@ import type { ConfigEntityFamilyDefinition, ConfigFamilyFile } from '@/domain/co
 import { familyFileId } from '@/domain/config/config-entity-families';
 import type { RowData, SavedConfig, WriteResult } from '@/shared/types';
 import { createSchemaRuntimeContext } from '@/app/composables/use-schema-runtime-context';
-import { queryBuiltInWeaponSlotOptions } from '@/services/config-resource.service';
+import { queryBuiltInWeaponSlotOptions } from '@/services/hull-reference.service';
 import { hasQueryInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 
 export function useConfigFamilyEditorViewModel(params: {
@@ -144,16 +144,16 @@ export function useConfigFamilyEditorViewModel(params: {
     return {
       ...context,
       sourceContextKey: hullId,
-      querySourceOptions: (source: string) =>
+      querySourceOptions: (source: string, signal?: AbortSignal) =>
         source === 'hull:builtInWeaponSlots'
           ? hullId
-            ? queryBuiltInWeaponSlotOptions(session, hullId)
+            ? queryBuiltInWeaponSlotOptions(session, hullId, signal)
             : Promise.resolve([])
-          : context.querySourceOptions!(source),
+          : context.querySourceOptions!(source, signal),
       subscribeSourceOptionInvalidation: (source: string, resources: () => import('@/shared/types').ResourceRef[], listener: () => void) =>
         source === 'hull:builtInWeaponSlots'
           ? subscribeQueryInvalidations((event) => {
-              if (event.sessionId === session && hasQueryInvalidation(event, 'hull-references')) listener();
+              if (event.scope !== 'session' && event.sessionId === session && hasQueryInvalidation(event, 'hull-references')) listener();
             })
           : context.subscribeSourceOptionInvalidation!(source, resources, listener),
     };
