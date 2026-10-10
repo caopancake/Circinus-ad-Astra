@@ -134,11 +134,11 @@ export const RESOURCE_OWNER_KINDS = [
 export type ResourceOwnerKind = (typeof RESOURCE_OWNER_KINDS)[number];
 
 export interface ResourceRef {
-  source: ResourceSource;
-  relPath: string;
-  ownerKind: ResourceOwnerKind;
-  ownerId: string;
-  key: string;
+  readonly source: ResourceSource;
+  readonly relPath: string;
+  readonly ownerKind: ResourceOwnerKind;
+  readonly ownerId: string;
+  readonly key: string;
 }
 
 export interface ResourceDataUrlBatchEntry {

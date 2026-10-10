@@ -54,7 +54,7 @@ const emit = defineEmits<{
   update: [values: string[]];
 }>();
 
-const { schemaSelectSprite, ensureSchemaSelectSprites, releaseSchemaSelectSprites } = useSchemaSelectMedia();
+const { schemaSelectSprite, replaceSchemaSelectSprites } = useSchemaSelectMedia();
 
 function optionSprite(option: SelectOption): string | undefined {
   return schemaSelectSprite(props.sessionId, option.resourceRef);
@@ -86,8 +86,7 @@ watch(
   () => [props.sessionId, filteredGroups.value] as const,
   ([sid, groups]) => {
     const resources = groups.flatMap((group) => group.options.flatMap((option) => (option.resourceRef ? [option.resourceRef] : [])));
-    releaseSchemaSelectSprites(sid, resources);
-    if (resources.length > 0) void ensureSchemaSelectSprites(sid, resources);
+    void replaceSchemaSelectSprites(sid, 'menu', resources);
   },
   { immediate: true, flush: 'post' },
 );

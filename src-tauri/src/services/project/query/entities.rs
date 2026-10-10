@@ -37,21 +37,21 @@ pub fn query_entity_list(session_id: &str, kind: EntityKind) -> AppResult<Vec<En
     let definition = entity_definition(kind)?;
     (definition.prepare)(&mut session)?;
     let projections = (definition.list)(&mut session)?;
-    projections
+    let targets = super::entity_targets::prepare_entity_targets(&mut session, kind)?;
+    Ok(projections
         .into_iter()
         .map(|projection| {
-            let info =
-                super::entity_targets::describe_entity_target(&mut session, kind, &projection.id)?;
-            Ok(EntityData {
+            let info = targets.describe(&session, &projection.id);
+            EntityData {
                 target: info.target,
                 base_versions: info.base_versions,
                 kind: projection.kind,
                 id: projection.id,
                 data: projection.data,
                 resource_refs: projection.resource_refs,
-            })
+            }
         })
-        .collect()
+        .collect())
 }
 
 pub fn query_editor_draft_resources(
@@ -83,6 +83,47 @@ mod tests {
     use std::collections::BTreeMap;
 
     use crate::testutil::temp_dir;
+
+    #[test]
+    fn faction_list_prepares_one_index_and_matches_loaded_nested_targets() {
+        let root = temp_dir("faction_list_target_projection");
+        std::fs::create_dir_all(root.join("data/world/factions/nested")).unwrap();
+        write_utf8_no_bom(&root.join("data/world/factions/factions.csv"),
+            "faction,file,custom\r\nalias,data/world/factions/nested/one.faction,kept\r\ntwo,data/world/factions/two.faction,other\r\n").unwrap();
+        write_utf8_no_bom(
+            &root.join("data/world/factions/nested/one.faction"),
+            r#"{"id":"one","displayName":"One"}"#,
+        )
+        .unwrap();
+        write_utf8_no_bom(
+            &root.join("data/world/factions/two.faction"),
+            r#"{"id":"two","displayName":"Two"}"#,
+        )
+        .unwrap();
+        let mut trace = crate::services::project::PerformanceTrace::new("project.openSession");
+        let manifest = open_project_session_traced(&root, None, &mut trace).unwrap();
+        crate::io::faction_index::take_faction_index_reads();
+        let list = query_entity_list(&manifest.session_id, EntityKind::Faction).unwrap();
+        assert_eq!(crate::io::faction_index::take_faction_index_reads(), 1);
+        assert_eq!(list.len(), 2);
+        for record in &list {
+            let detail = query_entity(&manifest.session_id, EntityKind::Faction, &record.id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(record.target, detail.target);
+            assert_eq!(record.base_versions, detail.base_versions);
+        }
+        assert_eq!(
+            list[0].target.write.rel_path,
+            "data/world/factions/nested/one.faction"
+        );
+        assert!(matches!(
+            &list[0].target.linked_record,
+            Some(crate::models::EntityLinkedRecord::Index { row_index: 0, .. })
+        ));
+        close_project_session(manifest.session_id).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn mission_entity_query_returns_index_descriptor_text_and_icon_ref() {

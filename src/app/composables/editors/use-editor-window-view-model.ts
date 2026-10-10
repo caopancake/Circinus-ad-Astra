@@ -63,12 +63,7 @@ export function useEditorWindowViewModel(params: {
   const editorData = ref<EditorEntityBundle | null>(null);
   const feedback = useAppFeedback();
   const reads = createQueryReadOwner();
-  let imageRequestId = 0;
-  let editorDataRequestId = 0;
-  let derivedDataRequestId = 0;
-  let projectileReadId = 0;
-  let projectileOptionsReadId = 0;
-  let previewResourceReadId = 0;
+  let missingSpecIntent: object | null = null;
   let identityPreparation: Awaited<ReturnType<typeof createEntitySavePreparation>> | null = null;
   const draftSession: EditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }> =
     useEditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }>({
@@ -169,7 +164,8 @@ export function useEditorWindowViewModel(params: {
     pendingSynchronization: draftSession.hasPendingSynchronization,
     waitForSave: draftSession.waitForSave,
   });
-  const loading = ref(true);
+  const previewLoading = ref(false);
+  const loading = computed(() => draftSession.loading.value || previewLoading.value);
   const { confirmDiscard } = useFieldInputActions(draftSession.inputs);
   const errorText = ref('');
   let unlistenEditorSpecSaved: UnlistenFn | null = null;
@@ -193,7 +189,10 @@ export function useEditorWindowViewModel(params: {
     draftSession.baselineSnapshot,
     (snapshot) => {
       if (snapshot) currentId.value = snapshot.target.id;
-      if (snapshot && !disposed) applyLoadedEditorData(snapshot.meta.bundle, snapshot.meta.receipt !== null);
+      if (snapshot && !disposed) {
+        reads.revoke();
+        applyLoadedEditorData(snapshot.meta.bundle, snapshot.meta.receipt !== null);
+      }
     },
     { flush: 'sync' },
   );
@@ -213,31 +212,22 @@ export function useEditorWindowViewModel(params: {
     const target = editorWindowTarget();
     if (disposed || !target || !editorData.value || (params.kind !== 'ship' && params.kind !== 'weapon')) return;
     const kind = params.kind;
-    const requestId = ++imageRequestId;
-    const revision = resourceRevision.value;
     const draft = deepClone(draftSession.draftValue.value);
     editorData.value = clearBundleImages(editorData.value);
-    try {
-      const images = await reads.read('images', { sessionId: target.sessionId, kind, id: target.id, draftKey: key }, (signal) =>
-        queryDraftEditorImages(target.sessionId, kind, target.id, draft, signal),
-      );
-      if (
-        disposed ||
-        requestId !== imageRequestId ||
-        revision !== resourceRevision.value ||
-        key !== draftImageKey.value ||
-        !sameEditorWindowTarget(target, editorWindowTarget())
-      )
-        return;
-      if (editorData.value?.kind === 'ship')
-        editorData.value = { ...editorData.value, resourceRefs: images.resourceRefs, shipSpriteData: images.shipSpriteData };
-      if (editorData.value?.kind === 'weapon')
-        editorData.value = { ...editorData.value, resourceRefs: images.resourceRefs, weaponSpriteData: images.weaponSpriteData };
-    } catch (error) {
-      if (isReadInvalidated(error)) return;
-      if (!disposed && requestId === imageRequestId && revision === resourceRevision.value && key === draftImageKey.value)
-        feedback.error(error, '读取草稿贴图失败');
-    }
+    await reads.consume(
+      'images',
+      { ...target, draftKey: key },
+      (signal) => queryDraftEditorImages(target.sessionId, kind, target.id, draft, signal),
+      {
+        ready: (images) => {
+          if (editorData.value?.kind === 'ship')
+            editorData.value = { ...editorData.value, resourceRefs: images.resourceRefs, shipSpriteData: images.shipSpriteData };
+          if (editorData.value?.kind === 'weapon')
+            editorData.value = { ...editorData.value, resourceRefs: images.resourceRefs, weaponSpriteData: images.weaponSpriteData };
+        },
+        error: (error) => feedback.error(error, '读取草稿贴图失败'),
+      },
+    );
   }
 
   const shipEditorData = computed(() => (editorData.value?.kind === 'ship' ? editorData.value : null));
@@ -274,38 +264,42 @@ export function useEditorWindowViewModel(params: {
   });
 
   async function queryEditorData(options: { promptForMissing: boolean; showLoading: boolean }) {
-    const requestId = ++editorDataRequestId;
-    derivedDataRequestId++;
-    imageRequestId++;
+    const intent = {};
+    missingSpecIntent = intent;
+    reads.revoke();
     const target = editorWindowTarget();
     if (!target) {
       errorText.value = '缺少 Mod 路径或目标 id。';
-      loading.value = false;
+      previewLoading.value = false;
       return;
     }
-    if (options.showLoading) loading.value = true;
     errorText.value = '';
+    if (!isEditableWindowKind(params.kind)) {
+      previewLoading.value = options.showLoading;
+      await reads.consume(
+        'preview',
+        target,
+        (signal) => queryEditorEntityBundle(target.sessionId, target.kind, target.id, previewDraftSnapshot ?? undefined, signal),
+        {
+          ready: applyLoadedEditorData,
+          error: (error) => {
+            if (options.showLoading) errorText.value = formatError(error);
+            else feedback.error(error, '刷新编辑器失败');
+          },
+          settled: () => {
+            previewLoading.value = false;
+          },
+        },
+      );
+      return;
+    }
     try {
-      const snapshot =
-        isEditableWindowKind(params.kind) && target.kind === params.kind
-          ? options.promptForMissing
-            ? await draftSession.loadTarget(target)
-            : await draftSession.refreshTarget(target)
-          : {
-              meta: {
-                bundle: await reads.read('preview', { sessionId: target.sessionId, kind: params.kind, id: target.id }, (signal) =>
-                  queryEditorEntityBundle(target.sessionId, params.kind, target.id, previewDraftSnapshot ?? undefined, signal),
-                ),
-              },
-              value: {},
-            };
-      if (disposed || requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
+      const snapshot = options.promptForMissing ? await draftSession.loadTarget(target) : await draftSession.refreshTarget(target);
       if (!snapshot?.meta) return;
       const data = snapshot.meta.bundle;
-      if (!isEditableWindowKind(params.kind)) applyLoadedEditorData(data);
-      if (data.isNew && params.kind !== 'weapon-preview' && options.promptForMissing) {
+      if (data.isNew && options.promptForMissing) {
         const choice = await handleMissingSpec(params.kind, target);
-        if (disposed || requestId !== editorDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
+        if (missingSpecIntent !== intent) return;
         if (choice.action === 'cancel') {
           void closeCurrentWindow();
           return;
@@ -313,12 +307,9 @@ export function useEditorWindowViewModel(params: {
         if (choice.action === 'import') applyImportedSpec(params.kind, target.id, choice.data);
       }
     } catch (error) {
-      if (disposed || requestId !== editorDataRequestId) return;
       if (isReadInvalidated(error)) return;
       if (options.showLoading) errorText.value = formatError(error);
       else feedback.error(error, '刷新编辑器失败');
-    } finally {
-      if (requestId === editorDataRequestId) loading.value = false;
     }
   }
 
@@ -436,6 +427,7 @@ export function useEditorWindowViewModel(params: {
 
   function disposeEditorWindow() {
     disposed = true;
+    missingSpecIntent = null;
     reads.revoke();
     identityPreparation?.dispose();
     unlistenIdentity?.();
@@ -567,6 +559,8 @@ export function useEditorWindowViewModel(params: {
     if (!target || event.sessionId !== target.sessionId) return;
     if (event.scope === 'session') {
       reads.revoke('session');
+      missingSpecIntent = null;
+      previewLoading.value = false;
       return;
     }
     if (hasPrimaryDetailInvalidation(event, params.kind, target.id)) {
@@ -612,55 +606,58 @@ export function useEditorWindowViewModel(params: {
     const target = editorWindowTarget();
     const bundle = editorData.value;
     if (!target || !bundle) return;
-    const epoch = derivedDataRequestId;
     const reference = bundleReferenceKey(bundle);
-    const specTicket = options.projectileSpecs ? ++projectileReadId : null;
-    const optionsTicket = options.projectileOptions ? ++projectileOptionsReadId : null;
-    const resourceTicket = options.resources ? ++previewResourceReadId : null;
-    const acceptsSpec = () => specTicket !== null && specTicket === projectileReadId;
-    const acceptsOptions = () => optionsTicket !== null && optionsTicket === projectileOptionsReadId;
-    const acceptsResources = () =>
-      resourceTicket !== null && resourceTicket === previewResourceReadId && reference === bundleReferenceKey(editorData.value);
-    try {
-      const projectileRefreshed =
-        options.projectileSpecs || options.projectileOptions
-          ? await reads.read(
-              options.projectileOptions && !options.projectileSpecs ? 'projectile-options' : 'projectiles',
-              { sessionId: target.sessionId, target: target.id, reference },
-              (signal) => refreshBundleProjectiles(target.sessionId, bundle, options, signal),
+    const error = (error: unknown) => feedback.error(error, '刷新编辑器派生数据失败');
+    const tasks: Promise<void>[] = [];
+    if (options.projectileSpecs)
+      tasks.push(
+        reads.consume(
+          'projectiles',
+          { ...target, reference },
+          (signal) => refreshBundleProjectiles(target.sessionId, bundle, { projectileSpecs: true, projectileOptions: false }, signal),
+          {
+            ready: (refreshed) => {
+              const current = editorData.value;
+              if (
+                (current?.kind === 'weapon' || current?.kind === 'weapon-preview') &&
+                (refreshed.kind === 'weapon' || refreshed.kind === 'weapon-preview')
+              )
+                editorData.value = { ...current, projectileSpecs: refreshed.projectileSpecs };
+            },
+            error,
+          },
+        ),
+      );
+    if (options.projectileOptions)
+      tasks.push(
+        reads.consume(
+          'projectile-options',
+          target,
+          (signal) => refreshBundleProjectiles(target.sessionId, bundle, { projectileSpecs: false, projectileOptions: true }, signal),
+          {
+            ready: (refreshed) => {
+              if (editorData.value?.kind === 'weapon' && refreshed.kind === 'weapon')
+                editorData.value = { ...editorData.value, projectileOptions: refreshed.projectileOptions };
+            },
+            error,
+          },
+        ),
+      );
+    if (options.resources)
+      tasks.push(
+        reads.consume('resources', { ...target, reference }, (signal) => refreshBundleResources(target.sessionId, bundle, signal), {
+          ready: (refreshed) => {
+            const current = editorData.value;
+            if (
+              (current?.kind === 'weapon' || current?.kind === 'weapon-preview') &&
+              (refreshed.kind === 'weapon' || refreshed.kind === 'weapon-preview')
             )
-          : bundle;
-      const refreshed = options.resources
-        ? await reads.read('resources', { sessionId: target.sessionId, target: target.id, reference }, (signal) =>
-            refreshBundleResources(target.sessionId, projectileRefreshed, signal),
-          )
-        : projectileRefreshed;
-      if (disposed || epoch !== derivedDataRequestId || !sameEditorWindowTarget(target, editorWindowTarget())) return;
-      const current = editorData.value;
-      if (
-        (current?.kind === 'weapon' || current?.kind === 'weapon-preview') &&
-        (refreshed.kind === 'weapon' || refreshed.kind === 'weapon-preview')
-      ) {
-        editorData.value = {
-          ...current,
-          ...(acceptsSpec() ? { projectileSpecs: refreshed.projectileSpecs } : {}),
-          ...(current.kind === 'weapon' && refreshed.kind === 'weapon' && acceptsOptions()
-            ? { projectileOptions: refreshed.projectileOptions }
-            : {}),
-          ...(acceptsResources() ? { resourceRefs: refreshed.resourceRefs, weaponSpriteData: refreshed.weaponSpriteData } : {}),
-        };
-      }
-    } catch (error) {
-      if (
-        disposed ||
-        epoch !== derivedDataRequestId ||
-        !sameEditorWindowTarget(target, editorWindowTarget()) ||
-        (!acceptsSpec() && !acceptsOptions() && !acceptsResources())
-      )
-        return;
-      if (isReadInvalidated(error)) return;
-      feedback.error(error, '刷新编辑器派生数据失败');
-    }
+              editorData.value = { ...current, resourceRefs: refreshed.resourceRefs, weaponSpriteData: refreshed.weaponSpriteData };
+          },
+          error,
+        }),
+      );
+    await Promise.all(tasks);
   }
 
   function editorWindowTarget(): EditorWindowTarget | null {

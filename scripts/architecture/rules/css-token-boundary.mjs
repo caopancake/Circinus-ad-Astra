@@ -1,4 +1,5 @@
 import * as csstree from 'css-tree';
+import { CSS_TOKEN_OWNER, THIRD_PARTY_PROPERTIES, DOM_PROPERTIES, SPECIAL_VALUES } from '../../shared/css-policy.mjs';
 
 const REQUIRED_TOKENS = [
   '--color-bg',
@@ -47,121 +48,163 @@ const REQUIRED_TOKENS = [
   '--shadow-subtle',
 ];
 const DARK_REQUIRED_TOKENS = REQUIRED_TOKENS.filter((token) => !token.startsWith('--space-') && !token.startsWith('--radius-'));
-const CSS_VAR_PATTERN = /var\(\s*(--[\w-]+)/g;
-const SHARED_SPACING_PATTERN = /(?:^|\s)(?:4|8|12|16)px(?:$|\s)/;
 
 export const cssTokenBoundaryRule = {
   name: 'css-token-boundary',
   /** @param {Array<{rel: string, text: string}>} files @returns {string[]} */
   check(files) {
-    const styles = files.filter((file) => file.rel.startsWith('src/styles/') && file.rel.endsWith('.css'));
     const failures = [];
-    const definitions = new Set();
-    const baseDefinitions = new Set();
-    const darkDefinitions = new Set();
-    /** @type {Array<{file: {rel: string}, node: any, value: string}>} */
+    const global = new Set();
+    const base = new Set();
+    const dark = new Set();
+    /** @type {Map<string, string[]>} */
+    const local = new Map();
+    /** @type {Array<{ file: { rel: string }, node: import('css-tree').Declaration, value: string, selectors: string[] }>} */
     const declarations = [];
-
-    for (const file of styles) {
+    for (const file of files.filter((file) => file.rel.startsWith('src/styles/') && file.rel.endsWith('.css'))) {
       let ast;
       try {
-        ast = csstree.parse(file.text, { positions: true });
+        ast = csstree.parse(file.text, { positions: true, parseCustomProperty: true });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        failures.push(`${file.rel}: CSS parse failed: ${message}`);
+        failures.push(`${file.rel}: CSS parse failed: ${error instanceof Error ? error.message : String(error)}`);
         continue;
       }
       csstree.walk(ast, {
-        visit: 'Declaration',
-        /** @param {any} node */
-        enter(node) {
-          const value = csstree.generate(node.value);
-          declarations.push({ file, node, value });
-          if (node.property.startsWith('--')) definitions.add(node.property);
-        },
-      });
-      csstree.walk(ast, {
         visit: 'Rule',
-        /** @param {any} rule */
         enter(rule) {
-          const selector = csstree.generate(rule.prelude);
-          if (selector === ':root' || selector === ':root[data-theme="light"]' || selector === ":root[data-theme='light']")
-            collectRuleDefinitions(rule.block, baseDefinitions);
-          if (selector === ':root[data-theme="dark"]' || selector === ":root[data-theme='dark']")
-            collectRuleDefinitions(rule.block, darkDefinitions);
+          if (rule.prelude.type !== 'SelectorList') return;
+          const selectors = rule.prelude.children.toArray().map((selector) => csstree.generate(selector));
+          for (const node of rule.block.children) {
+            if (node.type !== 'Declaration') continue;
+            const value = csstree.generate(node.value);
+            declarations.push({ file, node, value, selectors });
+            if (!node.property.startsWith('--')) continue;
+            if (node.property.startsWith('--n-')) {
+              if (!thirdPartyAllowed(file, selectors, node.property))
+                failures.push(diagnostic(file, node, selectors, `unauthorized third-party CSS property ${node.property}`));
+              continue;
+            }
+            const roots = selectors.filter(
+              (selector) => selector === ':root' || selector === ':root[data-theme="light"]' || selector === ':root[data-theme="dark"]',
+            );
+            if (roots.length) {
+              if (file.rel !== CSS_TOKEN_OWNER)
+                failures.push(diagnostic(file, node, selectors, 'shared CSS tokens must be defined in base.css'));
+              global.add(node.property);
+              if (roots.some((selector) => selector !== ':root[data-theme="dark"]')) base.add(node.property);
+              if (roots.includes(':root[data-theme="dark"]')) dark.add(node.property);
+            } else {
+              const scopes = local.get(node.property) ?? [];
+              scopes.push(...selectors);
+              local.set(node.property, scopes);
+            }
+          }
         },
       });
     }
+    for (const token of REQUIRED_TOKENS) if (!base.has(token)) failures.push(`src/styles/base.css: missing base token ${token}`);
+    for (const token of new Set([
+      ...DARK_REQUIRED_TOKENS,
+      ...[...global].filter((token) => token.startsWith('--color-') || token.startsWith('--shadow-')),
+    ]))
+      if (!dark.has(token)) failures.push(`src/styles/base.css: missing dark theme token ${token}`);
 
-    for (const token of REQUIRED_TOKENS) {
-      if (!baseDefinitions.has(token)) failures.push(`src/styles/base.css: missing base token ${token}`);
-    }
-    for (const token of DARK_REQUIRED_TOKENS) {
-      if (!darkDefinitions.has(token)) failures.push(`src/styles/base.css: missing dark theme token ${token}`);
-    }
-    for (const { file, node, value } of declarations) {
-      for (const match of value.matchAll(CSS_VAR_PATTERN)) {
-        const referenced = match[1];
-        if (!referenced.startsWith('--n-') && !definitions.has(referenced) && !['--hue-color', '--preview-color'].includes(referenced)) {
-          const location = node.loc?.start;
-          failures.push(`${file.rel}:${location?.line ?? 1}:${location?.column ?? 1}: undefined CSS variable ${referenced}`);
+    for (const { file, node, value, selectors } of declarations) {
+      /** @type {string[]} */
+      const vars = [];
+      csstree.walk(node.value, {
+        visit: 'Function',
+        enter(fn) {
+          if (fn.name === 'var' && fn.children.first?.type === 'Identifier') vars.push(fn.children.first.name);
+        },
+      });
+      for (const property of vars) {
+        if (property.startsWith('--n-')) {
+          if (!thirdPartyAllowed(file, selectors, property))
+            failures.push(diagnostic(file, node, selectors, `unauthorized third-party CSS variable ${property}`));
+        } else if (!global.has(property)) {
+          const scopes = local.get(property) ?? [];
+          const injected = file.rel === CSS_TOKEN_OWNER && selectors.every((selector) => DOM_PROPERTIES.get(property)?.includes(selector));
+          if (!injected && !selectors.every((selector) => scopes.some((scope) => withinScope(selector, scope)))) {
+            const message = scopes.length ? `CSS variable outside its scope ${property}` : `undefined CSS variable ${property}`;
+            failures.push(diagnostic(file, node, selectors, message));
+          }
         }
       }
-    }
-    for (const { file, node, value } of declarations) {
-      if (node.property === 'box-shadow' && !isApprovedShadow(value))
-        failures.push(diagnostic(file, node, 'box-shadow must use a shared shadow token'));
-      if (node.property === 'border-radius' && !isApprovedRadius(value))
-        failures.push(diagnostic(file, node, 'border-radius must use a shared radius token'));
-      if (isSpacingProperty(node.property) && SHARED_SPACING_PATTERN.test(value) && !value.includes('var(--space-'))
-        failures.push(diagnostic(file, node, 'shared spacing must use a --space token'));
+      const special = selectors.every((current) =>
+        SPECIAL_VALUES.some(
+          ([path, selector, property, expected]) =>
+            file.rel === path && current === selector && node.property === property && value === expected,
+        ),
+      );
+      if (special) continue;
+      if (node.property === 'box-shadow' && value !== 'none' && !onlyTokenValue(node.value, '--shadow-', ['none']))
+        failures.push(diagnostic(file, node, selectors, 'box-shadow must use a shared shadow token'));
+      if (node.property === 'border-radius' && value !== '0' && !onlyTokenValue(node.value, '--radius-', ['0']))
+        failures.push(diagnostic(file, node, selectors, 'border-radius must use a shared radius token'));
+      if (isSpacingProperty(node.property)) {
+        let hardcoded = false;
+        csstree.walk(node.value, {
+          visit: 'Dimension',
+          enter(dimension) {
+            if (dimension.unit === 'px' && [4, 8, 12, 16].includes(Number(dimension.value))) hardcoded = true;
+          },
+        });
+        if (hardcoded) failures.push(diagnostic(file, node, selectors, 'shared spacing must use a --space token'));
+      }
     }
     return failures;
   },
 };
 
-/** @param {any} block @param {Set<string>} output */
-function collectRuleDefinitions(block, output) {
-  csstree.walk(block, {
-    visit: 'Declaration',
-    /** @param {any} node */
-    enter(node) {
-      if (node.property.startsWith('--')) output.add(node.property);
-    },
-  });
+/** @param {string} selector @param {string} scope */
+function withinScope(selector, scope) {
+  return selector === scope || selector.startsWith(`${scope} `) || selector.startsWith(`${scope}>`) || selector.startsWith(`${scope}:`);
 }
 
-/** @param {{rel: string}} file @param {any} node @param {string} message */
-function diagnostic(file, node, message) {
-  return `${file.rel}:${node.loc?.start.line ?? 1}:${node.loc?.start.column ?? 1}: ${message}`;
+/** @param {{rel: string}} file @param {string[]} selectors @param {string} property */
+function thirdPartyAllowed(file, selectors, property) {
+  return file.rel === CSS_TOKEN_OWNER && selectors.every((selector) => THIRD_PARTY_PROPERTIES.get(selector)?.includes(property));
 }
 
-/** @param {string} value */
-function isApprovedShadow(value) {
-  return value === 'none' || value.includes('var(--shadow-') || value.includes('var(--color-') || /^0 0 0 1px /.test(value);
-}
-
-/** @param {string} value */
-function isApprovedRadius(value) {
+/** @param {import('css-tree').CssNode} value @param {string} prefix @param {string[]} literals */
+function onlyTokenValue(value, prefix, literals) {
+  if (value.type !== 'Value') return false;
+  const nodes = value.children.toArray();
   return (
-    value === '0' ||
-    value === '2px' ||
-    value === '50%' ||
-    value === '999px' ||
-    value.includes('var(--radius-') ||
-    value.startsWith('calc(var(--radius-')
+    nodes.length > 0 &&
+    nodes.every(
+      (node) =>
+        literals.includes(csstree.generate(node)) ||
+        (node.type === 'Function' &&
+          node.name === 'var' &&
+          node.children.first?.type === 'Identifier' &&
+          node.children.first.name.startsWith(prefix)) ||
+        (node.type === 'Function' &&
+          node.name === 'calc' &&
+          node.children
+            .toArray()
+            .some(
+              (child) =>
+                child.type === 'Function' &&
+                child.name === 'var' &&
+                child.children.first?.type === 'Identifier' &&
+                child.children.first.name.startsWith(prefix),
+            )),
+    )
   );
+}
+
+/** @param {{rel: string}} file @param {import('css-tree').CssNode} node @param {string[]} selectors @param {string} message */
+function diagnostic(file, node, selectors, message) {
+  return `${file.rel}:${node.loc?.start.line ?? 1}:${node.loc?.start.column ?? 1}: ${message} [${selectors.join(', ')}; ${node.type === 'Declaration' ? node.property : ''}]`;
 }
 
 /** @param {string} property */
 function isSpacingProperty(property) {
   return (
-    property === 'gap' ||
-    property === 'row-gap' ||
-    property === 'column-gap' ||
-    property === 'padding' ||
+    ['gap', 'row-gap', 'column-gap', 'padding', 'margin'].includes(property) ||
     property.startsWith('padding-') ||
-    property === 'margin' ||
     property.startsWith('margin-')
   );
 }

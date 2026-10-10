@@ -49,7 +49,7 @@ vi.mock('@/app/composables/use-app-feedback', () => ({
 vi.mock('@/app/composables/tables/use-schema-select-media', () => ({
   useSchemaSelectMedia: () => ({
     schemaSelectSprite: vi.fn(() => 'data:image/png;base64,thumb'),
-    ensureSchemaSelectSprites: vi.fn(async () => {}),
+    replaceSchemaSelectSprites: vi.fn(async () => {}),
     releaseSchemaSelectSprites: vi.fn(),
   }),
 }));

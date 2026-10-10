@@ -96,7 +96,7 @@ defineEmits<{
 
 const tables = useTablesStore();
 const project = useProjectStore();
-const { schemaSelectSprite, ensureSchemaSelectSprites, releaseSchemaSelectSprites } = useSchemaSelectMedia();
+const { schemaSelectSprite, replaceSchemaSelectSprites } = useSchemaSelectMedia();
 const settings = useSettingsStore();
 const workspace = useWorkspaceStore();
 const showReferenceDecorations = computed(() => settings.editMode === 'smart');
@@ -189,8 +189,7 @@ const summaryResources = computed(() => {
 watch(
   () => [project.activeSessionId, summaryResources.value] as const,
   ([sessionId, resources]) => {
-    releaseSchemaSelectSprites(sessionId, resources);
-    if (sessionId && resources.length) void ensureSchemaSelectSprites(sessionId, resources);
+    void replaceSchemaSelectSprites(sessionId, 'summary', resources);
   },
   { immediate: true },
 );

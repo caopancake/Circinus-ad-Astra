@@ -13,7 +13,7 @@ import {
   touchMediaBudgetEntry,
   WEBVIEW_MEDIA_BUDGET_BYTES,
 } from '@/shared/runtime/media-budget';
-import { invalidatedRead, waitForRead } from '@/shared/runtime/read-request';
+import { createReadTicket, invalidatedRead, waitForRead, type ReadTicket } from '@/shared/runtime/read-request';
 import { requireProjectionReady } from '@/shared/runtime/project-projection';
 import type { ProjectSessionId, ResourceRef } from '@/shared/types';
 
@@ -33,7 +33,7 @@ export interface ResourceMediaBatchResult {
 interface PendingMedia {
   sessionId: ProjectSessionId;
   resource: ResourceRef;
-  done: Promise<string | null>;
+  ticket: ReadTicket<string | null>;
   resolve: (value: string | null) => void;
   reject: (error: unknown) => void;
 }
@@ -84,17 +84,21 @@ export async function ensureResourceMedia(
     }
     const existing = pending.get(key) ?? inFlight.get(key);
     if (existing) {
-      waitFor.push(existing.done.then((value) => [key, value] as const));
+      waitFor.push(existing.ticket.promise.then((value) => [key, value] as const));
       continue;
     }
     let resolve!: (value: string | null) => void;
     let reject!: (error: unknown) => void;
-    const done = new Promise<string | null>((doneResolve, doneReject) => {
-      resolve = doneResolve;
-      reject = doneReject;
-    });
-    pending.set(key, { sessionId, resource, done, resolve, reject });
-    waitFor.push(done.then((value) => [key, value] as const));
+    const ticket = createReadTicket(
+      { sessionId, resource },
+      () =>
+        new Promise<string | null>((doneResolve, doneReject) => {
+          resolve = doneResolve;
+          reject = doneReject;
+        }),
+    );
+    pending.set(key, { sessionId, resource, ticket, resolve, reject });
+    waitFor.push(ticket.promise.then((value) => [key, value] as const));
     requested += 1;
   }
 
@@ -166,7 +170,10 @@ async function flushPendingMedia(): Promise<void> {
         );
         group.forEach(([key, item], index) => {
           const value = dataUrls[index] ?? null;
-          if (inFlight.get(key) === item) storeMedia(key, value);
+          if (!item.ticket.signal.aborted) {
+            item.ticket.accept();
+            storeMedia(key, value);
+          }
           item.resolve(value);
         });
       } catch (error) {
@@ -227,8 +234,8 @@ subscribeResourceInvalidations((event) => {
 
 function invalidateMediaKey(key: string, reason: 'project' | 'session' = 'project'): void {
   removeMediaKey(key);
-  pending.get(key)?.reject(invalidatedRead({ key }, reason));
+  pending.get(key)?.ticket.invalidate(reason);
   pending.delete(key);
-  inFlight.get(key)?.reject(invalidatedRead({ key }, reason));
+  inFlight.get(key)?.ticket.invalidate(reason);
   inFlight.delete(key);
 }

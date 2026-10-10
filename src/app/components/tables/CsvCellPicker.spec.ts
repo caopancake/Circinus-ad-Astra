@@ -6,8 +6,9 @@ import CsvCellPicker from './CsvCellPicker.vue';
 vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ error: vi.fn() }) }));
 
 vi.mock('@/services/resource-media.service', () => ({
-  ensureResourceMedia: vi.fn().mockResolvedValue({ uncachedDataUrls: new Map() }),
+  ensureResourceMedia: vi.fn().mockResolvedValue({ failedResources: [], uncachedDataUrls: new Map() }),
   resourceMediaDataUrl: vi.fn().mockReturnValue(undefined),
+  subscribeResourceMediaInvalidations: vi.fn(() => () => {}),
 }));
 
 function mountPicker(

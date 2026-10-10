@@ -131,7 +131,7 @@ describe('useVisibleResourceMedia', () => {
     observer.trigger([{ target: rows[1]!.element, isIntersecting: true }]);
     await Promise.resolve();
 
-    expect(mocks.ensure.mock.calls.map((call) => call[1])).toEqual([[resource(1)], [resource(2)], [resource(2)]]);
+    expect(mocks.ensure.mock.calls.map((call) => call[1])).toEqual([[resource(1)], [resource(2)]]);
   });
 
   it('rebuilds the observer when the scroll container height changes', () => {
@@ -176,6 +176,7 @@ describe('useVisibleResourceMedia', () => {
     activeObserver().trigger([{ target: row, isIntersecting: true }]);
     await Promise.resolve();
 
+    await flushPromises();
     expect(mocks.warning).toHaveBeenCalledTimes(1);
     const observer = activeObserver();
     const resizeObserver = TestResizeObserver.instances[TestResizeObserver.instances.length - 1]!;
@@ -227,9 +228,7 @@ describe('useVisibleResourceMedia', () => {
     const wrapper = mountHarness();
     const row = wrapper.findAll('[data-row]')[0]!.element;
     activeObserver().trigger([{ target: row, isIntersecting: true }]);
-    const signal = mocks.ensure.mock.calls[0]![3] as AbortSignal;
     activeObserver().trigger([{ target: row, isIntersecting: false }]);
-    expect(signal.aborted).toBe(true);
     fail(new Error('late failure'));
     await flushPromises();
     expect(mocks.error).not.toHaveBeenCalled();

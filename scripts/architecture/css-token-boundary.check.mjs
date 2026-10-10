@@ -59,7 +59,7 @@ const base = `:root {
 
 test('CSS tokens and shared radius/shadow semantics pass', () => {
   const failures = cssTokenBoundaryRule.check([{ rel: 'src/styles/base.css', text: base }]);
-  assert.deepEqual(failures, ['src/styles/base.css:53:77: undefined CSS variable --missing']);
+  assert.deepEqual(failures, ['src/styles/base.css:53:77: undefined CSS variable --missing [.panel; color]']);
 });
 
 test('CSS checker reports hardcoded shared radius and shadow values', () => {
@@ -73,4 +73,61 @@ test('CSS checker reports hardcoded shared radius and shadow values', () => {
 test('CSS checker reports hardcoded shared spacing values', () => {
   const failures = cssTokenBoundaryRule.check([{ rel: 'src/styles/base.css', text: `${base}.bad { gap: 8px; padding: 4px 6px; }` }]);
   assert.equal(failures.filter((failure) => failure.includes('shared spacing')).length, 2);
+});
+
+test('local variables follow their selector scope across descendants', () => {
+  const failures = cssTokenBoundaryRule.check([
+    {
+      rel: 'src/styles/base.css',
+      text: `${base}
+    .owner { --local: 6px; padding: var(--local); }
+    .owner .child { padding: var(--local); }
+    .other { padding: var(--local); }
+  `,
+    },
+  ]);
+  assert.equal(failures.filter((failure) => failure.includes('outside its scope --local')).length, 1);
+  assert.ok(failures.some((failure) => failure.includes('[.other; padding]')));
+});
+
+test('third-party and DOM-injected variables have explicit file, selector and property authorization', () => {
+  const failures = cssTokenBoundaryRule.check([
+    {
+      rel: 'src/styles/base.css',
+      text: `${base}
+    .n-base-selection { --n-color: var(--color-panel); }
+    .other { --n-color: red; color: var(--n-color); background: var(--hue-color); }
+    .color-picker-sv { background: var(--hue-color); }
+  `,
+    },
+  ]);
+  assert.equal(failures.filter((failure) => failure.includes('third-party')).length, 2);
+  assert.equal(failures.filter((failure) => failure.includes('undefined CSS variable --hue-color')).length, 1);
+});
+
+test('mixed declarations and color-based shadows retain their shared-token checks', () => {
+  const failures = cssTokenBoundaryRule.check([
+    {
+      rel: 'src/styles/base.css',
+      text: `${base}
+    .other { padding: var(--space-1) 8px; box-shadow: 0 3px 12px var(--color-border); border-radius: var(--radius-sm) 2px; }
+  `,
+    },
+  ]);
+  for (const message of ['shared spacing', 'shared shadow', 'shared radius'])
+    assert.equal(failures.filter((failure) => failure.includes(message)).length, 1);
+});
+
+test('special visual semantics are authorized by exact selector and property', () => {
+  const failures = cssTokenBoundaryRule.check([
+    {
+      rel: 'src/styles/base.css',
+      text: `${base}
+    .color-picker-sv-handle { border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,0.72); }
+    .other { border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,0.72); }
+  `,
+    },
+  ]);
+  assert.equal(failures.filter((failure) => failure.includes('shared radius')).length, 1);
+  assert.equal(failures.filter((failure) => failure.includes('shared shadow')).length, 1);
 });

@@ -12,7 +12,14 @@ const mocks = vi.hoisted(() => ({
   invalidated: null as ((event: ResourceCacheInvalidationEvent) => void) | null,
 }));
 vi.mock('@/app/composables/use-app-feedback', () => ({ useAppFeedback: () => ({ error: mocks.error }) }));
-vi.mock('@/services/resource-media.service', () => ({ ensureResourceMedia: mocks.ensure, resourceMediaDataUrl: () => undefined }));
+vi.mock('@/services/resource-media.service', () => ({
+  ensureResourceMedia: mocks.ensure,
+  resourceMediaDataUrl: () => undefined,
+  subscribeResourceMediaInvalidations: (listener: (event: ResourceCacheInvalidationEvent) => void) => {
+    mocks.invalidated = listener;
+    return mocks.stop;
+  },
+}));
 vi.mock('@/services/resource-cache.service', () => ({
   resourceCacheKey: (session: string, resource: ResourceRef) => JSON.stringify([session, resource.source, resource.relPath]),
   subscribeResourceInvalidations: (listener: (event: ResourceCacheInvalidationEvent) => void) => {
@@ -25,7 +32,7 @@ describe('selected resource projection', () => {
   it('reloads visible temporary content after resource invalidation and releases it on close', async () => {
     const resource: ResourceRef = { source: 'mod', relPath: 'graphics/a.png', key: 'icon', ownerKind: 'weapon', ownerId: 'a' };
     const key = JSON.stringify(['a', 'mod', resource.relPath]);
-    mocks.ensure.mockResolvedValue({ uncachedDataUrls: new Map([[key, 'data:old']]) });
+    mocks.ensure.mockResolvedValue({ failedResources: [], uncachedDataUrls: new Map([[key, 'data:old']]) });
     let media!: ReturnType<typeof useSchemaSelectMedia>;
     const wrapper = mount(
       defineComponent({
@@ -35,15 +42,15 @@ describe('selected resource projection', () => {
         },
       }),
     );
-    await media.ensureSchemaSelectSprites('a', [resource]);
+    await media.replaceSchemaSelectSprites('a', 'selected', [resource]);
     await flushPromises();
     expect(wrapper.attributes('src')).toBe('data:old');
-    mocks.ensure.mockResolvedValue({ uncachedDataUrls: new Map([[key, 'data:new']]) });
+    mocks.ensure.mockResolvedValue({ failedResources: [], uncachedDataUrls: new Map([[key, 'data:new']]) });
     mocks.invalidated!({ sessionId: 'a', scope: 'resources', resources: [resource], invalidation: null });
     await flushPromises();
     expect(wrapper.attributes('src')).toBe('data:new');
     expect(mocks.ensure).toHaveBeenCalledTimes(2);
-    media.releaseSchemaSelectSprites('a', []);
+    await media.releaseSchemaSelectSprites('selected');
     await flushPromises();
     expect(wrapper.attributes('src')).toBeUndefined();
     mocks.invalidated!({ sessionId: 'a', scope: 'session', resources: [], invalidation: null });

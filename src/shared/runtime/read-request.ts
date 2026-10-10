@@ -101,7 +101,36 @@ export function createQueryReadOwner() {
   function isCurrent(lane: string, identity: object): boolean {
     return requests.get(lane)?.identity === identity;
   }
-  return { read, revoke, schedule, isCurrent };
+  async function consume<T>(
+    lane: string,
+    identity: object,
+    load: (signal: AbortSignal) => T | Promise<T>,
+    handlers: { ready: (value: T) => void; error?: (error: unknown) => void; settled?: () => void },
+  ): Promise<void> {
+    requests.get(lane)?.invalidate('consumer');
+    let synchronous = false;
+    const ticket = createReadTicket(identity, load, (value) => {
+      synchronous = true;
+      handlers.ready(value);
+    });
+    requests.set(lane, ticket as ReadTicket<unknown>);
+    try {
+      const value = await ticket.promise;
+      ticket.accept();
+      if (!synchronous) handlers.ready(value);
+    } catch (error) {
+      if (!ticket.signal.aborted && !isReadInvalidated(error)) {
+        if (handlers.error) handlers.error(error);
+        else throw error;
+      }
+    } finally {
+      if (requests.get(lane) === ticket) {
+        if (!ticket.signal.aborted) handlers.settled?.();
+        requests.delete(lane);
+      }
+    }
+  }
+  return { read, consume, revoke, schedule, isCurrent };
 }
 
 export function waitForRead<T>(promise: Promise<T>, identity: object, signal?: AbortSignal): Promise<T> {

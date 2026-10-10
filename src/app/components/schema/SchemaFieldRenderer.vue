@@ -418,7 +418,7 @@ const plainMode = computed(() => mode.value === 'plain');
 const fieldInputs = useFieldInputs();
 const fieldInputKey = computed(() => props.inputKey ?? props.field.key);
 const fieldTitle = computed(() => [props.field.key, props.field.description ?? ''].filter(Boolean).join('\n'));
-const { schemaSelectSprite, ensureSchemaSelectSprites, releaseSchemaSelectSprites } = useSchemaSelectMedia();
+const { schemaSelectSprite, replaceSchemaSelectSprites, releaseSchemaSelectSprites } = useSchemaSelectMedia();
 
 const strVal = computed(() => schemaStringValue(props.value));
 const stringTextareaAutosize = { minRows: 1, maxRows: 6 };
@@ -483,11 +483,12 @@ function collectOptionMedia(options: SelectOption[]): OptionMediaEntry[] {
   return out;
 }
 
-function ensureSelectMedia(options: SelectOption[]) {
+function ensureSelectMedia(id: string, options: SelectOption[]) {
   const sessionId = props.runtimeContext?.sessionId;
   if (!sessionId || !isCsvSource(props.field.source)) return;
-  void ensureSchemaSelectSprites(
+  void replaceSchemaSelectSprites(
     sessionId,
+    id,
     collectOptionMedia(options).map((entry) => entry.resource),
   );
 }
@@ -495,22 +496,16 @@ function ensureSelectMedia(options: SelectOption[]) {
 function ensureCurrentMedia() {
   const sessionId = props.runtimeContext?.sessionId;
   if (!isCsvSource(props.field.source) || !sessionId) {
-    releaseSchemaSelectSprites(sessionId, []);
+    void replaceSchemaSelectSprites(sessionId, 'selected', []);
     return;
   }
   const values = new Set(fieldSourceCurrentValues(props.field, props.value));
   const matched = collectOptionMedia(sourceOptions.value).filter((entry) => values.has(entry.value));
-  if (!selectOpen.value && !Object.values(kvSelectOpen.value).some(Boolean))
-    releaseSchemaSelectSprites(
-      sessionId,
-      matched.map((entry) => entry.resource),
-    );
-  if (matched.length > 0) {
-    void ensureSchemaSelectSprites(
-      sessionId,
-      matched.map((entry) => entry.resource),
-    );
-  }
+  void replaceSchemaSelectSprites(
+    sessionId,
+    'selected',
+    matched.map((entry) => entry.resource),
+  );
 }
 
 watch([sourceOptions, () => fieldSourceCurrentValues(props.field, props.value)], () => ensureCurrentMedia(), { immediate: true });
@@ -678,6 +673,7 @@ function removeKvEntry(idx: number) {
   fieldInputs?.cancel(`${fieldInputKey.value}/${kvRowIds.value[idx]}`);
   const rowId = kvRowIds.value[idx];
   if (rowId !== undefined) {
+    void releaseSchemaSelectSprites(`kv:${rowId}`);
     delete kvSelectOpen.value[rowId];
     delete suppressNextKvSelectOpen.value[rowId];
   }
@@ -748,27 +744,17 @@ function handleSelectShowUpdate(show: boolean) {
   if (show && suppressNextSelectOpen.value) return;
   selectOpen.value = show;
   if (show) {
-    ensureSelectMedia([...displayOptions.value, ...listOptions.value, ...tagDisplayOptions.value]);
+    ensureSelectMedia('menu', [...displayOptions.value, ...listOptions.value, ...tagDisplayOptions.value]);
   } else {
-    releaseCurrentSelectMedia();
+    void releaseSchemaSelectSprites('menu');
   }
 }
 
 function handleKvSelectShowUpdate(rowId: number, show: boolean) {
   if (show && suppressNextKvSelectOpen.value[rowId]) return;
   kvSelectOpen.value[rowId] = show;
-  if (show) ensureSelectMedia(kvKeyOptions.value);
-  else releaseCurrentSelectMedia();
-}
-
-function releaseCurrentSelectMedia() {
-  const values = new Set(fieldSourceCurrentValues(props.field, props.value));
-  releaseSchemaSelectSprites(
-    props.runtimeContext?.sessionId,
-    collectOptionMedia(sourceOptions.value)
-      .filter((entry) => values.has(entry.value))
-      .map((entry) => entry.resource),
-  );
+  if (show) ensureSelectMedia(`kv:${rowId}`, kvKeyOptions.value);
+  else void releaseSchemaSelectSprites(`kv:${rowId}`);
 }
 
 function shouldLetSelectClickPass(event: MouseEvent): boolean {

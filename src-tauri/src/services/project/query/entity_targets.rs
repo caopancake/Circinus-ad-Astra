@@ -170,137 +170,184 @@ pub fn query_entity_identity_intent(
     })
 }
 
+pub(in crate::services::project) struct EntityTargetProjection {
+    kind: EntityKind,
+    sources: std::collections::BTreeMap<String, EntityFileLocation>,
+    linked: std::collections::BTreeMap<String, EntityLinkedRecord>,
+    index_version: Option<crate::models::FileVersion>,
+}
+
+pub(in crate::services::project) fn prepare_entity_targets(
+    session: &mut ProjectSession,
+    kind: EntityKind,
+) -> AppResult<EntityTargetProjection> {
+    let root = &session.manifest.mod_root;
+    let mut sources = std::collections::BTreeMap::new();
+    match kind {
+        EntityKind::Variant => {
+            for record in &session.variant_files {
+                sources
+                    .entry(record.variant_id.clone())
+                    .or_insert_with(|| location(root, &record.rel_path));
+            }
+        }
+        EntityKind::Skin => {
+            for record in &session.skin_files {
+                sources
+                    .entry(record.skin_hull_id.clone())
+                    .or_insert_with(|| location(root, &record.rel_path));
+            }
+        }
+        EntityKind::Mission => {}
+        _ => {
+            let records = match kind {
+                EntityKind::Ship => &session.ship_files,
+                EntityKind::Weapon => &session.weapon_specs,
+                EntityKind::Projectile => &session.projectile_specs,
+                EntityKind::System => &session.system_files,
+                EntityKind::Skill => &session.skill_files,
+                EntityKind::Faction => &session.faction_files,
+                _ => unreachable!("file-backed entity kind"),
+            };
+            sources.extend(
+                records
+                    .iter()
+                    .map(|(id, record)| (id.clone(), record.location.clone())),
+            );
+        }
+    }
+    let definition = crate::domain::editor_config_definitions::entity_spec_definition(kind);
+    let mut linked = std::collections::BTreeMap::new();
+    let index_version = if let Some(table) = definition.and_then(|definition| definition.csv_table)
+    {
+        ensure_registered_table_rows(session, table)?;
+        let state = session
+            .csv_tables
+            .get(table.as_str())
+            .expect("registered table");
+        for row in state.rows.as_ref().expect("associated rows are loaded") {
+            if let Some(id) = string_from_row(&row.data, "id") {
+                linked.entry(id).or_insert_with(|| EntityLinkedRecord::Csv {
+                    table,
+                    row_key: row.row_key.clone(),
+                });
+            }
+        }
+        Some(version_for_path(session, &state.path))
+    } else if kind == EntityKind::Faction {
+        let index = "data/world/factions/factions.csv";
+        let entries = crate::io::read_faction_index(Path::new(&session.manifest.mod_root))?;
+        let mut paths = std::collections::BTreeMap::new();
+        for entry in entries {
+            paths
+                .entry(entry.path.to_string_lossy().to_string())
+                .or_insert(entry.row_index);
+        }
+        for (id, source) in &sources {
+            if let Some(row_index) = paths.get(&source.path) {
+                linked.insert(
+                    id.clone(),
+                    EntityLinkedRecord::Index {
+                        path: index.to_string(),
+                        row_index: *row_index,
+                    },
+                );
+            }
+        }
+        Some(version_for_path(session, index))
+    } else if kind == EntityKind::Mission {
+        ensure_session_table_rows(session, MISSION_LIST_TABLE_KEY)?;
+        let index = "data/missions/mission_list.csv";
+        for (row_index, row) in session.csv_tables[MISSION_LIST_TABLE_KEY]
+            .rows
+            .as_ref()
+            .expect("mission rows are loaded")
+            .iter()
+            .enumerate()
+        {
+            if let Some(id) = string_from_row(&row.data, "mission") {
+                linked
+                    .entry(id)
+                    .or_insert_with(|| EntityLinkedRecord::Index {
+                        path: index.to_string(),
+                        row_index,
+                    });
+            }
+        }
+        Some(version_for_path(session, index))
+    } else {
+        None
+    };
+    Ok(EntityTargetProjection {
+        kind,
+        sources,
+        linked,
+        index_version,
+    })
+}
+
+impl EntityTargetProjection {
+    pub(in crate::services::project) fn describe(
+        &self,
+        session: &ProjectSession,
+        id: &str,
+    ) -> EntityEditInfo {
+        let root = &session.manifest.mod_root;
+        let definition =
+            crate::domain::editor_config_definitions::entity_spec_definition(self.kind);
+        let source = if self.kind == EntityKind::Mission {
+            let relative = format!("data/missions/{id}");
+            Path::new(root)
+                .join(&relative)
+                .is_dir()
+                .then(|| location(root, &relative))
+        } else {
+            self.sources.get(id).cloned()
+        };
+        let write = source
+            .as_ref()
+            .filter(|source| source.source == ResourceSource::Mod)
+            .cloned()
+            .unwrap_or_else(|| {
+                location(
+                    root,
+                    &definition
+                        .map(|definition| definition.default_rel_path(id))
+                        .unwrap_or_else(|| format!("data/missions/{id}")),
+                )
+            });
+        let state = if source
+            .as_ref()
+            .is_some_and(|source| source.source == ResourceSource::Mod)
+        {
+            EntityTargetState::Existing
+        } else {
+            EntityTargetState::Create
+        };
+        let mut versions = vec![version_for_path(session, &write.rel_path)];
+        versions.extend(self.index_version.iter().cloned());
+        versions.sort_by(|left, right| left.path.cmp(&right.path));
+        versions.dedup_by(|left, right| left.path.eq_ignore_ascii_case(&right.path));
+        EntityEditInfo {
+            target: EntityEditTarget {
+                kind: self.kind,
+                id: id.to_string(),
+                source,
+                write,
+                state,
+                linked_record: self.linked.get(id).cloned(),
+            },
+            base_versions: versions,
+        }
+    }
+}
+
 pub(in crate::services::project) fn describe_entity_target(
     session: &mut ProjectSession,
     kind: EntityKind,
     id: &str,
 ) -> AppResult<EntityEditInfo> {
-    let root = session.manifest.mod_root.clone();
-    let definition = crate::domain::editor_config_definitions::entity_spec_definition(kind);
-    let source = match kind {
-        EntityKind::Ship => session
-            .ship_files
-            .get(id)
-            .map(|record| record.location.clone()),
-        EntityKind::Weapon => session
-            .weapon_specs
-            .get(id)
-            .map(|record| record.location.clone()),
-        EntityKind::Projectile => session
-            .projectile_specs
-            .get(id)
-            .map(|record| record.location.clone()),
-        EntityKind::System => session
-            .system_files
-            .get(id)
-            .map(|record| record.location.clone()),
-        EntityKind::Skill => session
-            .skill_files
-            .get(id)
-            .map(|record| record.location.clone()),
-        EntityKind::Faction => session
-            .faction_files
-            .get(id)
-            .map(|record| record.location.clone()),
-        EntityKind::Variant => session
-            .variant_files
-            .iter()
-            .find(|record| record.variant_id == id)
-            .map(|record| location(&root, &record.rel_path)),
-        EntityKind::Skin => session
-            .skin_files
-            .iter()
-            .find(|record| record.skin_hull_id == id)
-            .map(|record| location(&root, &record.rel_path)),
-        EntityKind::Mission => Path::new(&root)
-            .join(format!("data/missions/{id}"))
-            .is_dir()
-            .then(|| location(&root, &format!("data/missions/{id}"))),
-    };
-    let write = source
-        .as_ref()
-        .filter(|source| source.source == ResourceSource::Mod)
-        .cloned()
-        .unwrap_or_else(|| {
-            location(
-                &root,
-                &definition
-                    .map(|definition| definition.default_rel_path(id))
-                    .unwrap_or_else(|| format!("data/missions/{id}")),
-            )
-        });
-    let state = if source
-        .as_ref()
-        .is_some_and(|source| source.source == ResourceSource::Mod)
-    {
-        EntityTargetState::Existing
-    } else {
-        EntityTargetState::Create
-    };
-    let mut versions = vec![version_for_path(session, &write.rel_path)];
-    let linked_record = if let Some(table) = definition.and_then(|definition| definition.csv_table)
-    {
-        ensure_registered_table_rows(session, table)?;
-        let table_state = session
-            .csv_tables
-            .get(table.as_str())
-            .expect("registered table");
-        versions.push(version_for_path(session, &table_state.path));
-        table_state
-            .rows
-            .as_ref()
-            .expect("associated rows are loaded")
-            .iter()
-            .find(|row| string_from_row(&row.data, "id").as_deref() == Some(id))
-            .map(|row| EntityLinkedRecord::Csv {
-                table,
-                row_key: row.row_key.clone(),
-            })
-    } else if kind == EntityKind::Faction {
-        let index = "data/world/factions/factions.csv";
-        versions.push(version_for_path(session, index));
-        let entries = crate::io::read_faction_index(Path::new(&root))?;
-        entries
-            .iter()
-            .find(|entry| {
-                source
-                    .as_ref()
-                    .is_some_and(|source| entry.path.to_string_lossy() == source.path)
-            })
-            .map(|entry| EntityLinkedRecord::Index {
-                path: index.to_string(),
-                row_index: entry.row_index,
-            })
-    } else if kind == EntityKind::Mission {
-        let index = "data/missions/mission_list.csv";
-        versions.push(version_for_path(session, index));
-        ensure_session_table_rows(session, MISSION_LIST_TABLE_KEY)?;
-        session.csv_tables[MISSION_LIST_TABLE_KEY]
-            .rows
-            .as_ref()
-            .expect("mission rows are loaded")
-            .iter()
-            .position(|row| string_from_row(&row.data, "mission").as_deref() == Some(id))
-            .map(|row_index| EntityLinkedRecord::Index {
-                path: index.to_string(),
-                row_index,
-            })
-    } else {
-        None
-    };
-    versions.sort_by(|left, right| left.path.cmp(&right.path));
-    versions.dedup_by(|left, right| left.path.eq_ignore_ascii_case(&right.path));
-    Ok(EntityEditInfo {
-        target: EntityEditTarget {
-            kind,
-            id: id.to_string(),
-            source,
-            write,
-            state,
-            linked_record,
-        },
-        base_versions: versions,
-    })
+    Ok(prepare_entity_targets(session, kind)?.describe(session, id))
 }
 
 pub(crate) fn location(root: &str, rel_path: &str) -> EntityFileLocation {

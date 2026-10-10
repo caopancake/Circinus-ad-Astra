@@ -74,12 +74,11 @@ export function createEditSessionValue<T>(initialValue: T, options: EditSessionV
       state.draft = clone(value);
     },
     applyExternal(value, preserveDraft = false) {
-      const next = clone(value);
       if (preserveDraft || !equals(state.baseline, state.draft)) {
-        state.pendingExternal = next;
+        state.pendingExternal = clone(value);
         return;
       }
-      loadBaseline(next);
+      loadBaseline(value);
     },
     loadPendingExternal() {
       if (state.pendingExternal === null) return;

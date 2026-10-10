@@ -34,6 +34,29 @@ function createSession(options: Partial<EditTargetDraftSessionOptions<SampleValu
 }
 
 describe('target snapshots', () => {
+  it('clones each owned value once and isolates snapshot metadata', () => {
+    const clone = vi.fn((value: SampleValue) => ({ ...value }));
+    const session = createSession({ clone });
+    expect(clone).toHaveBeenCalledTimes(2);
+    const source = snapshot(4);
+    clone.mockClear();
+    session.loadBaseForTarget(source);
+    expect(clone).toHaveBeenCalledTimes(2);
+    source.value.a = 99;
+    source.baseVersions[0]!.fingerprint = 'mutated';
+    source.meta.label = 'mutated';
+    expect(session.baselineSnapshot.value).toEqual(snapshot(4));
+    session.draftValue.value.a = 5;
+    expect(session.baselineSnapshot.value?.value.a).toBe(4);
+    clone.mockClear();
+    session.setDraft({ a: 6 });
+    expect(clone).toHaveBeenCalledOnce();
+    clone.mockClear();
+    session.applyExternalForTarget(snapshot(7, 'v7'));
+    expect(clone).toHaveBeenCalledOnce();
+    expect(session.pendingSnapshot.value?.value.a).toBe(7);
+    expect(session.draftValue.value.a).toBe(6);
+  });
   it('waiting a pending synchronization retries its receipt while retaining newer draft edits', async () => {
     const save = vi.fn((_target: SampleTarget, value: SampleValue) => snapshot(value.a));
     const afterSaved = vi.fn().mockRejectedValueOnce(new Error('broadcast')).mockResolvedValue(undefined);

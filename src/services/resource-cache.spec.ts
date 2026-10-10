@@ -68,9 +68,7 @@ describe('resource data URL cache', () => {
   it('shares a cached data URL across owner metadata for one physical path', async () => {
     const sessionId = 'resource-cache-physical-key';
     const first = resource(900);
-    const second = JSON.parse(JSON.stringify(first)) as ResourceRef;
-    second.ownerId = 'other-owner';
-    second.key = 'thumbnail';
+    const second: ResourceRef = { ...first, ownerId: 'other-owner', key: 'thumbnail' };
     await queryResources(sessionId, [first]);
     const result = await queryResources(sessionId, [second]);
 

@@ -46,7 +46,7 @@ const props = defineProps<{
 const rawValue = computed(() => cell(props.row.data[props.column.key]));
 const mode = useInputEditMode();
 const context = useCsvTableInputs();
-const { schemaSelectSprite, ensureSchemaSelectSprites, releaseSchemaSelectSprites } = useSchemaSelectMedia();
+const { schemaSelectSprite, replaceSchemaSelectSprites } = useSchemaSelectMedia();
 const control = computed(() => csvColumnControl(props.column.schema));
 const isListControl = computed(() => isCsvListControl(control.value));
 const isReferenceControl = computed(() => isCsvReferenceControl(control.value));
@@ -65,8 +65,7 @@ watch(
   () => [context.target.sessionId, referenceMatch.value?.option.resourceRef, mode.value] as const,
   ([sessionId, resource, editMode]) => {
     const resources = editMode === 'smart' && resource ? [resource] : [];
-    releaseSchemaSelectSprites(sessionId, resources);
-    if (sessionId && resources.length) void ensureSchemaSelectSprites(sessionId, resources);
+    void replaceSchemaSelectSprites(sessionId, 'selected', resources);
   },
   { immediate: true },
 );
