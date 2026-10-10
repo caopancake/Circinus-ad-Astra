@@ -10,7 +10,6 @@ import type {
 } from '@/shared/types';
 import { cell, deepClone, rowDisplayId } from '@/shared/lib/starsector';
 import { createCsvDeletedRow, createCsvDirtyCells, csvDirtyCells, hasCsvDirtyCells } from '@/domain/tables/csv-dirty';
-import { defaultCsvFactionId } from '@/domain/tables/csv-faction-filter';
 import { isLoadedCsvTableRow } from '@/domain/tables/csv-table-rows';
 import { createTableRowKey } from '@/domain/tables/table-row-key';
 import type { DeepReadonly } from '@/shared/types';
@@ -52,11 +51,9 @@ export function applyCsvTableWindowDraft(
     if (sameBaseline) {
       for (const entry of record.rows) {
         const original = originalRows.get(entry.rowKey)!;
-        original.factionId = entry.factionId;
         original.sourceRowIndex = entry.sourceRowIndex;
         const current = findLoadedRow(state, table, entry.rowKey);
         if (current) {
-          current.factionId = entry.factionId;
           current.sourceRowIndex = entry.sourceRowIndex;
         }
       }
@@ -73,7 +70,6 @@ export function applyCsvTableWindowDraft(
     rowKey: entry.rowKey,
     data: deepClone(entry.data) as RowData,
     isComment: entry.isComment,
-    factionId: entry.factionId,
     sourceRowIndex: entry.sourceRowIndex,
     insertAt: null,
   }));
@@ -129,7 +125,6 @@ export function createCsvRowDraft(state: ModTableState, now: number): CsvDraftRe
     rowKey: createTableRowKey(tab, state.nextRowKey++),
     data: Object.fromEntries(state.headers[tab].map((col) => [col, ''])),
     isComment: false,
-    factionId: defaultCsvFactionId(),
     sourceRowIndex: null,
     insertAt: null,
   };
@@ -264,7 +259,6 @@ export function commitCsvTableSaveDraft(state: ModTableState, tab: TableKey, pat
       data: deepClone(patch.row),
       isComment: patch.isComment,
       rowKey,
-      factionId: findLoadedRow(state, tab, rowKey)?.factionId ?? null,
       sourceRowIndex: sourceIndex ?? null,
       insertAt: null,
     };

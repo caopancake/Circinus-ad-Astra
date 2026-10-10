@@ -16,7 +16,7 @@ import {
 import { getColumns } from '@/shared/lib/starsector';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { csvDirtyCells } from '@/domain/tables/csv-dirty';
-import { DEFAULT_CSV_FACTION_FILTER, filterFromOptionValue, filterOptionValue } from '@/domain/tables/csv-faction-filter';
+import { DEFAULT_CSV_SEARCH_FIELD } from '@/domain/tables/csv-search';
 import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
 import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 import {
@@ -72,7 +72,7 @@ function createModTableState(): ModTableState {
     dirty: emptyDirtyState(),
     pendingExternalTableUpdates: emptyExternalUpdateState(),
     currentTab: 'ships',
-    currentFaction: DEFAULT_CSV_FACTION_FILTER,
+    searchField: DEFAULT_CSV_SEARCH_FIELD,
     searchText: '',
     selectedRowKey: null,
     editing: null,
@@ -123,8 +123,8 @@ export const useTablesStore = defineStore('tables', () => {
 
   const tables = computed(() => getActiveState()?.tables ?? emptyTablesRecord());
   const currentTab = computed(() => getActiveState()?.currentTab ?? 'ships');
-  const currentFaction = computed(() => getActiveState()?.currentFaction ?? DEFAULT_CSV_FACTION_FILTER);
-  const currentFactionOptionValue = computed(() => filterOptionValue(currentFaction.value));
+  const searchField = computed(() => getActiveState()?.searchField ?? DEFAULT_CSV_SEARCH_FIELD);
+  const currentHeader = computed(() => getActiveState()?.headers[currentTab.value] ?? []);
   const searchText = computed(() => getActiveState()?.searchText ?? '');
   const selectedRowKey = computed(() => getActiveState()?.selectedRowKey ?? null);
   const editing = computed(() => getActiveState()?.editing ?? null);
@@ -226,7 +226,7 @@ export const useTablesStore = defineStore('tables', () => {
     state.currentTab = tab;
     state.selectedRowKey = null;
     state.searchText = '';
-    state.currentFaction = DEFAULT_CSV_FACTION_FILTER;
+    state.searchField = DEFAULT_CSV_SEARCH_FIELD;
   }
 
   function applyTableWindow(target: CsvTableTarget, window: import('@/shared/types').DeepReadonly<CsvTableWindow>) {
@@ -252,8 +252,8 @@ export const useTablesStore = defineStore('tables', () => {
     stateMap.get(target.modRoot)!.searchText = text;
   }
 
-  function setFactionFilter(target: CsvTableTarget, option: string) {
-    stateMap.get(target.modRoot)!.currentFaction = filterFromOptionValue(option);
+  function setSearchField(target: CsvTableTarget, field: import('@/shared/types').CsvSearchField) {
+    stateMap.get(target.modRoot)!.searchField = field;
   }
 
   function selectRowByKey(target: CsvTableTarget, rowKey: string | null) {
@@ -369,9 +369,9 @@ export const useTablesStore = defineStore('tables', () => {
     isTableLocked,
     lockTable,
     releaseTableLock,
-    currentFaction,
-    currentFactionOptionValue,
+    searchField,
     currentTab,
+    currentHeader,
     activeModRoot,
     canRedoCurrentTableEdit,
     canUndoCurrentTableEdit,
@@ -414,7 +414,7 @@ export const useTablesStore = defineStore('tables', () => {
     selectRowByKey,
     setSaving,
     setSearchText,
-    setFactionFilter,
+    setSearchField,
     clearTableExternalUpdate,
     switchTab,
     applySavedRowKeyMapForMod,

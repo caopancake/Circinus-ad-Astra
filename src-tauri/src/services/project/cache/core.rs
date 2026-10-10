@@ -122,7 +122,6 @@ pub(crate) fn load_core_csv_table(
                     row_key: format!("core:{table_key}:row:{index}"),
                     data: row.data,
                     is_comment: row.is_comment,
-                    faction_id: None,
                 })
                 .collect();
             let next_row_seq = rows.len() as u64;

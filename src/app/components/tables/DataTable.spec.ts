@@ -87,7 +87,7 @@ describe('DataTable', () => {
 
   it('explains tables whose rows are hidden by filters', () => {
     const mounted = mountTable(tableVmFixture({ tables: { rows: [{}], filteredRowCount: 0, visibleColumns: ['id'] } }));
-    expect(mounted.get('.table-empty-note').text()).toContain('被搜索或势力过滤隐藏');
+    expect(mounted.get('.table-empty-note').text()).toContain('被搜索隐藏');
   });
 
   it('explains tables without any displayable columns', () => {

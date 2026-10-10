@@ -118,7 +118,7 @@ describe('DetailPane', () => {
       header: ['id', 'name'],
       totalRows: 1,
       filteredRows: 1,
-      rows: [{ rowKey: 'key-XY', isComment: false, sourceRowIndex: 0, factionId: null, data: { id: 'XY', name: 'Ruler' } }],
+      rows: [{ rowKey: 'key-XY', isComment: false, sourceRowIndex: 0, data: { id: 'XY', name: 'Ruler' } }],
     } satisfies CsvTableWindow;
     tables.applyTableWindow({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, window);
     tables.selectRowByKey({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, 'key-XY');
@@ -144,7 +144,7 @@ describe('DetailPane', () => {
       header: ['id'],
       totalRows: 1,
       filteredRows: 1,
-      rows: [{ rowKey: 'key-XY', isComment: false, sourceRowIndex: 0, factionId: null, data: { id: 'XY', name: '#quoted' } }],
+      rows: [{ rowKey: 'key-XY', isComment: false, sourceRowIndex: 0, data: { id: 'XY', name: '#quoted' } }],
     } satisfies CsvTableWindow;
     tables.applyTableWindow({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, window);
     tables.selectRowByKey({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, 'key-XY');
@@ -165,7 +165,7 @@ describe('DetailPane', () => {
       header: ['id'],
       totalRows: 1,
       filteredRows: 1,
-      rows: [{ rowKey: 'key-c', isComment: true, sourceRowIndex: 0, factionId: null, data: { id: '#note' } }],
+      rows: [{ rowKey: 'key-c', isComment: true, sourceRowIndex: 0, data: { id: '#note' } }],
     } satisfies CsvTableWindow;
     tables.applyTableWindow({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, window);
     tables.selectRowByKey({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, 'key-c');

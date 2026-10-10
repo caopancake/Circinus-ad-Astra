@@ -19,7 +19,7 @@ use walkdir::WalkDir;
 
 use super::super::model::{CoreCache, SpecBundle, csv_table_specs};
 
-const CACHE_FORMAT_VERSION: u32 = 7;
+const CACHE_FORMAT_VERSION: u32 = 8;
 const CACHE_DIRECTORY: &str = "project-index-cache";
 const MOD_INDEX_DIRECTORY: &str = "mods";
 const CORE_INDEX_DIRECTORY: &str = "core";
@@ -37,7 +37,7 @@ static CORE_FINGERPRINT_CACHE: LazyLock<Mutex<BTreeMap<String, SourceFingerprint
 pub(crate) struct ProjectIndex {
     pub mod_info: Option<Value>,
     pub faction_files: BTreeMap<String, LoadedSpecRecord>,
-    pub tag_map: HashMap<String, String>,
+    pub faction_blueprint_tags: HashMap<String, String>,
     pub mission_count: usize,
     pub spec_bundle: SpecBundle,
     pub table_entity_summaries: BTreeMap<CsvTableKey, usize>,

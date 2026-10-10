@@ -261,7 +261,7 @@ fn save_entity_content(
 #[cfg(test)]
 mod tests {
     use crate::{
-        models::{CsvFactionFilter, CsvTableKey, EntityKind, FileChangeReplayDirection},
+        models::{CsvSearchField, CsvTableKey, EntityKind, FileChangeReplayDirection},
         services::project,
         testutil::temp_dir,
     };
@@ -383,7 +383,7 @@ mod tests {
             0,
             20,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         let result = crate::commands::save_editor_spec(
@@ -408,7 +408,7 @@ mod tests {
             0,
             20,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         assert_eq!(before.rows[0].row_key, current.rows[0].row_key);

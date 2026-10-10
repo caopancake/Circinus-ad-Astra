@@ -15,7 +15,7 @@ pub fn query_csv_table_window(payload: CsvTableWindowPayload) -> Result<CsvTable
         payload.start,
         payload.count,
         payload.search,
-        payload.faction,
+        payload.search_field,
     )
 }
 

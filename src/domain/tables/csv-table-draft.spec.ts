@@ -38,7 +38,7 @@ function fixture() {
         rowKey: 'ships:row:0',
         isComment: false,
         sourceRowIndex: 0,
-        factionId: 'derived',
+
         data: { id: 'ship', _rowKey: 'business-key', _faction: 'business-faction', _insertAt: '001', _sourceRowIndex: '02' },
       },
     ],
@@ -127,7 +127,7 @@ describe('CSV business content and metadata acceptance', () => {
     setCsvCellValueDraft(state, 'ships', 'ships:row:0', '_rowKey', 'changed-business');
     expect(state.tables.ships[0]).toMatchObject({
       rowKey: 'ships:row:0',
-      factionId: 'derived',
+
       sourceRowIndex: 0,
       insertAt: null,
       data: { _rowKey: 'changed-business', _faction: 'business-faction', _insertAt: '001', _sourceRowIndex: '02' },
@@ -138,11 +138,11 @@ describe('CSV business content and metadata acceptance', () => {
   it('accepts same-version metadata while keeping committed edits and pending input', () => {
     const { state, window } = fixture();
     setCsvCellValueDraft(state, 'ships', 'ships:row:0', 'id', 'draft');
-    const refreshed = { ...window, rows: window.rows.map((row) => ({ ...row, factionId: 'updated' })) };
+    const refreshed = { ...window, rows: window.rows.map((row) => ({ ...row, sourceRowIndex: 3 })) };
     applyCsvTableWindowDraft(state, refreshed, true);
     expect(state.tables.ships[0]?.data.id).toBe('draft');
-    expect(state.tables.ships[0]?.factionId).toBe('updated');
-    expect(state.originalTables.ships[0]?.factionId).toBe('updated');
+    expect(state.tables.ships[0]?.sourceRowIndex).toBe(3);
+    expect(state.originalTables.ships[0]?.sourceRowIndex).toBe(3);
     expect(state.originalTables.ships[0]?.data.id).toBe('ship');
     expect(state.dirty.ships['ships:row:0']).toEqual({ action: 'upsert', cells: { id: 'draft' } });
     expect(state.pendingExternalTableUpdates.ships).toBe(false);

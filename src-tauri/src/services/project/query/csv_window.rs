@@ -3,14 +3,12 @@ use super::super::{
         ensure_registered_table_rows, loaded_registered_csv_rows, lock_ready_session,
         registered_session_table, session_handle,
     },
-    definitions::table_definitions::{
-        csv_table_row_resource_ref, csv_table_supports_faction_filter,
-    },
+    definitions::table_definitions::csv_table_row_resource_ref,
     model::SessionCsvRow,
 };
 use crate::{
     errors::AppResult,
-    models::{CsvFactionFilter, CsvRowPreview, CsvTableKey, CsvTableWindow, CsvWindowRow},
+    models::{CsvRowPreview, CsvSearchField, CsvTableKey, CsvTableWindow, CsvWindowRow},
 };
 
 pub fn query_csv_table_window(
@@ -19,7 +17,7 @@ pub fn query_csv_table_window(
     start: usize,
     count: usize,
     search: Option<String>,
-    faction: CsvFactionFilter,
+    search_field: CsvSearchField,
 ) -> AppResult<CsvTableWindow> {
     let handle = session_handle(session_id)?;
     let mut session = lock_ready_session(&handle)?;
@@ -30,7 +28,7 @@ pub fn query_csv_table_window(
     let filtered: Vec<(usize, &SessionCsvRow)> = rows_ref
         .iter()
         .enumerate()
-        .filter(|(_, row)| csv_row_matches(row, &search, &faction, table))
+        .filter(|(_, row)| csv_row_matches(row, &search, search_field, table))
         .collect();
     let rows = filtered
         .iter()
@@ -41,7 +39,6 @@ pub fn query_csv_table_window(
             source_row_index: *index,
             data: row.data.clone(),
             is_comment: row.is_comment,
-            faction_id: row.faction_id.clone(),
         })
         .collect();
     let mut base_versions = vec![super::super::versions::version_for_path(
@@ -92,135 +89,138 @@ pub fn query_csv_row_preview(
 fn csv_row_matches(
     row: &SessionCsvRow,
     search: &str,
-    faction: &CsvFactionFilter,
+    field: CsvSearchField,
     table: CsvTableKey,
 ) -> bool {
-    if let Some(faction_id) = faction
-        .faction_id()
-        .filter(|_| csv_table_supports_faction_filter(table))
-        && row.faction_id.as_deref() != Some(faction_id)
-    {
-        return false;
-    }
     if search.is_empty() {
         return true;
     }
-    row.data
-        .values()
-        .filter_map(serde_json::Value::as_str)
-        .chain(row.faction_id.as_deref())
-        .any(|value| value.to_lowercase().contains(search))
+    let id_field = super::super::model::csv_table_spec(table).entity_id_field;
+    let matches = |key: &str| {
+        row.data
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| value.to_lowercase().contains(search))
+    };
+    match field {
+        CsvSearchField::IdName => matches(id_field) || matches("name"),
+        CsvSearchField::Id => matches(id_field),
+        CsvSearchField::Name => matches("name"),
+        CsvSearchField::Tags => matches("tags"),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::{Map, json};
+    use serde_json::json;
 
-    fn session_row(key: &str, entries: &[(&str, &str)]) -> SessionCsvRow {
-        let mut row = Map::new();
-        for (field, value) in entries {
-            row.insert(field.to_string(), json!(value));
-        }
-        SessionCsvRow {
+    #[test]
+    fn search_fields_only_match_their_business_columns() {
+        let row = SessionCsvRow {
+            row_key: "row".to_string(),
             is_comment: false,
-            row_key: key.to_string(),
-            data: row,
-            faction_id: None,
+            data: json!({"id":"Alpha","name":"银河舰船","tags":"demo_bp,RARE","description":"only-description"})
+                .as_object().unwrap().clone(),
+        };
+        for (field, search, expected) in [
+            (CsvSearchField::IdName, "alpha", true),
+            (CsvSearchField::IdName, "银河", true),
+            (CsvSearchField::IdName, "demo", false),
+            (CsvSearchField::Id, "alpha", true),
+            (CsvSearchField::Id, "银河", false),
+            (CsvSearchField::Name, "银河", true),
+            (CsvSearchField::Name, "alpha", false),
+            (CsvSearchField::Tags, "bp", true),
+            (CsvSearchField::Tags, "rare", true),
+            (CsvSearchField::Tags, "alpha", false),
+            (CsvSearchField::IdName, "only-description", false),
+        ] {
+            assert_eq!(
+                csv_row_matches(&row, search, field, CsvTableKey::Ships),
+                expected
+            );
+        }
+        for field in [
+            CsvSearchField::IdName,
+            CsvSearchField::Id,
+            CsvSearchField::Name,
+            CsvSearchField::Tags,
+        ] {
+            assert!(csv_row_matches(&row, "", field, CsvTableKey::Ships));
         }
     }
 
     #[test]
-    fn search_matches_any_cell_value_case_insensitively() {
-        let row = session_row("k", &[("id", "XY"), ("name", "Ruler of Mars")]);
-        assert!(csv_row_matches(
+    fn search_uses_registered_ids_and_preserves_comment_rows() {
+        let row = SessionCsvRow {
+            row_key: "row".to_string(),
+            is_comment: true,
+            data: json!({"variant id":"#demo","id":"wrong-field"})
+                .as_object()
+                .unwrap()
+                .clone(),
+        };
+        for field in [CsvSearchField::IdName, CsvSearchField::Id] {
+            assert!(csv_row_matches(
+                &row,
+                "demo",
+                field,
+                CsvTableKey::SimOpponents
+            ));
+            assert!(!csv_row_matches(
+                &row,
+                "wrong-field",
+                field,
+                CsvTableKey::SimOpponents
+            ));
+        }
+        assert!(!csv_row_matches(
             &row,
-            "ruler of",
-            &CsvFactionFilter::All,
-            CsvTableKey::Ships
+            "demo",
+            CsvSearchField::Name,
+            CsvTableKey::SimOpponents
         ));
         assert!(!csv_row_matches(
             &row,
-            "venus",
-            &CsvFactionFilter::All,
-            CsvTableKey::Ships
+            "demo",
+            CsvSearchField::Tags,
+            CsvTableKey::SimOpponents
         ));
     }
 
     #[test]
-    fn empty_search_matches_everything() {
-        let row = session_row("k", &[("id", "XY")]);
-        assert!(csv_row_matches(
-            &row,
-            "",
-            &CsvFactionFilter::All,
-            CsvTableKey::Ships
-        ));
-        assert!(!csv_row_matches(
-            &row,
-            "xy",
-            &CsvFactionFilter::Faction {
-                faction_id: "hegemony".to_string()
-            },
-            CsvTableKey::Ships
-        ));
-    }
-
-    #[test]
-    fn faction_filter_scopes_rows_for_tables_that_support_it() {
-        let mut row = Map::new();
-        row.insert("id".to_string(), json!("XY"));
-        row.insert("_faction".to_string(), json!("business-faction"));
-        let entry = SessionCsvRow {
-            is_comment: false,
-            row_key: "k".to_string(),
-            data: row,
-            faction_id: Some("tritachyon".to_string()),
-        };
-
-        let filter = CsvFactionFilter::Faction {
-            faction_id: "tritachyon".to_string(),
-        };
-        assert!(csv_row_matches(&entry, "", &filter, CsvTableKey::Ships));
-        assert!(csv_row_matches(
-            &entry,
-            "business-faction",
-            &CsvFactionFilter::All,
-            CsvTableKey::Ships
-        ));
-        assert!(csv_row_matches(
-            &entry,
-            "tritachyon",
-            &CsvFactionFilter::All,
-            CsvTableKey::Ships
-        ));
-
-        let other = CsvFactionFilter::Faction {
-            faction_id: "hegemony".to_string(),
-        };
-        assert!(!csv_row_matches(&entry, "", &other, CsvTableKey::Ships));
-    }
-
-    #[test]
-    fn faction_filter_is_ignored_for_tables_without_faction_support() {
-        let row = session_row("k", &[("id", "XY")]);
-        let filter = CsvFactionFilter::Faction {
-            faction_id: "hegemony".to_string(),
-        };
-        assert!(csv_row_matches(
-            &row,
-            "",
-            &filter,
-            CsvTableKey::Descriptions
-        ));
-    }
-
-    #[test]
-    fn faction_filter_ignores_rows_without_a_faction_field() {
-        let row = session_row("k", &[("id", "XY")]);
-        let filter = CsvFactionFilter::Faction {
-            faction_id: "hegemony".to_string(),
-        };
-        assert!(!csv_row_matches(&row, "", &filter, CsvTableKey::Ships));
+    fn window_search_normalizes_text_and_returns_exact_counts() {
+        let root = crate::testutil::temp_dir("csv_search_fields");
+        std::fs::create_dir_all(root.join("data/hulls")).unwrap();
+        crate::io::write_utf8_no_bom(&root.join("data/hulls/ship_data.csv"),
+            "id,name,tags,description\r\nAlpha,银河,demo_bp,description\r\nBeta,Alpha,rare,description\r\n#Alpha,注释,disabled,description\r\n").unwrap();
+        let mut trace = super::super::super::PerformanceTrace::new("project.openSession");
+        let manifest =
+            super::super::super::open_project_session_traced(&root, None, &mut trace).unwrap();
+        for (field, search, count) in [
+            (CsvSearchField::IdName, "  ALPHA  ", 3),
+            (CsvSearchField::Id, "alpha", 2),
+            (CsvSearchField::Name, "alpha", 1),
+            (CsvSearchField::Name, "银河", 1),
+            (CsvSearchField::Tags, "BP", 1),
+            (CsvSearchField::IdName, "description", 0),
+            (CsvSearchField::Tags, "  ", 3),
+        ] {
+            let window = query_csv_table_window(
+                &manifest.session_id,
+                CsvTableKey::Ships,
+                0,
+                80,
+                Some(search.to_string()),
+                field,
+            )
+            .unwrap();
+            assert_eq!(window.total_rows, 3);
+            assert_eq!(window.filtered_rows, count);
+            assert_eq!(window.rows.len(), count);
+        }
+        super::super::super::close_project_session(manifest.session_id).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

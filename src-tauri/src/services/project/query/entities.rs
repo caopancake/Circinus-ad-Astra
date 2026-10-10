@@ -298,7 +298,7 @@ mod tests {
                 warnings: Vec::new(),
             },
             faction_files: BTreeMap::new(),
-            tag_map: std::collections::HashMap::new(),
+            faction_blueprint_tags: std::collections::HashMap::new(),
             csv_tables,
             ship_files: BTreeMap::new(),
             variant_files: Vec::new(),

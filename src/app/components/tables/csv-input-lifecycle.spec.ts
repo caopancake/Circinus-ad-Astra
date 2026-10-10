@@ -48,7 +48,7 @@ function mountTable() {
     start: 0,
     filteredRows: 1,
     totalRows: 1,
-    rows: [{ rowKey: 'ships:new:0', isComment: false, sourceRowIndex: 0, factionId: null, data: { width: '1' } }],
+    rows: [{ rowKey: 'ships:new:0', isComment: false, sourceRowIndex: 0, data: { width: '1' } }],
   });
   const inputs = tables.getTableInputs(root, 'ships');
   const grid = computed(() => {
@@ -111,7 +111,7 @@ describe('CSV input, target and row lifecycle', () => {
         start: 0,
         filteredRows: 1,
         totalRows: 1,
-        rows: [{ rowKey: 'ships:new:0', isComment: false, sourceRowIndex: 0, factionId: null, data: { width: 'external' } }],
+        rows: [{ rowKey: 'ships:new:0', isComment: false, sourceRowIndex: 0, data: { width: 'external' } }],
       },
     );
     expect(tables.rows[0]?.data.width).toBe('1');

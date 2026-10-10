@@ -119,7 +119,6 @@ pub fn save_csv_patch_snapshot(
         table_data.next_row_seq = next_row_seq;
         table_data.saved_text = Some(csv_text);
     }
-    super::super::cache::refresh_faction_annotations(&mut session);
     let mut write_result: WriteResult<()> = WriteResult::new(changes, key_map, None);
     for spec in &associated_specs {
         let definition = associated_spec_definition(table).expect("associated format exists");
@@ -222,7 +221,6 @@ fn apply_csv_row_patches(
                             row_key: next_key,
                             data: patch.row,
                             is_comment: patch.is_comment,
-                            faction_id: None,
                         },
                     );
                 } else {
@@ -451,7 +449,7 @@ mod tests {
                 0,
                 10,
                 None,
-                CsvFactionFilter::All,
+                CsvSearchField::IdName,
             )
             .unwrap();
             assert_eq!(window.rows[0].data, *content.as_object().unwrap());
@@ -507,7 +505,7 @@ mod tests {
                 0,
                 10,
                 None,
-                CsvFactionFilter::All,
+                CsvSearchField::IdName,
             )
             .unwrap();
             let mut row = window.rows[0].data.clone();
@@ -621,7 +619,7 @@ mod tests {
             0,
             10,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         let error = save_csv_patch(
@@ -653,8 +651,8 @@ mod tests {
     use crate::{
         io::{read_utf8_no_bom, write_utf8_no_bom},
         models::{
-            AssociatedSpecChange, AssociatedSpecCreateParams, CsvFactionFilter, CsvRowPatch,
-            CsvRowPatchAction, FileChangeKind,
+            AssociatedSpecChange, AssociatedSpecCreateParams, CsvRowPatch, CsvRowPatchAction,
+            CsvSearchField, FileChangeKind,
         },
         services::project::{
             query::query_csv_table_window,
@@ -689,7 +687,7 @@ mod tests {
             0,
             20,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         assert_eq!(
@@ -790,7 +788,7 @@ mod tests {
             0,
             20,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         assert_eq!(replayed.rows[1].data["name"], "#edited");
@@ -871,7 +869,7 @@ mod tests {
             0,
             20,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         let survivor_key = window.rows[1].row_key.clone();
@@ -912,7 +910,7 @@ mod tests {
             0,
             20,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         assert_eq!(window.rows[0].row_key, survivor_key);
@@ -944,7 +942,7 @@ mod tests {
             0,
             20,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         assert_eq!(window.rows[0].data["id"], "b2");
@@ -980,7 +978,7 @@ mod tests {
             0,
             10,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         let result = save_csv_patch(
@@ -1039,7 +1037,7 @@ mod tests {
             0,
             10,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         let mut row = window.rows[0].data.clone();
@@ -1105,7 +1103,7 @@ mod tests {
             0,
             10,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         let mut row = window.rows[0].data.clone();
@@ -1161,7 +1159,7 @@ mod tests {
             0,
             10,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         let mut row = window.rows[0].data.clone();
@@ -1215,7 +1213,7 @@ mod tests {
             0,
             10,
             None,
-            CsvFactionFilter::All,
+            CsvSearchField::IdName,
         )
         .unwrap();
         let mut row = window.rows[0].data.clone();
@@ -1292,13 +1290,11 @@ mod tests {
                 is_comment: false,
                 row_key: "ships:row:0".to_string(),
                 data: row_with_id("id", "a"),
-                faction_id: None,
             },
             SessionCsvRow {
                 is_comment: false,
                 row_key: "ships:row:1".to_string(),
                 data: row_with_id("id", "b"),
-                faction_id: None,
             },
         ];
         let mut next_row_seq = 2;
@@ -1340,13 +1336,11 @@ mod tests {
                 is_comment: false,
                 row_key: "ships:row:0".to_string(),
                 data: row_with_id("id", "a"),
-                faction_id: None,
             },
             SessionCsvRow {
                 is_comment: false,
                 row_key: "ships:row:1".to_string(),
                 data: row_with_id("id", "b"),
-                faction_id: None,
             },
         ];
         let mut next_row_seq = 2;
@@ -1387,13 +1381,11 @@ mod tests {
                 is_comment: false,
                 row_key: "ships:row:0".to_string(),
                 data: row_with_id("id", "a"),
-                faction_id: None,
             },
             SessionCsvRow {
                 is_comment: false,
                 row_key: "ships:row:1".to_string(),
                 data: row_with_id("id", "b"),
-                faction_id: None,
             },
         ];
         let mut next_row_seq = 2;
@@ -1445,13 +1437,11 @@ mod tests {
                 is_comment: false,
                 row_key: "ships:row:0".to_string(),
                 data: row_with_id("id", "a"),
-                faction_id: None,
             },
             SessionCsvRow {
                 is_comment: false,
                 row_key: "ships:row:1".to_string(),
                 data: row_with_id("id", "b"),
-                faction_id: None,
             },
         ];
         let mut next_row_seq = 2;

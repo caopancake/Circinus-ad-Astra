@@ -5,7 +5,7 @@ import { queryResourceDataUrls } from '@/services/resource-cache.service';
 import type {
   AssociatedSpecChange,
   AssociatedSpecWrite,
-  CsvFactionFilter,
+  CsvSearchField,
   CsvRowPatch,
   JsonWriteOptions,
   TableKey,
@@ -53,10 +53,10 @@ export function queryTableWindow(
   start: number,
   count: number,
   search: string | null,
-  faction: CsvFactionFilter,
+  searchField: CsvSearchField,
   signal?: AbortSignal,
 ): Promise<QueryValue<'csv-table-window'>> {
-  const parameters = { table, start, count, search, faction };
+  const parameters = { table, start, count, search, searchField };
   return queryCached(
     { sessionId, queryKind: 'csv-table-window', parameters },
     () => invokeCommand('query_csv_table_window', { payload: { sessionId, ...parameters } }),

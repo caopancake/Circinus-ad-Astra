@@ -791,7 +791,7 @@ impl EntityRefresh {
             }
             Self::Faction { files, tags } => {
                 session.faction_files = files;
-                session.tag_map = tags;
+                session.faction_blueprint_tags = tags;
             }
             Self::Mission(_) => {}
         }
@@ -859,7 +859,7 @@ fn refresh_skill(session: &ProjectSession) -> AppResult<EntityRefresh> {
 fn refresh_faction(session: &ProjectSession) -> AppResult<EntityRefresh> {
     let root = Path::new(&session.manifest.mod_root);
     let files = factions::load_faction_files(root)?;
-    let tags = factions::discover_factions(root)?.1;
+    let tags = factions::faction_blueprint_tags(&files);
     Ok(EntityRefresh::Faction { files, tags })
 }
 fn refresh_mission(session: &ProjectSession) -> AppResult<EntityRefresh> {

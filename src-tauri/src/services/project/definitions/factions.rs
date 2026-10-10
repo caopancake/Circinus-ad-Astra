@@ -1,9 +1,7 @@
 use crate::{
     errors::{AppError, AppResult},
     io::{FsRootBoundary, forward_slash_path, read_faction_index, read_json_file},
-    models::{
-        EntityFileLocation, FactionIndexEntry, FactionMeta, LoadedSpecRecord, ResourceSource,
-    },
+    models::{EntityFileLocation, FactionIndexEntry, LoadedSpecRecord, ResourceSource},
 };
 use serde_json::{Map, Value};
 use std::{
@@ -11,47 +9,35 @@ use std::{
     path::Path,
 };
 
-pub(in crate::services::project) fn discover_factions(
-    mod_root: &Path,
-) -> AppResult<(BTreeMap<String, FactionMeta>, HashMap<String, String>)> {
-    let mut factions = BTreeMap::new();
-    let mut tag_map = HashMap::new();
-    for entry in read_faction_index(mod_root)? {
-        let (fid, obj) = read_faction_object(&entry)?;
-        let Some(name) = obj
+pub(in crate::services::project) fn faction_blueprint_tags(
+    files: &BTreeMap<String, LoadedSpecRecord>,
+) -> HashMap<String, String> {
+    let mut tags_by_faction = HashMap::new();
+    for (id, record) in files {
+        let obj = &record.data;
+        if obj
             .get("displayName")
             .or_else(|| obj.get("displayNameLong"))
             .and_then(Value::as_str)
-        else {
+            .is_none()
+        {
             continue;
-        };
-        let color = obj
-            .get("color")
-            .and_then(Value::as_array)
-            .map(|v| rgb_to_hex(v))
-            .unwrap_or_else(|| "#808080".to_string());
-        factions.insert(
-            fid.to_string(),
-            FactionMeta {
-                name: name.to_string(),
-                color,
-            },
-        );
+        }
         for section in ["knownShips", "knownWeapons", "knownFighters"] {
             if let Some(tags) = obj
                 .get(section)
-                .and_then(|v| v.get("tags"))
+                .and_then(|value| value.get("tags"))
                 .and_then(Value::as_array)
             {
                 for tag in tags.iter().filter_map(Value::as_str) {
-                    if is_owned_faction_blueprint_tag(tag, &fid) {
-                        tag_map.insert(tag.to_string(), fid.to_string());
+                    if is_owned_faction_blueprint_tag(tag, id) {
+                        tags_by_faction.insert(tag.to_string(), id.clone());
                     }
                 }
             }
         }
     }
-    Ok((factions, tag_map))
+    tags_by_faction
 }
 
 pub(in crate::services::project) fn load_faction_files(
@@ -119,25 +105,6 @@ fn is_owned_faction_blueprint_tag(tag: &str, faction_id: &str) -> bool {
         || (tag.starts_with(&format!("{faction_id}_")) && tag.ends_with("_bp"))
 }
 
-fn rgb_to_hex(values: &[Value]) -> String {
-    let r = values
-        .first()
-        .and_then(Value::as_i64)
-        .unwrap_or(128)
-        .clamp(0, 255);
-    let g = values
-        .get(1)
-        .and_then(Value::as_i64)
-        .unwrap_or(128)
-        .clamp(0, 255);
-    let b = values
-        .get(2)
-        .and_then(Value::as_i64)
-        .unwrap_or(128)
-        .clamp(0, 255);
-    format!("#{r:02x}{g:02x}{b:02x}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn discover_factions_does_not_assign_foreign_blueprint_tags() {
+    fn faction_blueprint_tags_preserve_owned_tags() {
         let root = temp_dir("faction_foreign_blueprint_tags");
         let dir = root.join("data/world/factions");
         fs::create_dir_all(&dir).unwrap();
@@ -171,12 +138,15 @@ mod tests {
         )
         .unwrap();
 
-        let (_, tag_map) = discover_factions(&root).unwrap();
+        let faction_blueprint_tags = faction_blueprint_tags(&load_faction_files(&root).unwrap());
 
         let _ = fs::remove_dir_all(root);
-        assert_eq!(tag_map.get("demo_bp"), Some(&"demo".to_string()));
-        assert!(!tag_map.contains_key("custom_bp"));
-        assert!(!tag_map.contains_key("base_bp"));
+        assert_eq!(
+            faction_blueprint_tags.get("demo_bp"),
+            Some(&"demo".to_string())
+        );
+        assert!(!faction_blueprint_tags.contains_key("custom_bp"));
+        assert!(!faction_blueprint_tags.contains_key("base_bp"));
     }
 
     #[test]
@@ -206,13 +176,12 @@ mod tests {
         .unwrap();
 
         let files = load_faction_files(&root).unwrap();
-        let (meta, _) = discover_factions(&root).unwrap();
 
         let _ = fs::remove_dir_all(root);
         assert!(files.contains_key("plsp"));
         assert!(files.contains_key("celestite"));
         assert!(!files.contains_key("mercenary"));
-        assert_eq!(meta["plsp"].name, "Polaris");
+        assert_eq!(files["plsp"].data["displayName"], "Polaris");
     }
 
     #[test]
@@ -267,11 +236,9 @@ mod tests {
         write_utf8_no_bom(&dir.join("demo.faction"), "{").unwrap();
 
         let load_error = load_faction_files(&root).unwrap_err().to_string();
-        let discover_error = discover_factions(&root).unwrap_err().to_string();
 
         let _ = fs::remove_dir_all(root);
         assert!(load_error.contains("demo.faction"));
-        assert!(discover_error.contains("demo.faction"));
     }
 
     #[test]
@@ -287,14 +254,11 @@ mod tests {
         write_utf8_no_bom(&dir.join("demo.faction"), "[]").unwrap();
 
         let load_error = load_faction_files(&root).unwrap_err().to_string();
-        let discover_error = discover_factions(&root).unwrap_err().to_string();
 
         let _ = fs::remove_dir_all(root);
         // A non-object root is rejected by the parser per the game's
         // new JSONObject; read_json_file adds the file path.
         assert!(load_error.contains("demo.faction"));
         assert!(load_error.contains("must begin with '{'"));
-        assert!(discover_error.contains("demo.faction"));
-        assert!(discover_error.contains("must begin with '{'"));
     }
 }

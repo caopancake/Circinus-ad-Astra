@@ -12,16 +12,16 @@
             :disabled="tables.currentTableLocked"
             class="top-search-input"
             clearable
-            placeholder="搜索 ID / 名称"
+            :placeholder="csvSearchPlaceholder(tables.searchField)"
             @update:value="csvTable.setSearchText"
           />
           <n-select
-            :value="tables.currentFactionOptionValue"
+            :value="tables.searchField"
             :disabled="tables.currentTableLocked"
-            @update:value="csvTable.setFactionFilter"
-            class="top-faction-select"
-            :options="factionOptions"
-            placeholder="势力"
+            @update:value="csvTable.setSearchField"
+            class="top-search-field-select"
+            :options="searchOptions"
+            placeholder="搜索项"
           />
         </div>
         <div class="top-action-group">
@@ -70,12 +70,12 @@ import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useTablesStore } from '@/stores/tables.store';
 import { useProjectStore } from '@/stores/project.store';
 import { MODULE_LABELS } from '@/shared/lib/starsector';
-import { csvFactionFilterOptions } from '@/domain/tables/csv-faction-filter';
+import { csvSearchOptions, csvSearchPlaceholder } from '@/domain/tables/csv-search';
 
 const tables = useTablesStore();
 const project = useProjectStore();
 const csvTable = useCsvTableViewModel();
 const actions = useWorkspaceShellActions(useAppFeedback());
 
-const factionOptions = computed(() => csvFactionFilterOptions());
+const searchOptions = computed(() => csvSearchOptions(tables.currentTab, tables.currentHeader));
 </script>

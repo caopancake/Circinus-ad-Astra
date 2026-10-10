@@ -45,10 +45,6 @@ pub(crate) fn invalidate_session_changes(
         );
     }
     let content_tables = tables.clone();
-    let factions_changed = affected_kinds.contains(&EntityKind::Faction);
-    if factions_changed {
-        tables.extend(faction_annotated_tables());
-    }
     let summary_tables = affected_kinds
         .iter()
         .filter_map(|kind| {
@@ -123,9 +119,6 @@ pub(crate) fn invalidate_session_changes(
         .chain(&session.skin_warnings)
         .cloned()
         .collect();
-    if factions_changed {
-        super::cache::refresh_faction_annotations(session);
-    }
     Ok(invalidation)
 }
 
@@ -433,13 +426,6 @@ fn invalidated_entity(kind: EntityKind, id: Option<String>) -> InvalidatedEntity
 
 fn is_exact_spec_path(path: &str, dir: &str, extension: &str) -> bool {
     path.starts_with(&format!("{dir}/")) && path.ends_with(extension)
-}
-
-fn faction_annotated_tables() -> impl Iterator<Item = CsvTableKey> {
-    table_definitions::csv_table_definitions()
-        .iter()
-        .filter(|definition| definition.spec.supports_faction_filter)
-        .map(|definition| definition.spec.key)
 }
 
 fn query_scopes_for_invalidation(
@@ -783,7 +769,7 @@ mod tests {
     }
 
     #[test]
-    fn invalidating_faction_path_refreshes_tags_and_loaded_csv_rows() {
+    fn invalidating_faction_path_refreshes_tag_sources_and_preserves_csv_rows() {
         let root = temp_dir("invalidate_faction_tags");
         fs::create_dir_all(root.join("data/world/factions")).unwrap();
         fs::create_dir_all(root.join("data/hulls")).unwrap();
@@ -824,8 +810,8 @@ mod tests {
         .unwrap();
 
         let _ = fs::remove_dir_all(root);
-        assert!(session.tag_map.contains_key("demo_new_bp"));
-        assert!(!session.tag_map.contains_key("demo_old_bp"));
+        assert!(session.faction_blueprint_tags.contains_key("demo_new_bp"));
+        assert!(!session.faction_blueprint_tags.contains_key("demo_old_bp"));
         let rows = session
             .csv_tables
             .get(CsvTableKey::Ships.as_str())
@@ -835,13 +821,18 @@ mod tests {
             .unwrap();
         assert_eq!(rows[0].row_key, "ships:row:0");
         assert_eq!(rows[0].data["tags"], "demo_old_bp");
-        assert_eq!(rows[0].faction_id.as_deref(), Some("other"));
         assert!(invalidation.entities.contains(&invalidated_entity(
             EntityKind::Faction,
             Some("demo".to_string())
         )));
-        assert!(invalidation.tables.contains(&CsvTableKey::Ships));
-        assert!(invalidation.tables.contains(&CsvTableKey::Weapons));
+        assert!(invalidation.tables.is_empty());
+        assert!(
+            invalidation
+                .query_scopes
+                .iter()
+                .any(|scope| scope.kind == InvalidatedQueryKind::CsvSourceOptions
+                    && scope.source.as_deref() == Some("csv:ships.tags"))
+        );
     }
 
     #[test]

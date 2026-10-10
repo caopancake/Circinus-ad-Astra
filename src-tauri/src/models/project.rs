@@ -22,7 +22,6 @@ pub enum CsvTableKey {
     Descriptions,
 }
 
-pub const CSV_DEFAULT_FACTION_ID: &str = "other";
 /// Frozen on-disk log file name; every writer and validator must share it.
 pub const LOG_FILE: &str = "circinus-ad-astra.log";
 
@@ -67,23 +66,13 @@ impl CsvTableKey {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum CsvFactionFilter {
-    All,
-    Faction {
-        #[serde(rename = "factionId")]
-        faction_id: String,
-    },
-}
-
-impl CsvFactionFilter {
-    pub fn faction_id(&self) -> Option<&str> {
-        match self {
-            Self::All => None,
-            Self::Faction { faction_id } => Some(faction_id.as_str()),
-        }
-    }
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CsvSearchField {
+    IdName,
+    Id,
+    Name,
+    Tags,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -245,7 +234,6 @@ pub struct CsvWindowRow {
     pub source_row_index: usize,
     pub data: Map<String, Value>,
     pub is_comment: bool,
-    pub faction_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -467,12 +455,6 @@ pub struct SkinFile {
     pub built_in_wing_count: usize,
     pub weapon_slot_change_count: usize,
     pub engine_slot_change_count: usize,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct FactionMeta {
-    pub name: String,
-    pub color: String,
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
+import { ref } from 'vue';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCsvTableViewModel } from './use-csv-table-view-model';
 import { useTablesStore } from '@/stores/tables.store';
@@ -29,7 +30,7 @@ function windowRecord(): CsvTableWindow {
     header: ['id', 'name'],
     totalRows: 1,
     filteredRows: 1,
-    rows: [{ rowKey: 'row', isComment: false, data: { id: 'demo', name: 'Name' }, sourceRowIndex: 0, factionId: null }],
+    rows: [{ rowKey: 'row', isComment: false, data: { id: 'demo', name: 'Name' }, sourceRowIndex: 0 }],
   };
 }
 function harness() {
@@ -76,6 +77,96 @@ beforeEach(() => {
 afterEach(() => wrapper?.unmount());
 
 describe('CSV explicit targets and column ownership', () => {
+  it('reloads the first window with the selected search field and retains the text', async () => {
+    const vm = harness();
+    await flushPromises();
+    const tables = useTablesStore();
+    await vm.setSearchText('Alpha');
+    await flushPromises();
+    await vm.setSearchField('name');
+    await flushPromises();
+    expect(tables.searchText).toBe('Alpha');
+    expect(tables.searchField).toBe('name');
+    expect(mocks.query).toHaveBeenLastCalledWith(a.sessionId, 'ships', 0, 240, 'Alpha', 'name', expect.any(AbortSignal));
+    navigateToModTable(a.modRoot, 'weapons');
+    await flushPromises();
+    expect(tables.searchText).toBe('');
+    expect(tables.searchField).toBe('id-name');
+  });
+
+  it('commits the active input before changing search fields and preserves its dirty edit', async () => {
+    const vm = harness();
+    await flushPromises();
+    const tables = useTablesStore();
+    const dirty = ref(true);
+    const commit = vi.fn(() => {
+      expect(tables.searchField).toBe('id-name');
+      tables.updateCellValue({ ...a, rowKey: 'row', column: 'name' }, 'Unblurred draft');
+      dirty.value = false;
+      return null;
+    });
+    const unregister = tables.getTableInputs(a.modRoot, a.table).register({
+      key: 'row/name',
+      label: '名称',
+      dirty,
+      commit,
+      cancel: vi.fn(),
+      focus: vi.fn(),
+    });
+    await vm.setSearchField('name');
+    await flushPromises();
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(tables.searchField).toBe('name');
+    expect(tables.rows[0]?.data.name).toBe('Unblurred draft');
+    expect(tables.hasCurrentTableChanges).toBe(true);
+    unregister();
+  });
+
+  it('retains the selected search field and original input when input commit fails', async () => {
+    const vm = harness();
+    await flushPromises();
+    const tables = useTablesStore();
+    const focus = vi.fn();
+    const dirty = ref(true);
+    const unregister = tables.getTableInputs(a.modRoot, a.table).register({
+      key: 'row/name',
+      label: '名称',
+      dirty,
+      commit: () => '输入错误',
+      cancel: vi.fn(),
+      focus,
+    });
+    const calls = mocks.query.mock.calls.length;
+    await vm.setSearchField('tags');
+    await flushPromises();
+    expect(tables.searchField).toBe('id-name');
+    expect(dirty.value).toBe(true);
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(mocks.error).toHaveBeenCalledTimes(1);
+    expect(mocks.query).toHaveBeenCalledTimes(calls);
+    unregister();
+  });
+
+  it.each(['resolve', 'reject'] as const)('revokes a previous search-field request on late %s', async (completion) => {
+    let resolve!: (window: CsvTableWindow) => void;
+    let reject!: (error: Error) => void;
+    mocks.query.mockImplementationOnce(
+      () =>
+        new Promise((yes, no) => {
+          resolve = yes;
+          reject = no;
+        }),
+    );
+    const vm = harness();
+    await vm.setSearchField('name');
+    await flushPromises();
+    if (completion === 'resolve') resolve({ ...windowRecord(), rows: [{ ...windowRecord().rows[0]!, data: { id: 'obsolete' } }] });
+    else reject(new Error('obsolete search'));
+    await flushPromises();
+    expect(useTablesStore().rows[0]?.data.id).toBe('demo');
+    expect(useTablesStore().searchField).toBe('name');
+    expect(mocks.error).not.toHaveBeenCalled();
+  });
   it('measures and persists prototype-named columns as ordinary header keys', async () => {
     const record = windowRecord();
     record.header = ['id', '__proto__', 'constructor'];
@@ -111,14 +202,17 @@ describe('CSV explicit targets and column ownership', () => {
   it('applies captured table state to its owner across workspace navigation', async () => {
     const tables = useTablesStore();
     tables.setSearchText(a, 'A search');
+    tables.setSearchField(a, 'name');
     tables.selectRowByKey(a, 'A row');
     navigateToModTable(b.modRoot, 'ships');
     tables.applyTableWindow(a, windowRecord());
     tables.markTableExternalUpdate(a);
     expect(tables.searchText).toBe('');
+    expect(tables.searchField).toBe('id-name');
     expect(tables.selectedRowKey).toBeNull();
     navigateToModTable(a.modRoot, 'ships');
     expect(tables.searchText).toBe('A search');
+    expect(tables.searchField).toBe('name');
     expect(tables.hasCurrentTableExternalUpdate).toBe(true);
   });
 

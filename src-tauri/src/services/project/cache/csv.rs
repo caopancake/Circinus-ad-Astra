@@ -3,11 +3,10 @@ use crate::{
     io::read_csv_data,
     models::{CsvTable, CsvTableKey},
 };
-use serde_json::Value;
 use std::path::Path;
 
 use super::super::model::{
-    MISSION_LIST_TABLE_KEY, ProjectSession, SessionCsvRow, SessionCsvTable, csv_table_spec,
+    MISSION_LIST_TABLE_KEY, ProjectSession, SessionCsvRow, SessionCsvTable,
     mission_list_default_header,
 };
 use super::core::load_core_csv_table;
@@ -101,8 +100,6 @@ pub(crate) fn ensure_session_table_rows(
             csv.header = mission_list_default_header();
         }
     }
-    let supports_faction =
-        CsvTableKey::from_key(table).is_some_and(|key| csv_table_spec(key).supports_faction_filter);
     let row_sequence = session_table(session, table)?.next_row_seq;
     let rows: Vec<SessionCsvRow> = csv
         .rows
@@ -111,9 +108,6 @@ pub(crate) fn ensure_session_table_rows(
         .map(|(index, row)| SessionCsvRow {
             row_key: format!("{table}:row:{}", row_sequence + index as u64),
             is_comment: row.is_comment,
-            faction_id: supports_faction
-                .then(|| csv_row_faction_id(&row.data, row.is_comment, &session.tag_map))
-                .flatten(),
             data: row.data,
         })
         .collect();
@@ -136,49 +130,6 @@ pub(crate) fn ensure_registered_table_rows(
     table: CsvTableKey,
 ) -> AppResult<()> {
     ensure_session_table_rows(session, table.as_str())
-}
-
-pub(crate) fn refresh_faction_annotations(session: &mut ProjectSession) {
-    for (key, table) in &mut session.csv_tables {
-        if CsvTableKey::from_key(key).is_some_and(|key| csv_table_spec(key).supports_faction_filter)
-            && let Some(rows) = &mut table.rows
-        {
-            for row in rows {
-                row.faction_id = csv_row_faction_id(&row.data, row.is_comment, &session.tag_map);
-            }
-        }
-    }
-}
-
-fn csv_row_faction_id(
-    row: &serde_json::Map<String, Value>,
-    is_comment: bool,
-    tag_map: &std::collections::HashMap<String, String>,
-) -> Option<String> {
-    if is_comment || is_faction_padding_row(row) {
-        return None;
-    }
-    let id = row
-        .get("id")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .unwrap_or_default();
-    let tags = row
-        .get("tags")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .unwrap_or_default();
-    if id.is_empty() && tags.is_empty() {
-        return None;
-    }
-    Some(crate::domain::faction_annotation::detect_faction(
-        tags, tag_map,
-    ))
-}
-
-fn is_faction_padding_row(row: &serde_json::Map<String, Value>) -> bool {
-    row.values()
-        .all(|value| value.as_str().is_none_or(|text| text.trim().is_empty()))
 }
 
 #[cfg(test)]
@@ -215,7 +166,7 @@ mod tests {
                 warnings: Vec::new(),
             },
             faction_files: BTreeMap::new(),
-            tag_map: HashMap::new(),
+            faction_blueprint_tags: HashMap::new(),
             csv_tables: BTreeMap::new(),
             ship_files: BTreeMap::new(),
             variant_files: Vec::new(),
@@ -236,8 +187,8 @@ mod tests {
     }
 
     #[test]
-    fn ensure_session_table_rows_projects_faction_metadata_for_supported_data_rows() {
-        let root = temp_dir("csv_faction_annotation_boundary");
+    fn ensure_session_table_rows_preserves_comment_identity_and_business_columns() {
+        let root = temp_dir("csv_business_metadata_boundary");
         fs::create_dir_all(root.join("data/hulls")).unwrap();
         fs::create_dir_all(root.join("data/characters/skills")).unwrap();
         write_utf8_no_bom(
@@ -268,7 +219,7 @@ mod tests {
                 warnings: Vec::new(),
             },
             faction_files: BTreeMap::new(),
-            tag_map: HashMap::from([("demo_bp".to_string(), "demo".to_string())]),
+            faction_blueprint_tags: HashMap::from([("demo_bp".to_string(), "demo".to_string())]),
             csv_tables: BTreeMap::from([
                 (
                     CsvTableKey::Ships.as_str().to_string(),
@@ -308,11 +259,10 @@ mod tests {
         let ships = loaded_registered_csv_rows(&session, CsvTableKey::Ships).unwrap();
         let skills = loaded_registered_csv_rows(&session, CsvTableKey::Skills).unwrap();
         let _ = fs::remove_dir_all(root);
-        assert_eq!(ships[0].faction_id.as_deref(), Some("demo"));
         assert_eq!(ships[0].data["_faction"], "business");
+        assert!(!ships[0].is_comment);
+        assert!(ships[1].is_comment);
+        assert!(!skills[0].is_comment);
         assert_eq!(ships[0].data["_rowKey"], "business-key");
-        assert_eq!(ships[1].faction_id, None);
-        assert_eq!(ships[2].faction_id, None);
-        assert_eq!(skills[0].faction_id, None);
     }
 }

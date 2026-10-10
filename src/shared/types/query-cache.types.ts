@@ -1,4 +1,4 @@
-import type { CsvFactionFilter, CsvTableWindow, CsvRowPreview, TableKey } from '@/shared/types/tables.types';
+import type { CsvSearchField, CsvTableWindow, CsvRowPreview, TableKey } from '@/shared/types/tables.types';
 import type { EntityData, EntityKind, HullReferencesResult, SourceOptionGroup, ResourceRef } from '@/shared/types/query.types';
 import type { EntityEditInfo, EntityEditTarget, EntityIdentityIntent } from '@/shared/types/entity-target.types';
 import type { EditorResourceKind } from '@/shared/types/editor.types';
@@ -16,7 +16,7 @@ export type DeepReadonly<T> = [JsonValue] extends [T]
     : T;
 
 export interface QueryParameters {
-  'csv-table-window': { table: TableKey; start: number; count: number; search: string | null; faction: CsvFactionFilter };
+  'csv-table-window': { table: TableKey; start: number; count: number; search: string | null; searchField: CsvSearchField };
   'csv-source-options': { source: string };
   'csv-row-preview': { table: TableKey; rowKey: string };
   'hull-references': { referenceIds: string[] };

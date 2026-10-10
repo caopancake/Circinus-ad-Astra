@@ -87,10 +87,6 @@ pub(in crate::services::project) fn csv_table_entity_id_field(table: CsvTableKey
     csv_table_spec(table).entity_id_field
 }
 
-pub(in crate::services::project) fn csv_table_supports_faction_filter(table: CsvTableKey) -> bool {
-    csv_table_spec(table).supports_faction_filter
-}
-
 pub(in crate::services::project) fn csv_table_entity_summary(
     table: CsvTableKey,
     summaries: &EntitySummaries,
@@ -630,14 +626,5 @@ mod tests {
     fn entity_id_fields_follow_the_table_convention() {
         assert_eq!(csv_table_entity_id_field(CsvTableKey::Ships), "id");
         assert_eq!(csv_table_entity_id_field(CsvTableKey::Weapons), "id");
-    }
-
-    #[test]
-    fn faction_filter_support_is_limited_to_registered_tables() {
-        assert!(csv_table_supports_faction_filter(CsvTableKey::Ships));
-        assert!(!csv_table_supports_faction_filter(CsvTableKey::Wings));
-        assert!(!csv_table_supports_faction_filter(
-            CsvTableKey::Descriptions
-        ));
     }
 }

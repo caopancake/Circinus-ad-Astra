@@ -807,7 +807,7 @@ mod tests {
     #[test]
     fn csv_undo_queries_actual_disk_state() {
         use crate::models::command_payloads::SaveCsvPatchPayload;
-        use crate::models::{CsvFactionFilter, CsvRowPatch, CsvRowPatchAction, CsvTableKey};
+        use crate::models::{CsvRowPatch, CsvRowPatchAction, CsvSearchField, CsvTableKey};
         let root = temp_dir("csv_history_actual_direction");
         std::fs::create_dir_all(root.join("data/hulls")).unwrap();
         let path = root.join("data/hulls/ship_data.csv");
@@ -822,7 +822,7 @@ mod tests {
                 0,
                 20,
                 None,
-                CsvFactionFilter::All,
+                CsvSearchField::IdName,
             )
             .unwrap()
         };

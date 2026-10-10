@@ -193,7 +193,7 @@ pub(super) fn build_project_session(
     let super::cache::persistent::ProjectIndex {
         mod_info,
         faction_files,
-        tag_map,
+        faction_blueprint_tags,
         mission_count,
         spec_bundle,
         table_entity_summaries,
@@ -258,7 +258,7 @@ pub(super) fn build_project_session(
         source_versions,
         manifest,
         faction_files,
-        tag_map,
+        faction_blueprint_tags,
         csv_tables,
         ship_files: spec_bundle.ship_files,
         variant_files: spec_bundle.variant_files,
@@ -288,14 +288,14 @@ fn build_project_index(
         )],
     );
     let timer = trace.timer();
-    let (_, tag_map) = factions::discover_factions(mod_root)?;
     let faction_files = factions::load_faction_files(mod_root)?;
+    let faction_blueprint_tags = factions::faction_blueprint_tags(&faction_files);
     trace.record_stage(
         "factions",
         timer,
         [
             ("factionFiles", faction_files.len().to_string()),
-            ("tags", tag_map.len().to_string()),
+            ("tags", faction_blueprint_tags.len().to_string()),
         ],
     );
     let timer = trace.timer();
@@ -322,7 +322,7 @@ fn build_project_index(
     let index = super::cache::persistent::ProjectIndex {
         mod_info,
         faction_files,
-        tag_map,
+        faction_blueprint_tags,
         mission_count,
         spec_bundle,
         table_entity_summaries,
@@ -824,7 +824,7 @@ mod tests {
 
     #[test]
     fn concurrent_threads_on_separate_sessions_run_without_blocking_or_corruption() {
-        use crate::models::{CsvFactionFilter, CsvRowPatch, CsvRowPatchAction, CsvTableKey};
+        use crate::models::{CsvRowPatch, CsvRowPatchAction, CsvSearchField, CsvTableKey};
         use crate::services::project::{query::query_csv_table_window, write::save_csv_patch};
         use serde_json::{Map, Value};
         use std::sync::{Arc, Barrier};
@@ -870,7 +870,7 @@ mod tests {
                         0,
                         200,
                         None,
-                        CsvFactionFilter::All,
+                        CsvSearchField::IdName,
                     )
                     .unwrap();
                     assert!(window.total_rows >= 1);
@@ -908,7 +908,7 @@ mod tests {
                 0,
                 200,
                 None,
-                CsvFactionFilter::All,
+                CsvSearchField::IdName,
             )
             .unwrap();
             assert_eq!(window.total_rows, 1 + WRITES_PER_SESSION);

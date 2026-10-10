@@ -55,7 +55,7 @@ function mountCell(props: Record<string, unknown>) {
     CsvGridStaticCell,
     { global: { stubs: editorUiStubs } },
     {
-      row: { rowKey: 'key-0', factionId: null, data: { col: 'railgun' } },
+      row: { rowKey: 'key-0', data: { col: 'railgun' } },
       sourceIndex: sourceIndexFixture(),
       ...props,
     },
@@ -78,7 +78,7 @@ describe('CsvGridStaticCell', () => {
   });
 
   it('renders list controls as tags', () => {
-    const cell = mountCell({ column: columnFixture('tags'), row: { rowKey: 'k', factionId: null, data: { col: 'a, b' } } });
+    const cell = mountCell({ column: columnFixture('tags'), row: { rowKey: 'k', data: { col: 'a, b' } } });
     const tags = cell.findAll('.csv-cell-tag').map((node) => node.text());
     expect(tags).toEqual(['a', 'b']);
   });
@@ -91,7 +91,7 @@ describe('CsvGridStaticCell', () => {
   });
 
   it('renders the raw value with a caret for enum controls', () => {
-    const cell = mountCell({ column: columnFixture('enum'), row: { rowKey: 'k', factionId: null, data: { col: 'SMALL' } } });
+    const cell = mountCell({ column: columnFixture('enum'), row: { rowKey: 'k', data: { col: 'SMALL' } } });
     expect(cell.get('.csv-cell-value').text()).toBe('SMALL');
     expect(cell.find('.csv-cell-caret').exists()).toBe(true);
   });

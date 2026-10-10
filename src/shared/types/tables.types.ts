@@ -32,10 +32,7 @@ export interface CsvCellTarget extends CsvTableTarget {
   column: string;
 }
 
-export const CSV_DEFAULT_FACTION_ID = 'other';
-export const CSV_FACTION_FILTER_ALL = 'all';
-
-export type CsvFactionFilter = { kind: 'all' } | { kind: 'faction'; factionId: string };
+export type CsvSearchField = 'id-name' | 'id' | 'name' | 'tags';
 
 export type CsvDirtyRow = { action: 'upsert'; cells: Record<string, string> } | { action: 'delete' };
 
@@ -46,7 +43,6 @@ export interface CsvRow {
 
 export interface CsvRowRecord extends CsvRow {
   rowKey: string;
-  factionId: string | null;
 }
 
 export interface CsvDraftRow extends CsvRowRecord {

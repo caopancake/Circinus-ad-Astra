@@ -74,7 +74,7 @@ export type {
   CsvRowRecord,
   CsvCellTarget,
   CsvTableTarget,
-  CsvFactionFilter,
+  CsvSearchField,
   CsvGridRowSlot,
   CsvLoadedRowSlot,
   CsvPlaceholderRowSlot,
@@ -85,7 +85,7 @@ export type {
   CsvWindowRow,
   TableKey,
 } from '@/shared/types/tables.types';
-export { CSV_DEFAULT_FACTION_ID, CSV_FACTION_FILTER_ALL, TABLE_KEYS } from '@/shared/types/tables.types';
+export { TABLE_KEYS } from '@/shared/types/tables.types';
 export type {
   DiscoveredField,
   DiscoveredFieldType,

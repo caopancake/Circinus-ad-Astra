@@ -14,7 +14,7 @@ import { querySourceOptionCatalog } from '@/services/source-options.service';
 import type { SelectOption } from '@/domain/schema/schema-options';
 import { hasSourceInvalidation, hasTableInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/services/resource-cache.service';
-import type { CsvRowPreviewTarget, ResourceRef } from '@/shared/types';
+import type { CsvRowPreviewTarget, ResourceRef, CsvSearchField } from '@/shared/types';
 import { useFieldInputActions } from '@/app/composables/use-field-input-actions';
 
 export function useCsvTableViewModel() {
@@ -58,11 +58,11 @@ export function useCsvTableViewModel() {
     }
   }
 
-  async function setFactionFilter(value: string) {
+  async function setSearchField(value: CsvSearchField) {
     const captured = target.value;
     const key = targetKey.value;
     try {
-      if (captured && (await commitTableInput()) && key === targetKey.value) tables.setFactionFilter(captured, value);
+      if (captured && (await commitTableInput()) && key === targetKey.value) tables.setSearchField(captured, value);
     } catch (error) {
       feedback.error(error);
     }
@@ -88,7 +88,7 @@ export function useCsvTableViewModel() {
   const effectiveTotalWidthPx = computed(() => effectiveColumns.value.reduce((sum, col) => sum + col.widthPx, 0));
 
   watch(
-    () => [targetKey.value, tables.searchText, tables.currentFactionOptionValue] as const,
+    () => [targetKey.value, tables.searchText, tables.searchField] as const,
     async () => {
       const captured = target.value;
       const identity = targetKey.value;
@@ -240,17 +240,16 @@ export function useCsvTableViewModel() {
     const generation = tables.tableReadGeneration(modRoot, table);
     const tableState = tables.getModTableState(modRoot);
     const searchText = tables.searchText;
-    const faction = tables.currentFaction;
-    const factionOptionValue = tables.currentFactionOptionValue;
+    const searchField = tables.searchField;
     const alignedStart = Math.max(0, Math.floor(start / 80) * 80);
     const windowCount = Math.max(160, Math.ceil(count / 80) * 80);
-    const key = stableStringify([sessionId, table, searchText, factionOptionValue, alignedStart, windowCount, generation]);
+    const key = stableStringify([sessionId, table, searchText, searchField, alignedStart, windowCount, generation]);
     if (loadedWindowKeys.value.has(key)) return;
     loadedWindowKeys.value.add(key);
     await reads.consume(
       `window:${key}`,
       { sessionId, modRoot, table, key },
-      (signal) => queryTableWindow(sessionId, table, alignedStart, windowCount, searchText, faction, signal),
+      (signal) => queryTableWindow(sessionId, table, alignedStart, windowCount, searchText, searchField, signal),
       {
         ready: (window) => {
           if (tables.saving || tables.currentTableLocked) {
@@ -339,7 +338,7 @@ export function useCsvTableViewModel() {
     target,
     targetKey,
     setSearchText,
-    setFactionFilter,
+    setSearchField,
     gridModel,
     effectiveColumns,
     effectiveTotalWidthPx,

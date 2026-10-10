@@ -487,7 +487,7 @@ fn add_faction_blueprint_metadata(
     metadata: &mut HashMap<String, SourceTokenMetadata>,
     session: &super::super::model::ProjectSession,
 ) {
-    for (tag, faction_id) in &session.tag_map {
+    for (tag, faction_id) in &session.faction_blueprint_tags {
         if metadata.contains_key(tag) {
             continue;
         }

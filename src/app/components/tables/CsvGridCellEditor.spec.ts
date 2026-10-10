@@ -55,7 +55,7 @@ function mountEditor(props: Record<string, unknown>) {
     },
     {
       anchorElement: null,
-      row: { rowKey: 'key-0', isComment: false, factionId: null, data: { size: 'MEDIUM' } },
+      row: { rowKey: 'key-0', isComment: false, data: { size: 'MEDIUM' } },
       sourceIndex,
       ...props,
     },
@@ -211,7 +211,7 @@ describe('CsvGridCellEditor', () => {
     await editor.get('input').setValue('later');
     fixture.props.value = {
       ...fixture.props.value,
-      row: { rowKey: 'ships:row:9', isComment: false, sourceRowIndex: 9, factionId: null, data: { size: 'MEDIUM' } },
+      row: { rowKey: 'ships:row:9', isComment: false, sourceRowIndex: 9, data: { size: 'MEDIUM' } },
     };
     await editor.vm.$nextTick();
     await fixture.inputs.commit();

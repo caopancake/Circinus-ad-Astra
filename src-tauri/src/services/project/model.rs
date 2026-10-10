@@ -48,7 +48,6 @@ pub(super) struct CsvTableSpec {
     pub rel_path: &'static str,
     pub entity_id_field: &'static str,
     pub entity_summary: Option<fn(&EntitySummaries) -> usize>,
-    pub supports_faction_filter: bool,
     pub core_source_requirements: CoreSourceRequirements,
 }
 
@@ -57,7 +56,6 @@ pub(super) const SHIPS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/hulls/ship_data.csv",
     entity_id_field: "id",
     entity_summary: Some(|summaries| summaries.ships),
-    supports_faction_filter: true,
     core_source_requirements: CoreSourceRequirements {
         ships: true,
         weapons: false,
@@ -70,7 +68,6 @@ pub(super) const WEAPONS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/weapons/weapon_data.csv",
     entity_id_field: "id",
     entity_summary: Some(|summaries| summaries.weapons),
-    supports_faction_filter: true,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: true,
@@ -83,7 +80,6 @@ pub(super) const WINGS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/hulls/wing_data.csv",
     entity_id_field: "id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: true,
         weapons: false,
@@ -96,7 +92,6 @@ pub(super) const HULLMODS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/hullmods/hull_mods.csv",
     entity_id_field: "id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -109,7 +104,6 @@ pub(super) const SHIP_SYSTEMS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/shipsystems/ship_systems.csv",
     entity_id_field: "id",
     entity_summary: Some(|summaries| summaries.systems),
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -122,7 +116,6 @@ pub(super) const INDUSTRIES_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/campaign/industries.csv",
     entity_id_field: "id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -135,7 +128,6 @@ pub(super) const SKILLS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/characters/skills/skill_data.csv",
     entity_id_field: "id",
     entity_summary: Some(|summaries| summaries.skills),
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -148,7 +140,6 @@ pub(super) const ABILITIES_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/campaign/abilities.csv",
     entity_id_field: "id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -161,7 +152,6 @@ pub(super) const COMMODITIES_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/campaign/commodities.csv",
     entity_id_field: "id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -174,7 +164,6 @@ pub(super) const SPECIAL_ITEMS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/campaign/special_items.csv",
     entity_id_field: "id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -187,7 +176,6 @@ pub(super) const SUBMARKETS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/campaign/submarkets.csv",
     entity_id_field: "id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -200,7 +188,6 @@ pub(super) const MARKET_CONDITIONS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/campaign/market_conditions.csv",
     entity_id_field: "id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -213,7 +200,6 @@ pub(super) const SIM_OPPONENTS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/campaign/sim_opponents.csv",
     entity_id_field: "variant id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -226,7 +212,6 @@ pub(super) const DESCRIPTIONS_SPEC: CsvTableSpec = CsvTableSpec {
     rel_path: "data/strings/descriptions.csv",
     entity_id_field: "id",
     entity_summary: None,
-    supports_faction_filter: false,
     core_source_requirements: CoreSourceRequirements {
         ships: false,
         weapons: false,
@@ -301,7 +286,6 @@ pub(super) struct SessionCsvRow {
     pub row_key: String,
     pub data: Map<String, Value>,
     pub is_comment: bool,
-    pub faction_id: Option<String>,
 }
 
 pub(super) struct ProjectSession {
@@ -310,7 +294,7 @@ pub(super) struct ProjectSession {
     pub source_versions: BTreeMap<String, crate::models::FileVersion>,
     pub manifest: ProjectManifest,
     pub faction_files: BTreeMap<String, LoadedSpecRecord>,
-    pub tag_map: HashMap<String, String>,
+    pub faction_blueprint_tags: HashMap<String, String>,
     pub csv_tables: BTreeMap<String, SessionCsvTable>,
     pub ship_files: BTreeMap<String, LoadedSpecRecord>,
     pub variant_files: Vec<VariantFile>,

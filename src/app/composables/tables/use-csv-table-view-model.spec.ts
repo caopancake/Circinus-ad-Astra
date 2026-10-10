@@ -78,11 +78,8 @@ vi.mock('@/stores/tables.store', () => ({
     get searchText() {
       return (tablesState.searchText ?? '') as string;
     },
-    get currentFactionOptionValue() {
-      return (tablesState.factionOption ?? 'all') as string;
-    },
-    get currentFaction() {
-      return { kind: 'all' } as never;
+    get searchField() {
+      return tablesState.searchField ?? 'id-name';
     },
     get activeModRoot() {
       return (tablesState.activeModRoot ?? 'M:/mod') as string | null;
@@ -120,7 +117,7 @@ function windowFixture(totalRows: number): CsvTableWindow {
       rowKey: `key-${index}`,
       isComment: false,
       sourceRowIndex: index,
-      factionId: null,
+
       data: { id: `s${index}`, name: `Ship ${index}` },
     })),
   };
@@ -162,7 +159,7 @@ describe('useCsvTableViewModel', () => {
     mocks.queryTableWindow.mockResolvedValue(windowFixture(40));
     const vm = mountViewModel();
     await vi.waitFor(() => expect(mocks.queryTableWindow).toHaveBeenCalledTimes(1));
-    expect(mocks.queryTableWindow).toHaveBeenCalledWith('sess-1', 'ships', 0, 240, '', { kind: 'all' }, expect.any(AbortSignal));
+    expect(mocks.queryTableWindow).toHaveBeenCalledWith('sess-1', 'ships', 0, 240, '', 'id-name', expect.any(AbortSignal));
     expect(mocks.queryTableWindow.mock.calls[0]![3]).toBe(240);
 
     await vi.waitFor(() => expect(vm.gridModel.value.rows.some((row) => row.kind === 'row')).toBe(true));

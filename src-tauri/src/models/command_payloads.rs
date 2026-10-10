@@ -2,7 +2,7 @@ use crate::models::{
     SessionModScope,
     app_log::AppLogEntry,
     app_settings::AppSettings,
-    project::{CsvFactionFilter, CsvTableKey, EntityKind, ProjectSessionId, ResourceRef},
+    project::{CsvSearchField, CsvTableKey, EntityKind, ProjectSessionId, ResourceRef},
     required_nullable, required_nullable_non_empty_string,
     workspace_persistence::PersistedWorkspace,
     write::{
@@ -89,7 +89,7 @@ pub struct CsvTableWindowPayload {
     pub count: usize,
     #[serde(deserialize_with = "required_nullable")]
     pub search: Option<String>,
-    pub faction: CsvFactionFilter,
+    pub search_field: CsvSearchField,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -492,24 +492,19 @@ mod tests {
     }
 
     #[test]
-    fn csv_table_window_payload_uses_explicit_faction_filter() {
-        let payload = serde_json::from_value::<CsvTableWindowPayload>(json!({
-            "baseVersions": [],
-            "sessionId": "session-1",
-            "table": "ships",
-            "start": 0,
-            "count": 50,
-            "search": null,
-            "faction": {"kind": "faction", "factionId": "demo"}
-        }))
-        .unwrap();
-
-        assert_eq!(
-            payload.faction,
-            CsvFactionFilter::Faction {
-                faction_id: "demo".to_string()
-            }
-        );
+    fn csv_table_window_payload_uses_explicit_search_field() {
+        for field in ["id-name", "id", "name", "tags"] {
+            let payload = serde_json::from_value::<CsvTableWindowPayload>(json!({
+                "sessionId": "session-1",
+                "table": "ships",
+                "start": 0,
+                "count": 50,
+                "search": null,
+                "searchField": field
+            }))
+            .unwrap();
+            assert_eq!(serde_json::to_value(payload.search_field).unwrap(), field);
+        }
     }
 
     #[test]
