@@ -71,7 +71,7 @@ beforeEach(() => {
   useWorkspaceStore().activateModTable(root);
   useProjectStore().registerProjectManifest(manifest);
   const tables = useTablesStore();
-  tables.hydrate(root, manifest);
+  tables.initializeModTables({ sessionId: manifest.sessionId, modRoot: root, manifest });
   const state = tables.getModTableState(root)!;
   state.tables.ships = [csvDraftRow({ id: 'old' }, 'ships:row:0', 0)];
   state.originalTables.ships = [csvDraftRow({ id: 'old' }, 'ships:row:0', 0)];

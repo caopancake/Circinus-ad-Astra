@@ -23,7 +23,7 @@ function fixture() {
     tableEntitySummaries: Object.fromEntries(TABLE_KEYS.map((key) => [key, 0])) as ProjectManifest['tableEntitySummaries'],
     entitySummaries: { ships: 0, weapons: 0, projectiles: 0, variants: 0, skins: 0, systems: 0, skills: 0, factions: 0, missions: 0 },
   };
-  tables.hydrate('M:/mod', manifest);
+  tables.initializeModTables({ sessionId: manifest.sessionId, modRoot: 'M:/mod', manifest });
   const state = tables.getModTableState('M:/mod')!;
   const window: CsvTableWindow = {
     table: 'ships',

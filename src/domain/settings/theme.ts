@@ -11,6 +11,7 @@ export interface ThemeColorTokens {
   border: string;
   borderStrong: string;
   canvasBackground: string;
+  overlay: string;
   danger: string;
   dangerBackground: string;
   dangerBorderSoft: string;
@@ -29,6 +30,7 @@ export interface ThemeColorTokens {
   primaryPressed: string;
   primarySoft: string;
   scrollbar: string;
+  scrollbarTrack: string;
   scrollbarHover: string;
   shadowFloating: string;
   shadowSubtle: string;
@@ -43,6 +45,46 @@ export interface ThemeColorTokens {
   warningBackground: string;
   warningBorder: string;
 }
+
+export const THEME_TOKEN_MAP = {
+  '--color-bg': 'background',
+  '--color-overlay': 'overlay',
+  '--color-panel': 'panel',
+  '--color-panel-muted': 'panelMuted',
+  '--color-surface': 'surface',
+  '--color-surface-hover': 'surfaceHover',
+  '--color-surface-active': 'surfaceActive',
+  '--color-border': 'border',
+  '--color-border-strong': 'borderStrong',
+  '--color-text': 'text',
+  '--color-text-soft': 'textSoft',
+  '--color-muted': 'muted',
+  '--color-faint': 'faint',
+  '--color-primary': 'primary',
+  '--color-primary-hover': 'primaryHover',
+  '--color-primary-pressed': 'primaryPressed',
+  '--color-primary-soft': 'primarySoft',
+  '--color-primary-border': 'primaryBorder',
+  '--color-on-primary': 'onPrimary',
+  '--color-warning': 'warning',
+  '--color-warning-bg': 'warningBackground',
+  '--color-warning-border': 'warningBorder',
+  '--color-danger': 'danger',
+  '--color-success': 'success',
+  '--color-success-bg': 'successBackground',
+  '--color-danger-bg': 'dangerBackground',
+  '--color-danger-text': 'dangerText',
+  '--color-danger-border-soft': 'dangerBorderSoft',
+  '--color-danger-highlight-soft': 'dangerHighlightSoft',
+  '--color-danger-highlight': 'dangerHighlight',
+  '--color-danger-highlight-border': 'dangerHighlightBorder',
+  '--color-canvas-bg': 'canvasBackground',
+  '--scrollbar-thumb': 'scrollbar',
+  '--scrollbar-track': 'scrollbarTrack',
+  '--scrollbar-thumb-hover': 'scrollbarHover',
+  '--shadow-floating': 'shadowFloating',
+  '--shadow-subtle': 'shadowSubtle',
+} as const satisfies Record<string, keyof ThemeColorTokens>;
 
 export const ACCENT_PRESETS: AccentTone[] = [
   { name: '蓝', value: 'blue', hex: '#2563eb' },
@@ -67,6 +109,7 @@ export function createThemeColors(hex: string, themeValue: AppTheme): ThemeColor
     border: neutralColors['--color-border'],
     borderStrong: neutralColors['--color-border-strong'],
     canvasBackground: neutralColors['--color-canvas-bg'],
+    overlay: isDarkTheme ? 'rgba(0, 0, 0, 0.55)' : 'rgba(15, 23, 42, 0.42)',
     danger: isDarkTheme ? '#f87171' : '#dc2626',
     dangerBackground: isDarkTheme ? '#450a0a' : '#fee2e2',
     dangerBorderSoft: isDarkTheme ? 'rgba(248, 113, 113, 0.28)' : 'rgba(220, 38, 38, 0.28)',
@@ -85,6 +128,7 @@ export function createThemeColors(hex: string, themeValue: AppTheme): ThemeColor
     primaryPressed,
     primarySoft,
     scrollbar: neutralColors['--scrollbar-thumb'],
+    scrollbarTrack: 'transparent',
     scrollbarHover: neutralColors['--scrollbar-thumb-hover'],
     shadowFloating: neutralColors['--shadow-floating'],
     shadowSubtle: neutralColors['--shadow-subtle'],

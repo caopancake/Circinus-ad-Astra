@@ -1,4 +1,4 @@
-import type { RowData } from '@/shared/types';
+import type { JsonInputShape, RowData } from '@/shared/types';
 import { pathBasename } from '@/shared/lib/paths';
 import type { FieldSchema, SchemaFieldUpdate } from '@/domain/schema/schema.types';
 import { parseInputNumber } from '@/shared/lib/input-number';
@@ -109,6 +109,10 @@ export function schemaPathDisplayLabel(path: string): string {
   return pathBasename(path);
 }
 
+export function schemaJsonInputShape(field: Pick<FieldSchema, 'type' | 'format'>): JsonInputShape {
+  return field.type === 'array' || field.type === 'array-of-object' || field.format === 'array-of-entries' ? 'array' : 'object';
+}
+
 export function schemaKeyValueEntries(value: unknown, format: FieldSchema['format']): SchemaKeyValueEntry[] {
   if (format === 'array-of-entries' && Array.isArray(value)) {
     return value.map((item) => {
@@ -170,27 +174,6 @@ export function formatSchemaKeyValueText(value: unknown): string {
     }
   }
   return String(value);
-}
-
-export function parseSchemaUiJsonText(raw: string): unknown {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      return raw;
-    }
-  }
-  return raw;
-}
-
-export function formatSchemaUiJsonText(value: unknown): string {
-  if (value == null) return '';
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
 }
 
 export function getNestedValue(obj: RowData, key: string): unknown {

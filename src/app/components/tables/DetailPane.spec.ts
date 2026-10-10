@@ -84,7 +84,7 @@ function activateProject() {
   workspace.registerMod({ modRoot: 'M:/mod', displayName: 'Alpha', version: '', status: 'ready' });
   project.registerProjectManifest(manifestFixture('M:/mod'));
   // Hydrate the per-Mod table state the same way the directory-opening runtime does.
-  tables.hydrateWithoutActivate('M:/mod', manifestFixture('M:/mod'));
+  tables.initializeModTables({ sessionId: manifestFixture('M:/mod').sessionId, modRoot: 'M:/mod', manifest: manifestFixture('M:/mod') });
   workspace.activateModTab('M:/mod');
   return { workspace, project, tables };
 }

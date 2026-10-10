@@ -161,7 +161,7 @@
 
 .editor-draft-status button {
   height: 24px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   color: var(--color-text);
   font: inherit;
   cursor: pointer;
@@ -221,7 +221,7 @@
   height: calc(100% - 22px);
   min-width: 0;
   min-height: 0;
-  padding-right: 4px;
+  padding-right: var(--space-1);
   overflow: auto;
 }
 
@@ -332,7 +332,7 @@
 
 .segmented {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   margin-left: auto;
   padding: 3px;
   background: var(--color-surface);
@@ -399,7 +399,7 @@
 
 .item-list {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   margin-bottom: 10px;
 }
 
@@ -412,18 +412,18 @@
 }
 
 .item-list span {
-  margin-left: 8px;
+  margin-left: var(--space-2);
   color: var(--color-muted);
 }
 
 .button-row {
-  margin: 8px 0;
+  margin: var(--space-2) 0;
 }
 
 .sprite-actions {
   display: grid;
   gap: var(--space-2);
-  margin: 8px 0;
+  margin: var(--space-2) 0;
 }
 
 .sprite-actions .n-button {
@@ -461,7 +461,7 @@
 .bounds-list {
   display: grid;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .bounds-list > div {
@@ -469,7 +469,7 @@
   grid-template-columns: 28px 1fr 1fr auto;
   gap: 6px;
   align-items: center;
-  padding: 4px;
+  padding: var(--space-1);
   background: var(--color-panel);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -478,7 +478,7 @@
 textarea {
   width: 100%;
   min-height: 96px;
-  padding: 8px;
+  padding: var(--space-2);
   color: var(--color-text);
   resize: vertical;
   background: var(--color-panel);
@@ -516,17 +516,17 @@ textarea {
   min-height: 38px;
   padding: 0 18px;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .editor-side .n-collapse-item__content-inner,
 .projectile-body .n-collapse-item__content-inner {
-  padding: 2px 16px 14px;
+  padding: 2px var(--space-4) 14px;
 }
 
 .port-rows {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
   margin-bottom: 10px;
 }
 

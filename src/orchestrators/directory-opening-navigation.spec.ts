@@ -57,7 +57,7 @@ const mocks = vi.hoisted(() => {
       setActiveModRoot: vi.fn(),
       setLoading: vi.fn(),
     },
-    tables: { hydrate: vi.fn(), hydrateWithoutActivate: vi.fn(), removeModState: vi.fn() },
+    tables: { initializeModTables: vi.fn(), removeModState: vi.fn() },
     fileHistory: { activateFor: vi.fn(), removeModState: vi.fn() },
     csvHistory: { clearForMod: vi.fn() },
     writeSync: { pending: [], removeModState: vi.fn() },

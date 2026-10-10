@@ -1,6 +1,7 @@
 import { noNameExistenceChecksRule } from '../no-name-existence-checks.mjs';
 import { architectureRulesSelfBoundaryRule } from '../self-boundary.mjs';
 import { csvDraftBoundaryRule } from './csv-draft-boundary.mjs';
+import { cssTokenBoundaryRule } from './css-token-boundary.mjs';
 import { commandBoundaryRule } from './command-boundary.mjs';
 import { csvModuleBoundaryRule } from './csv-module-boundary.mjs';
 import { directoryOpeningBoundaryRule } from './directory-opening-boundary.mjs';
@@ -55,6 +56,7 @@ export const rules = [
   sharedTypesBoundaryRule,
   csvModuleBoundaryRule,
   csvDraftBoundaryRule,
+  cssTokenBoundaryRule,
   docsModuleMapRule,
   draftSessionBoundaryRule,
   schemaModuleBoundaryRule,

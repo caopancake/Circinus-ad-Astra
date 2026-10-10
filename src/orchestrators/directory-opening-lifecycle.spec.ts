@@ -15,8 +15,7 @@ import type { ProjectManifest } from '@/shared/types';
 const mocks = vi.hoisted(() => ({
   openProject: vi.fn(),
   closeProject: vi.fn(async () => {}),
-  hydrate: vi.fn(),
-  hydrateWithoutActivate: vi.fn(),
+  initializeModTables: vi.fn(),
   loadPersistedWorkspace: vi.fn(),
   scanDirectoryGameOverview: vi.fn(),
   detectDirectoryTarget: vi.fn(),
@@ -38,7 +37,7 @@ vi.mock('@/services/workspace-state.service', () => ({
   savePersistedWorkspace: vi.fn(async () => {}),
 }));
 vi.mock('@/stores/tables.store', () => ({
-  useTablesStore: () => ({ hydrate: mocks.hydrate, hydrateWithoutActivate: mocks.hydrateWithoutActivate, removeModState: vi.fn() }),
+  useTablesStore: () => ({ initializeModTables: mocks.initializeModTables, removeModState: vi.fn() }),
 }));
 vi.mock('@/services/app-log.service', () => ({ recordLogBestEffort: vi.fn() }));
 
@@ -87,8 +86,7 @@ describe('directory opening lifecycle', () => {
     expect(mocks.closeProject).toHaveBeenCalledWith('stale');
     expect(useProjectStore().getManifest(modRoot)).toBeNull();
     expect(useWorkspaceStore().isModImported(modRoot)).toBe(false);
-    expect(mocks.hydrate).not.toHaveBeenCalled();
-    expect(mocks.hydrateWithoutActivate).not.toHaveBeenCalled();
+    expect(mocks.initializeModTables).not.toHaveBeenCalled();
   });
 
   it('cancels a directory detection that finishes after workspace close', async () => {
@@ -115,7 +113,7 @@ describe('directory opening lifecycle', () => {
     expect(useProjectStore().getSessionId(modRoot)).toBe('current');
     expect(useWorkspaceStore().mods.get(modRoot)?.status).toBe('ready');
     expect(mocks.closeProject).toHaveBeenCalledExactlyOnceWith('stale');
-    expect(mocks.hydrate).toHaveBeenCalledTimes(1);
+    expect(mocks.initializeModTables).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the new opening when the previous request fails later', async () => {
@@ -157,7 +155,7 @@ describe('directory opening lifecycle', () => {
     pending.resolve(manifest('restored-stale'));
     await restoring;
     expect(useProjectStore().manifests.size).toBe(0);
-    expect(mocks.hydrateWithoutActivate).not.toHaveBeenCalled();
+    expect(mocks.initializeModTables).not.toHaveBeenCalled();
     expect(mocks.closeProject).toHaveBeenCalledWith('restored-stale');
     expect(mocks.openProject).toHaveBeenCalledTimes(1);
     expect(useWorkspaceStore().loadedModCount).toBe(0);

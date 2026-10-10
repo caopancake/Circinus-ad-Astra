@@ -176,19 +176,15 @@ export const useTablesStore = defineStore('tables', () => {
 
   // --- Per-Mod lifecycle ---
 
-  function hydrate(modRoot: string, manifest: ProjectManifest) {
+  function initializeModTables(target: { sessionId: string; modRoot: string; manifest: ProjectManifest }) {
     const state = createModTableState();
-    applyManifestSummaries(state, manifest);
-    stateMap.set(modRoot, state);
-    inputMap.get(modRoot)?.forEach((inputs) => inputs.release());
+    applyManifestSummaries(state, target.manifest);
+    stateMap.set(target.modRoot, state);
+    inputMap.get(target.modRoot)?.forEach((inputs) => inputs.release());
     inputMap.set(
-      modRoot,
-      new Map(TABLE_KEYS.map((table) => [table, createFieldInputs(ref(JSON.stringify([manifest.sessionId, modRoot, table])))])),
+      target.modRoot,
+      new Map(TABLE_KEYS.map((table) => [table, createFieldInputs(ref(JSON.stringify([target.sessionId, target.modRoot, table])))])),
     );
-  }
-
-  function hydrateWithoutActivate(modRoot: string, manifest: ProjectManifest) {
-    hydrate(modRoot, manifest);
   }
 
   function activateFor(modRoot: string | null, manifest?: ProjectManifest | null) {
@@ -402,8 +398,7 @@ export const useTablesStore = defineStore('tables', () => {
     getActiveModTableState,
     getModTableState,
     hasModDirtyChanges,
-    hydrate,
-    hydrateWithoutActivate,
+    initializeModTables,
     markTableSavedForMod,
     markTableExternalUpdate,
     removeModState,

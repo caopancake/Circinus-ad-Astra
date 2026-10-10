@@ -102,7 +102,7 @@ function hydrateActiveTable() {
   const workspace = useWorkspaceStore();
   workspace.registerMod({ modRoot: MOD_ROOT, displayName: MOD_ROOT, version: '', status: 'ready' });
   workspace.activateModTable(MOD_ROOT);
-  tables.hydrate(MOD_ROOT, buildManifest());
+  tables.initializeModTables({ sessionId: buildManifest().sessionId, modRoot: MOD_ROOT, manifest: buildManifest() });
   const state = tables.getModTableState(MOD_ROOT);
   if (!state) throw new Error('table state missing after hydrate');
   state.tables.ships = [csvDraftRow({ id: 'npc1', hullName: 'A' }, 'ships:r1', 0)];
@@ -214,7 +214,7 @@ describe('table-save orchestrator', () => {
     const tables = useTablesStore();
     const project = useProjectStore();
     project.manifests.set(MOD_ROOT, buildManifest());
-    tables.hydrate(MOD_ROOT, buildManifest());
+    tables.initializeModTables({ sessionId: buildManifest().sessionId, modRoot: MOD_ROOT, manifest: buildManifest() });
 
     const manifest = project.getManifest(MOD_ROOT);
     expect(await saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] })).toMatchObject({ status: 'noop' });

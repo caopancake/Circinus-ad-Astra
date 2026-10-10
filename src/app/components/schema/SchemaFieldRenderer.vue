@@ -362,6 +362,7 @@ import {
   schemaArrayStringValues,
   schemaKeyValueEntries,
   schemaKeyValueOutput,
+  schemaJsonInputShape,
   schemaNumberControlValue,
   schemaPathDisplayLabel,
   schemaStringValue,
@@ -430,9 +431,7 @@ const boolVal = computed(() => props.value === true);
 
 const arrVal = computed(() => schemaArrayStringValues(props.value));
 
-const jsonShape = computed(() =>
-  props.field.type === 'array' || props.field.type === 'array-of-object' || props.field.format === 'array-of-entries' ? 'array' : 'object',
-);
+const jsonShape = computed(() => schemaJsonInputShape(props.field));
 
 // tag-select: value is { tags: string[] } or string[]
 const tagSelectVal = computed(() => schemaTagValues(props.value));

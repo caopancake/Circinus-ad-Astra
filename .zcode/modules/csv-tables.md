@@ -21,6 +21,7 @@
 `src/domain/tables/table-row-key.ts`：行身份规则 owner。
 `src/services/csv-table.service.ts`：窗口、行预览、资源装配和关联实际目标准备主归属。
 `src/stores/tables.store.ts`：表格运行态 owner，拥有窗口行、选择、dirty、当前表与保存中状态。
+`src/stores/tables.store.ts:initializeModTables`：按 session、Mod 和 manifest 一次建立表格状态与输入集合。
 `src/stores/workspace.store.ts`：按 Mod、表与列持有持久化列宽的 owner。
 
 ## 边界
@@ -29,6 +30,7 @@
 - 列宽必须使用结构化 `modRoot/table/column`，严禁拼接 key。
 - 单元格提交必须消费完整 `CsvCellTarget`，包含 sessionId、modRoot、table、rowKey 与 column；历史必须沿用同一目标。
 - 活动单元格身份必须唯一归 tables 运行态；原始输入必须归控件，输入集合必须按 session、Mod 与表隔离。
+- Mod 表格运行态只能经 `initializeModTables` 建立；后台恢复与前台打开共享该入口，workspace 活动身份由导航 owner 接纳。
 - 窗口接纳、搜索、过滤、外部更新、草稿释放与行选择必须消费显式所属目标；活动身份必须由 workspace 提供。
 - 脏标记只允许经草稿变更边界写入，组件严禁直改 dirty 结构。
 - 行身份只使用 Rust rowKey 或前端临时 new key，严禁按数组索引、显示文本或过滤结果定位行。

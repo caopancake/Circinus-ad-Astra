@@ -62,7 +62,11 @@ beforeEach(() => {
     update.projection.manifest.tableSummaries.ships.totalRows = 1;
     useWorkspaceStore().registerMod({ modRoot: target.modRoot, displayName: target.sessionId, version: '', status: 'ready' });
     useProjectStore().registerProjectManifest(update.projection.manifest);
-    useTablesStore().hydrate(target.modRoot, update.projection.manifest);
+    useTablesStore().initializeModTables({
+      sessionId: update.projection.manifest.sessionId,
+      modRoot: target.modRoot,
+      manifest: update.projection.manifest,
+    });
   }
   useWorkspaceStore().setColumnWidths(a.modRoot, 'ships', { name: 120 });
   useWorkspaceStore().setColumnWidths(b.modRoot, 'ships', { name: 260 });

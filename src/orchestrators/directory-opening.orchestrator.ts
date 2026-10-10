@@ -174,11 +174,9 @@ export async function openModProjectManifest(
 export function hydrateOpenedModRuntime(modRoot: string, loaded: ProjectManifest, activate: boolean) {
   const tables = useTablesStore();
   const fileHistory = useFileHistoryStore();
+  tables.initializeModTables({ sessionId: loaded.sessionId, modRoot, manifest: loaded });
   if (activate) {
-    tables.hydrate(modRoot, loaded);
     fileHistory.activateFor(modRoot);
-  } else {
-    tables.hydrateWithoutActivate(modRoot, loaded);
   }
 }
 

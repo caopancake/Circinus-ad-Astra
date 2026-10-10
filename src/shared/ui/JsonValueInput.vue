@@ -21,7 +21,8 @@ import { ref } from 'vue';
 import { useRawFieldInput, type InputConversion } from '@/shared/runtime/raw-field-input';
 import { focusFieldInput } from '@/shared/runtime/focus-field-input';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
-import type { JsonValue, JsonInputShape, JsonInputValue } from '@/shared/types';
+import { formatJsonInput, parseJsonInput } from '@/shared/lib/json-input';
+import type { JsonInputShape, JsonInputValue } from '@/shared/types';
 
 const props = defineProps<{
   value: unknown;
@@ -41,7 +42,7 @@ const {
 } = useRawFieldInput<JsonInputValue<T>>({
   key: props.inputKey ?? props.label,
   label: props.label,
-  text: () => JSON.stringify(props.value ?? (props.shape === 'array' ? [] : {}), null, 2),
+  text: () => formatJsonInput(props.value, props.shape),
   convert,
   apply: (converted) => {
     if (converted.kind === 'value' && !stableDeepEqual(converted.value, props.value)) emit('update', converted.value);
@@ -53,16 +54,10 @@ const {
 });
 
 function convert(text: string): InputConversion<JsonInputValue<T>> {
-  try {
-    const parsed = JSON.parse(text) as JsonValue;
-    if (props.shape === 'array' && !Array.isArray(parsed)) return { kind: 'error', message: '请输入 JSON 数组' };
-    if (props.shape === 'object' && (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)))
-      return { kind: 'error', message: '请输入 JSON 对象' };
-    const value = parsed as JsonInputValue<T>;
-    return { kind: 'value', value: props.normalize ? props.normalize(value) : value };
-  } catch {
-    return { kind: 'error', message: 'JSON 输入未完成，请修正后提交' };
-  }
+  const parsed = parseJsonInput(text, props.shape);
+  if (parsed.kind === 'error') return parsed;
+  const value = props.normalize ? props.normalize(parsed.value) : parsed.value;
+  return { kind: 'value', value };
 }
 
 function commitOnBlur() {

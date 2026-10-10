@@ -134,20 +134,24 @@ describe('useWorkspaceNavigationActions', () => {
     const tables = useTablesStore();
     const root = 'M:/A';
     workspace.registerMod({ modRoot: root, displayName: 'A', version: '', status: 'ready' });
-    tables.hydrate(root, {
-      modRoot: root,
-      baseVersions: [],
-      starsectorRoot: null,
-      coreAvailable: false,
-      associatedSpecTables: [],
-      modInfo: {},
-      tableEntitySummaries: Object.fromEntries(TABLE_KEYS.map((table) => [table, 0])) as ProjectManifest['tableEntitySummaries'],
-      entitySummaries: { factions: 0, missions: 0, ships: 0, weapons: 0, projectiles: 0, variants: 0, skins: 0, systems: 0, skills: 0 },
-      warnings: [],
+    tables.initializeModTables({
       sessionId: 'sA',
-      tableSummaries: Object.fromEntries(
-        TABLE_KEYS.map((table) => [table, { path: `${table}.csv`, available: table === 'ships', header: ['id'], totalRows: 0 }]),
-      ) as ProjectManifest['tableSummaries'],
+      modRoot: root,
+      manifest: {
+        modRoot: root,
+        baseVersions: [],
+        starsectorRoot: null,
+        coreAvailable: false,
+        associatedSpecTables: [],
+        modInfo: {},
+        tableEntitySummaries: Object.fromEntries(TABLE_KEYS.map((table) => [table, 0])) as ProjectManifest['tableEntitySummaries'],
+        entitySummaries: { factions: 0, missions: 0, ships: 0, weapons: 0, projectiles: 0, variants: 0, skins: 0, systems: 0, skills: 0 },
+        warnings: [],
+        sessionId: 'sA',
+        tableSummaries: Object.fromEntries(
+          TABLE_KEYS.map((table) => [table, { path: `${table}.csv`, available: table === 'ships', header: ['id'], totalRows: 0 }]),
+        ) as ProjectManifest['tableSummaries'],
+      },
     });
     workspace.activateModTable(root);
     const dirty = ref(true);

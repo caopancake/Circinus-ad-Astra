@@ -12,6 +12,7 @@
 `src/app/composables/settings/use-theme-dom-effect.ts`：主题 DOM 副作用 owner，watch 主题令牌并写 root dataset 与 CSS 变量。
 `src/domain/settings/rules.ts`：设置校验 owner，拥有主题/accent/自定义色/历史上限/editMode/原样保存/日志级别/日志目录的读取校验与归一化。
 `src/domain/settings/theme.ts`：主题令牌与色彩数学 owner，拥有 accent 预设、light/dark 中性色与 `createThemeColors` 纯函数。
+`src/domain/settings/theme.ts:THEME_TOKEN_MAP`：ThemeColorTokens 与 CSS 自定义属性的一一映射 owner。
 `src/orchestrators/settings-persistence.orchestrator.ts`：设置持久化与镜像 owner，负责保存、广播、接收镜像与 historyLimit 同步。
 `src/services/app-settings.service.ts`：settings 读写签名与 command 参数装配主归属。
 `src/stores/settings.store.ts`：settings 运行态 owner，只持状态、setter 与派生值；初始快照经统一初始化入口注入。
@@ -24,6 +25,7 @@
 - 主窗口拥有设置持久化权威；子窗口只能从 URL snapshot 初始化并监听完整 snapshot 事件镜像。
 - 主题 DOM 副作用唯一归主题 effect，由唯一窗口壳挂载；主窗口与子窗口都经该 effect 生效。
 - 主题令牌计算归 domain 纯函数，输入校验归 domain 校验规则，store 只持状态；store 内严禁写 DOM。
+- CSS 自定义属性只能由 `THEME_TOKEN_MAP` 与主题 effect 共同接纳；明暗主题必须覆盖正式共享 token。
 - 应用私有数据目录必须由 Tauri 标识 `com.caopancake.circinus-ad-astra` 解析。
 - 日志目录保存由设置页 ViewModel 经持久化编排完成：后端成功返回规范化快照后才替换，并跳过当次回写。
 - 编辑面必须拥有实际渲染模式；设置与镜像只允许提供请求模式，待提交输入涉及的控件替换必须确认放弃。

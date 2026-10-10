@@ -17,10 +17,11 @@
 `src/domain/schema/schema-registry.ts`：schema 资产唯一加载入口，拥有 5 个 spec 与 14 个 csv 列资产的运行时形状校验。
 `src/domain/schema/schema-runtime.ts`：runtime 上下文 owner。
 `src/domain/schema/schema-sections.ts`：section 投影与折叠标识 owner。
-`src/domain/schema/schema-values.ts`：字段值转换 owner，拥有解析、格式化、kv 条目与宽松 JSON 文本规则。
+`src/domain/schema/schema-values.ts`：字段值转换 owner，拥有标量、kv 条目与业务归一化规则。
 `src/domain/schema/schema.types.ts`：schema 输出类型 owner，拥有字段/控件闭合枚举与 FileSchema/FieldSchema/列 schema 形状。
 `src/services/source-options.service.ts`：来源目录协议、查询身份与性能记录主归属。
 `src/shared/lib/input-number.ts`：完整有限浮点与安全整数解析 owner。
+`src/shared/lib/json-input.ts`：JSON 原文解析、形状校验与格式化的共享纯模块。
 `src/shared/ui/JsonFieldEditor.vue`：额外字段结构化编辑 owner。
 `src/shared/ui/JsonValueInput.vue`：JSON 原始输入 owner，按声明形状解析并提交。
 `src/shared/ui/NumberValueInput.vue`：Smart 数值原文与正式值提交 owner。
@@ -32,6 +33,7 @@
 - `csv:` source 目录必须只由 `(sessionId, source)` 标识，并完整返回当前 Mod 非注释唯一值与原版补集，保持 CSV 原始行顺序；实体声明的 source 以实体清单为值域，按 Mod 与原版分组去重，解析归后端实体注册表。
 - `hull:builtInWeaponSlots` 必须以 session 与草稿 baseHullId 标识，经后端舰体引用查询返回继承与覆盖后的内置武器槽 ID；基础舰体变化与舰体引用失效必须重新查询。
 - domain/schema runtime 拥有字段语义、source、归一化与纯转换；组件只渲染与提交字段事件。
+- JSON 原文解析、形状校验与格式化只能经共享纯模块；schema 领域只提供字段形状映射和业务归一化。
 - kv 行与数组条目必须使用结构化稳定 key；严禁按下标 key 后手工重排状态补偿。
 - schema 资产与加载器必须使用 `circinus-ad-astra/` 版本标识前缀。
 - schema 资产只能经唯一加载入口消费，入口处执行逐属性运行时校验；资产外严禁二次强转。

@@ -9,6 +9,7 @@
 `scripts/architecture/capability-boundary.check.mjs`：能力授权、规则归属和真实仓库入口的行为测试。
 `scripts/architecture/command-boundary.check.mjs`：command 来源、词法作用域与 owner 验收。
 `scripts/architecture/rules/command-boundary.mjs`：command 调用归属的唯一检查 owner。
+`scripts/architecture/rules/css-token-boundary.mjs`：CSS token 定义、引用、主题覆盖和共享圆角/阴影语义的检查 owner。
 `scripts/architecture/rules/frontend-layer-boundary.mjs`：前端层级、组件消费、wire 边界、service 依赖和运行时循环的检查 owner。
 `scripts/architecture/rules/index.mjs`：正式规则及元规则注册表。
 `scripts/architecture/rules/parser-boundary.mjs`：工具资产、Mod JSON-like 与 CSV 解析职责 owner。
@@ -40,6 +41,7 @@
 - 提交恢复必须归 project-session 能力，恢复执行必须归提交同步编排；投影运行态写入、查询 gate、receipt 发布与重试必须分别声明正式能力消费者。
 - 模块业务规则只允许表达独立业务契约；组件消费、wire 调用和 service 横向依赖必须由通用规则拥有。
 - 注册表必须装配全部正式规则和元规则；退役契约必须同步收束其检查入口与消费者。
+- CSS token 检查必须消费结构化 CSS AST，报告未定义变量、缺失主题 token、非共享阴影和非共享圆角，并保留组件专属尺寸 allowlist。
 - 测试源码必须按测试角色分类；生产能力权限必须通过合成生产节点和实际仓库入口验收。
 - 源码事实只允许由共享解析入口建立；规则只允许读取事实和输出诊断，严禁修改仓库状态。
 - 窗口 wire 必须归 window service；创建必须归 managed window，状态与关闭取消必须归关闭守卫，身份交接必须归实体身份编排。

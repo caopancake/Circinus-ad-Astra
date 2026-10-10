@@ -175,7 +175,7 @@
 
 .mod-navigation-separator {
   height: 1px;
-  margin: 4px 0;
+  margin: var(--space-1) 0;
   background: var(--color-border);
 }
 

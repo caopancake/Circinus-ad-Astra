@@ -70,7 +70,7 @@
 .schema-field {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
-  gap: 4px var(--space-2);
+  gap: var(--space-1) var(--space-2);
   align-items: start;
   min-width: 0;
   padding: 3px 0;

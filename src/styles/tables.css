@@ -105,7 +105,7 @@
   min-width: 36px;
   height: 20px;
   min-height: 20px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   overflow: hidden;
   color: var(--color-text);
   font-size: 12px;
@@ -126,8 +126,8 @@
 .csv-cell-frame-enum,
 .csv-cell-frame-tags,
 .csv-cell-frame-multi {
-  gap: 4px;
-  padding-right: 4px;
+  gap: var(--space-1);
+  padding-right: var(--space-1);
   background: var(--color-panel-muted);
 }
 
@@ -157,7 +157,7 @@
 .csv-cell-tag {
   max-width: 128px;
   height: 16px;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   overflow: hidden;
   color: var(--color-text);
   font-size: 11px;
@@ -230,7 +230,7 @@
   width: 100%;
   height: 26px;
   flex: 0 0 26px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   color: var(--color-text);
   font-size: 12px;
   background: var(--color-panel-muted);
@@ -243,7 +243,7 @@
   min-height: 0;
   max-height: 292px;
   overflow: auto;
-  padding: 4px;
+  padding: var(--space-1);
 }
 
 .csv-cell-text-editor {
@@ -252,8 +252,8 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 4px;
+  gap: var(--space-1);
+  padding: var(--space-1);
   background: var(--color-panel);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-sm);
@@ -283,7 +283,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .csv-cell-text-hint {
@@ -292,7 +292,7 @@
 }
 
 .csv-cell-text-commit {
-  padding: 2px 12px;
+  padding: 2px var(--space-3);
   color: var(--color-on-primary);
   font-size: 12px;
   background: var(--color-primary);
@@ -309,7 +309,7 @@
   display: block;
   box-sizing: border-box;
   width: 100%;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   color: var(--color-danger);
   font-size: 12px;
   text-align: left;

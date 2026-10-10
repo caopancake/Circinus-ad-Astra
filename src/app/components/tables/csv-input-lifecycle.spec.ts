@@ -36,10 +36,11 @@ function mountTable() {
   const workspace = useWorkspaceStore();
   workspace.registerMod({ modRoot: root, displayName: 'A', version: '', status: 'ready' });
   workspace.activateModTable(root);
-  tables.hydrate(root, {
+  const tableManifest = {
     sessionId: 'sA',
     tableSummaries: Object.fromEntries(TABLE_KEYS.map((table) => [table, { header: ['width'], totalRows: 1 }])),
-  } as ProjectManifest);
+  } as ProjectManifest;
+  tables.initializeModTables({ sessionId: tableManifest.sessionId, modRoot: root, manifest: tableManifest });
   tables.applyTableWindow(target, {
     table: 'ships',
     baseVersions: [],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applySchemaFieldUpdate, convertSchemaScalarInput, parseSchemaPlainNumber } from './schema-values';
+import { applySchemaFieldUpdate, convertSchemaScalarInput, parseSchemaPlainNumber, schemaJsonInputShape } from './schema-values';
 
 describe('whole-value plain numbers', () => {
   it.each(['12foo', '1e3', '1.5', '9007199254740992', '0x10'])('preserves integer input %s', (raw) => {
@@ -40,5 +40,17 @@ describe('schema scalar commit contract', () => {
     const source = { nested: { count: 1, name: 'keep' }, other: 2 };
     expect(applySchemaFieldUpdate(source, 'nested.count', { kind: 'remove' })).toEqual({ nested: { name: 'keep' }, other: 2 });
     expect(source.nested.count).toBe(1);
+  });
+});
+
+describe('declared JSON input shape', () => {
+  it.each([
+    [{ type: 'object' as const }, 'object'],
+    [{ type: 'key-value' as const }, 'object'],
+    [{ type: 'array' as const }, 'array'],
+    [{ type: 'array-of-object' as const }, 'array'],
+    [{ type: 'key-value' as const, format: 'array-of-entries' as const }, 'array'],
+  ])('uses the field declaration instead of the current value', (field, shape) => {
+    expect(schemaJsonInputShape(field)).toBe(shape);
   });
 });
