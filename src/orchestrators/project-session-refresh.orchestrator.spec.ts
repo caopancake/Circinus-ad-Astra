@@ -11,7 +11,10 @@ const mocks = vi.hoisted(() => ({
   handler: null as null | ((event: CommittedWriteEvent) => Promise<void>),
 }));
 vi.mock('@/services/project-session.service', () => ({ synchronizeSessionCommit: mocks.synchronizeSessionCommit }));
-vi.mock('@/services/query-cache.service', () => ({ invalidateQueryCacheByProject: mocks.invalidateQueryCacheByProject }));
+vi.mock('@/services/query-cache.service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/query-cache.service')>();
+  return { ...actual, invalidateQueryCacheByProject: mocks.invalidateQueryCacheByProject };
+});
 vi.mock('@/services/resource-cache.service', () => ({ invalidateResourceCacheByProject: mocks.invalidateResourceCacheByProject }));
 vi.mock('@/windows/current.window', () => ({ currentWindowLabel: () => 'main' }));
 vi.mock('@/windows/tauri.events', () => ({
@@ -33,6 +36,7 @@ import { useWriteSyncStore } from '@/stores/write-sync.store';
 import { useProjectStore } from '@/stores/project.store';
 import { useFileHistoryStore } from '@/stores/file-history.store';
 import { requireProjectionReady, markProjectionReady } from '@/shared/runtime/project-projection';
+import { queryCached, invalidateQueryCacheForSession } from '@/services/query-cache.service';
 function manifestFixture(modRoot: string, sessionId: string): ProjectManifest {
   return {
     baseVersions: [],
@@ -107,6 +111,48 @@ beforeEach(() => {
 afterEach(() => markProjectionReady('s1'));
 
 describe('committed session synchronization', () => {
+  it('keeps an identity query alive when the received receipt invalidates its destination', async () => {
+    const actual = await vi.importActual<typeof import('@/services/query-cache.service')>('@/services/query-cache.service');
+    mocks.invalidateQueryCacheByProject.mockImplementationOnce(actual.invalidateQueryCacheByProject);
+    let finish!: (value: []) => void;
+    const ready = vi.fn();
+    const stop = await listenCommittedWrites(
+      async () => {
+        const value = await queryCached(
+          { sessionId: 's1', queryKind: 'entity-list', parameters: { kind: 'ship' } },
+          () =>
+            new Promise<[]>((resolve) => {
+              finish = resolve;
+            }),
+        );
+        ready(value);
+      },
+      () => true,
+      'identity',
+    );
+    const result = receipt();
+    result.sessionUpdates[0] = {
+      sessionId: 's1',
+      modRoot: root,
+      commitId: 1,
+      status: 'ready',
+      projection: {
+        ...projection(),
+        invalidation: {
+          ...projection().invalidation,
+          queryScopes: [{ kind: 'entity-list', entity: { kind: 'ship', id: null }, table: null, source: null, resource: null }],
+        },
+      },
+    };
+    const receiving = mocks.handler!({ originWindowLabel: 'peer', sessionId: 's1', modRoot: root, reason: 'save', result });
+    const completed = expect(receiving).resolves.toBeUndefined();
+    await Promise.resolve();
+    finish([]);
+    await completed;
+    expect(ready).toHaveBeenCalledExactlyOnceWith([]);
+    stop();
+    invalidateQueryCacheForSession('s1');
+  });
   it('accepts the transaction projection and history then invalidates resources before queries', async () => {
     const written = receipt();
     await publishCommittedWrite(root, written, 's1');
@@ -169,7 +215,7 @@ describe('committed session synchronization', () => {
     expect(useFileHistoryStore().getHistoryStacks(root).revision).toBe(2);
     stop();
   });
-  it('starts identity consumers before notifying dependent cache consumers', async () => {
+  it('invalidates caches before identity reads and waits for identity before projection delivery', async () => {
     const sequence: string[] = [];
     mocks.invalidateQueryCacheByProject.mockImplementationOnce(() => sequence.push('cache'));
     await listenCommittedWrites(
@@ -185,7 +231,43 @@ describe('committed session synchronization', () => {
       sequence.push('projection');
     });
     await mocks.handler!({ originWindowLabel: 'peer', sessionId: 's1', modRoot: root, reason: 'save', result: receipt() });
-    expect(sequence).toEqual(['identity', 'cache', 'identity-ready', 'projection']);
+    expect(sequence).toEqual(['cache', 'identity', 'identity-ready', 'projection']);
+  });
+  it('shares concurrent delivery of one receipt until identity acceptance completes', async () => {
+    let finish!: () => void;
+    const waiting = new Promise<void>((resolve) => (finish = resolve));
+    const identity = vi.fn(() => waiting);
+    const dependent = vi.fn();
+    const stopIdentity = await listenCommittedWrites(identity, () => true, 'identity');
+    const stopDependent = await listenCommittedWrites(dependent);
+    const event: CommittedWriteEvent = { originWindowLabel: 'peer', sessionId: 's1', modRoot: root, reason: 'save', result: receipt() };
+    const first = mocks.handler!(event);
+    const duplicate = mocks.handler!(event);
+    const beforeCompletion = dependent.mock.calls.length;
+    finish();
+    await Promise.all([first, duplicate]);
+    expect(beforeCompletion).toBe(0);
+    expect(identity).toHaveBeenCalledOnce();
+    expect(dependent).toHaveBeenCalledOnce();
+    stopIdentity();
+    stopDependent();
+  });
+  it('releases a projection subscriber while identity delivery is awaiting confirmation', async () => {
+    let finish!: () => void;
+    const waiting = new Promise<void>((resolve) => (finish = resolve));
+    const stopIdentity = await listenCommittedWrites(
+      () => waiting,
+      () => true,
+      'identity',
+    );
+    const dependent = vi.fn();
+    const stopDependent = await listenCommittedWrites(dependent);
+    const delivery = mocks.handler!({ originWindowLabel: 'peer', sessionId: 's1', modRoot: root, reason: 'save', result: receipt() });
+    stopDependent();
+    finish();
+    await delivery;
+    expect(dependent).not.toHaveBeenCalled();
+    stopIdentity();
   });
   it('filters an older session before applying domain notifications', async () => {
     const handler = vi.fn();

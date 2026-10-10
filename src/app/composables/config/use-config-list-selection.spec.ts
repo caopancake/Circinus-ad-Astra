@@ -249,4 +249,30 @@ describe('config list selection and action boundaries', () => {
     expect(mocks.feedback.success).not.toHaveBeenCalled();
     expect(selection.selectedId.value).toBeNull();
   });
+
+  it.each([
+    ['select', 'session'],
+    ['mutate', 'session'],
+    ['select', 'unmount'],
+    ['mutate', 'unmount'],
+  ] as const)('releases a stale %s preparation error on %s', async (action, ending) => {
+    const { selection, sessionId } = harness();
+    let fail!: (error: Error) => void;
+    mocks.retry.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject;
+        }),
+    );
+    const mutationAction = mutation(selection);
+    const pending = action === 'select' ? selection.select('b') : mutationAction.run();
+    await flushPromises();
+    if (ending === 'session') sessionId.value = 's2';
+    else wrapper.unmount();
+    fail(new Error('old synchronization'));
+    await pending;
+    expect(mocks.feedback.error).not.toHaveBeenCalled();
+    expect(mutationAction.write).not.toHaveBeenCalled();
+    expect(selection.selectedId.value).toBe(ending === 'session' ? null : 'a');
+  });
 });

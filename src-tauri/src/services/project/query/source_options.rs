@@ -7,7 +7,7 @@ use super::super::{
         entity_definitions::entity_definitions,
         table_definitions::{csv_table_source_display_name, csv_table_source_resource_ref},
     },
-    model::{CoreSourceData, ProjectSession, SessionCsvRow, is_comment_row, string_from_row},
+    model::{CoreSourceData, ProjectSession, SessionCsvRow, string_from_row},
 };
 use crate::{
     domain::well_known_labels::{
@@ -236,7 +236,7 @@ fn source_options_from_rows(
 ) -> AppResult<Vec<crate::models::SourceOption>> {
     let is_id_column = column == "id";
     let mut options = Vec::new();
-    for row in rows.iter().filter(|row| !is_comment_row(&row.data)) {
+    for row in rows.iter().filter(|row| !row.is_comment) {
         let Some(cell_value) = row.data.get(column).and_then(serde_json::Value::as_str) else {
             continue;
         };
@@ -435,7 +435,7 @@ fn add_core_blueprint_package_metadata(
     let Some(rows) = table.rows.as_ref() else {
         return Ok(());
     };
-    for row in rows {
+    for row in rows.iter().filter(|row| !row.is_comment) {
         add_blueprint_package_metadata(metadata, &row.data);
     }
     Ok(())
@@ -446,7 +446,10 @@ fn add_mod_blueprint_package_metadata(
     session: &mut super::super::model::ProjectSession,
 ) -> AppResult<()> {
     ensure_registered_table_rows(session, CsvTableKey::SpecialItems)?;
-    for row in loaded_registered_csv_rows(session, CsvTableKey::SpecialItems)? {
+    for row in loaded_registered_csv_rows(session, CsvTableKey::SpecialItems)?
+        .iter()
+        .filter(|row| !row.is_comment)
+    {
         add_blueprint_package_metadata(metadata, &row.data);
     }
     Ok(())
@@ -1200,7 +1203,7 @@ mod tests {
         .unwrap();
         write_utf8_no_bom(
             &root.join("starsector-core/data/campaign/special_items.csv"),
-            "name,id,tags,plugin params,desc\r\nLow Tech Blueprint Package,low_tech_package,\"package_bp, codex_unlockable\",lowtech_bp,Unlocks low tech blueprints.\r\n",
+            "name,id,tags,plugin params,desc\r\nLow Tech Blueprint Package,low_tech_package,\"package_bp, codex_unlockable\",lowtech_bp,Unlocks low tech blueprints.\r\n#Disabled Package,disabled,package_bp,lowtech_bp,Disabled description.\r\n",
         )
         .unwrap();
         write_utf8_no_bom(
@@ -1235,7 +1238,7 @@ mod tests {
         std::fs::create_dir_all(root.join("data/campaign")).unwrap();
         write_utf8_no_bom(
             &root.join("data/campaign/special_items.csv"),
-            "name,id,tags,plugin params,desc\r\nOld Package,old_package,package_bp,demo_bp,Old description.\r\n",
+            "name,id,tags,plugin params,desc\r\n\"#Old Package\",old_package,package_bp,demo_bp,Old description.\r\n#Disabled Package,disabled,package_bp,demo_bp,Disabled description.\r\n",
         )
         .unwrap();
         write_utf8_no_bom(
@@ -1260,7 +1263,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
         let tag_label = source_option_label_from_groups(&groups, "demo_bp");
         let tag_description = source_option_description_from_groups(&groups, "demo_bp");
-        assert_eq!(tag_label.as_deref(), Some("demo_bp (Old Package)"));
+        assert_eq!(tag_label.as_deref(), Some("demo_bp (#Old Package)"));
         assert_eq!(tag_description.as_deref(), Some("Old description."));
     }
 

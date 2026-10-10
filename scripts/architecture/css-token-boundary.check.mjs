@@ -90,6 +90,37 @@ test('local variables follow their selector scope across descendants', () => {
   assert.ok(failures.some((failure) => failure.includes('[.other; padding]')));
 });
 
+test('local variables stay on their owner through pseudo-classes and child combinators', () => {
+  const failures = cssTokenBoundaryRule.check([
+    {
+      rel: 'src/styles/base.css',
+      text: `${base}
+    .owner { --local: 6px; }
+    .owner:hover > .child { padding: var(--local); }
+    .owner.selected { padding: var(--local); }
+    .owner:hover + .other { padding: var(--local); }
+    .owner:focus ~ .other { padding: var(--local); }
+  `,
+    },
+  ]);
+  assert.equal(failures.filter((failure) => failure.includes('outside its scope --local')).length, 2);
+});
+
+test('shared tokens keep their declaration owner inside local selectors', () => {
+  const failures = cssTokenBoundaryRule.check([
+    { rel: 'src/styles/base.css', text: base },
+    { rel: 'src/styles/tables.css', text: '.table { --color-primary: red; }' },
+  ]);
+  assert.equal(failures.filter((failure) => failure.includes('shared CSS tokens must be defined in base.css')).length, 1);
+});
+
+test('a new shared token declared only in the dark theme requires its base definition', () => {
+  const failures = cssTokenBoundaryRule.check([
+    { rel: 'src/styles/base.css', text: `${base}:root[data-theme="dark"] { --color-new: #000; }` },
+  ]);
+  assert.ok(failures.includes('src/styles/base.css: missing base token --color-new'));
+});
+
 test('third-party and DOM-injected variables have explicit file, selector and property authorization', () => {
   const failures = cssTokenBoundaryRule.check([
     {

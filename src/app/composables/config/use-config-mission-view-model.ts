@@ -1,5 +1,4 @@
 import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
-import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { getConfigMissionEditorData, listConfigMissionRecords, queryMissionDraftIcon } from '@/services/config-entity.service';
 import { useProjectStore } from '@/stores/project.store';
@@ -22,6 +21,7 @@ import { warningNotice } from '@/shared/lib/errors';
 import type { FileSchema } from '@/domain/schema/schema.types';
 import { hasEntityInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/services/resource-cache.service';
+import { focusExistingEntityWindow } from '@/orchestrators/window-target-focus.orchestrator';
 
 export function useConfigMissionViewModel() {
   const missionEditorReloadToken = ref(0);
@@ -88,22 +88,21 @@ export function useConfigMissionViewModel() {
     }
     if (!activeSessionId || disposed) return false;
     listLoadStartedAt.value = performance.now();
-    try {
-      const records = await reads.read('list', { sessionId: activeSessionId, kind: 'mission' }, (signal) =>
-        listConfigMissionRecords(activeSessionId, signal),
-      );
-      if (disposed || key !== sessionKey()) return false;
-      missionRows.value = records.map((record) => record.list);
-      missionVersions.value = Object.fromEntries(records.map((record) => [record.id, record.baseVersions]));
-      missionIconRefs.value = Object.fromEntries(records.map((record) => [record.id, record.iconRef]));
-      missionIconResourceRefs.value = records.flatMap((record) => (record.iconRef ? [record.iconRef] : []));
-      normalizeSelectedMission();
-      return true;
-    } catch (error) {
-      if (disposed || key !== sessionKey() || isReadInvalidated(error)) return false;
-      feedback.error(error, '加载战役失败');
-      return false;
-    }
+    return await reads.consume(
+      'list',
+      { sessionId: activeSessionId, kind: 'mission' },
+      (signal) => listConfigMissionRecords(activeSessionId, signal),
+      {
+        ready: (records) => {
+          missionRows.value = records.map((record) => record.list);
+          missionVersions.value = Object.fromEntries(records.map((record) => [record.id, record.baseVersions]));
+          missionIconRefs.value = Object.fromEntries(records.map((record) => [record.id, record.iconRef]));
+          missionIconResourceRefs.value = records.flatMap((record) => (record.iconRef ? [record.iconRef] : []));
+          normalizeSelectedMission();
+        },
+        error: (error) => feedback.error(error, '加载战役失败'),
+      },
+    );
   }
 
   function normalizeSelectedMission() {
@@ -128,6 +127,7 @@ export function useConfigMissionViewModel() {
       return false;
     }
     if (missionExists(id)) {
+      await focusExistingEntityWindow(createSessionId, createModRoot, 'mission', id);
       feedback.warning(warningNotice(`战役 "${id}" 已存在`, 'config.entity_exists', `Mission ID exists: ${id}`));
       return false;
     }
@@ -183,7 +183,7 @@ export function useConfigMissionViewModel() {
     const saved = await saveMissionDraft(saveSessionId, saveModRoot, previousId, draft, baseVersions);
     if (!saved) return null;
     const data = configMissionEditorModel({
-      list: saved.entity.indexRows.find((row) => row.mission === saved.entity.entityId)!,
+      list: saved.entity.indexRows.find((row) => !row.isComment && row.data.mission === saved.entity.entityId)!.data,
       descriptor: saved.entity.entityData!.descriptor as RowData,
       text: saved.entity.entityData!.text as string,
       iconSrc: '',

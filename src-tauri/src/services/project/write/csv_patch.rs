@@ -14,7 +14,7 @@ use crate::{
     },
     parsers::render_csv_text,
 };
-use serde_json::{Map, Value};
+use serde_json::Value;
 use std::path::Path;
 
 #[cfg(test)]
@@ -88,7 +88,10 @@ pub fn save_csv_patch_snapshot(
         )
     };
     let key_map = apply_csv_row_patches(table, &mut rows, &mut next_row_seq, patches)?;
-    let row_values: Vec<&Map<String, Value>> = rows.iter().map(|row| &row.data).collect();
+    let row_values = rows
+        .iter()
+        .map(|row| (&row.data, row.is_comment))
+        .collect::<Vec<_>>();
     let csv_text = render_csv_text(&header, &row_values)?;
     let mut builder = FileChangeSetBuilder::new_with_lock(Path::new(&mod_root), write_lock)?;
     let mut json = JsonWriteBatch::new(options);
@@ -147,7 +150,9 @@ pub fn save_csv_patch_snapshot(
             (next.state == crate::models::EntityTargetState::Existing).then(|| next.write.clone());
         next.linked_record = loaded_registered_csv_rows(&session, table)?
             .iter()
-            .find(|row| row.data.get("id").and_then(Value::as_str) == Some(&next.id))
+            .find(|row| {
+                !row.is_comment && row.data.get("id").and_then(Value::as_str) == Some(&next.id)
+            })
             .map(|row| crate::models::EntityLinkedRecord::Csv {
                 table,
                 row_key: row.row_key.clone(),
@@ -195,6 +200,7 @@ fn apply_csv_row_patches(
             CsvRowPatchAction::Upsert => {
                 if let Some(row) = rows.iter_mut().find(|row| row.row_key == patch.row_key) {
                     row.data = patch.row;
+                    row.is_comment = patch.is_comment;
                 } else if is_new_csv_row_key(table_key, &patch.row_key) {
                     let next_key = format!("{table_key}:row:{next_row_seq}");
                     *next_row_seq += 1;
@@ -215,6 +221,7 @@ fn apply_csv_row_patches(
                         SessionCsvRow {
                             row_key: next_key,
                             data: patch.row,
+                            is_comment: patch.is_comment,
                             faction_id: None,
                         },
                     );
@@ -427,6 +434,7 @@ mod tests {
                 &manifest.session_id,
                 table,
                 vec![CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: format!("{}:new:1", table.as_str()),
                     action: CsvRowPatchAction::Upsert,
@@ -520,6 +528,7 @@ mod tests {
                     base_versions,
                     table: CsvTableKey::Weapons,
                     patches: vec![CsvRowPatch {
+                        is_comment: false,
                         row_key: window.rows[0].row_key.clone(),
                         insert_at: None,
                         action: CsvRowPatchAction::Upsert,
@@ -555,7 +564,7 @@ mod tests {
                 1
             );
             assert_eq!(
-                crate::io::read_csv_data(&csv_path).unwrap().rows[0]["custom"],
+                crate::io::read_csv_data(&csv_path).unwrap().rows[0].data["custom"],
                 "keep"
             );
             let next = project::query_entity_edit_target(
@@ -576,7 +585,7 @@ mod tests {
             .unwrap();
             assert_eq!(actual_name(), "Demo.wpn");
             assert_eq!(
-                crate::io::read_csv_data(&csv_path).unwrap().rows[0]["id"],
+                crate::io::read_csv_data(&csv_path).unwrap().rows[0].data["id"],
                 "Demo"
             );
             write_transactions::replay(
@@ -619,6 +628,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,
@@ -655,6 +665,145 @@ mod tests {
     use std::path::Path;
 
     #[test]
+    fn command_preserves_comment_identity_through_queries_save_and_replay() {
+        use crate::models::{EntityKind, FileChangeReplayDirection};
+        use crate::services::{project, write_transactions};
+        let root = temp_dir("csv_comment_command");
+        let hulls = root.join("data/hulls");
+        std::fs::create_dir_all(&hulls).unwrap();
+        let path = hulls.join("ship_data.csv");
+        write_utf8_no_bom(&path, "name,id,notes\n#disabled,same,note\n\"#quoted\",same,note\n #space,space,note\n\t#tab,tab,note\nactive,later,#later\n,empty,#later\n").unwrap();
+        for id in ["same", "space", "tab", "later", "empty"] {
+            write_utf8_no_bom(
+                &hulls.join(format!("{id}.ship")),
+                &format!("{{hullId:'{id}',spriteName:'graphics/{id}.png'}}"),
+            )
+            .unwrap();
+        }
+        let mut trace = project::PerformanceTrace::new("project.openSession");
+        let manifest = open_project_session_traced(&root, None, &mut trace).unwrap();
+        assert_eq!(manifest.table_entity_summaries[&CsvTableKey::Ships], 5);
+        let window = query_csv_table_window(
+            &manifest.session_id,
+            CsvTableKey::Ships,
+            0,
+            20,
+            None,
+            CsvFactionFilter::All,
+        )
+        .unwrap();
+        assert_eq!(
+            window
+                .rows
+                .iter()
+                .map(|row| row.is_comment)
+                .collect::<Vec<_>>(),
+            [true, false, false, false, false, false]
+        );
+        let info =
+            project::query_entity_edit_target(&manifest.session_id, EntityKind::Ship, "same")
+                .unwrap();
+        assert!(
+            matches!(info.target.linked_record, Some(crate::models::EntityLinkedRecord::Csv { row_key, .. }) if row_key == window.rows[1].row_key)
+        );
+        assert!(
+            project::query_csv_row_preview(
+                &manifest.session_id,
+                CsvTableKey::Ships,
+                &window.rows[0].row_key
+            )
+            .unwrap()
+            .resource_ref
+            .is_none()
+        );
+        assert!(
+            project::query_csv_row_preview(
+                &manifest.session_id,
+                CsvTableKey::Ships,
+                &window.rows[1].row_key
+            )
+            .unwrap()
+            .resource_ref
+            .is_some()
+        );
+        let catalog =
+            project::query_csv_source_options(&manifest.session_id, "csv:ships.id").unwrap();
+        assert_eq!(
+            catalog[0]
+                .options
+                .iter()
+                .map(|option| option.value.as_str())
+                .collect::<Vec<_>>(),
+            ["same", "space", "tab", "later", "empty"]
+        );
+        let mut data = window.rows[1].data.clone();
+        data.insert("name".into(), Value::String("#edited".into()));
+        let saved =
+            crate::commands::save_csv_patch(crate::models::command_payloads::SaveCsvPatchPayload {
+                session_id: manifest.session_id.clone(),
+                mod_root: manifest.mod_root.clone(),
+                base_versions: window.base_versions,
+                table: CsvTableKey::Ships,
+                patches: vec![CsvRowPatch {
+                    row_key: window.rows[1].row_key.clone(),
+                    is_comment: false,
+                    action: CsvRowPatchAction::Upsert,
+                    row: data,
+                    insert_at: None,
+                }],
+                associated_specs: Vec::new(),
+                json_write: Default::default(),
+            })
+            .unwrap();
+        assert!(
+            read_utf8_no_bom(&path)
+                .unwrap()
+                .contains("\"#edited\",same,note")
+        );
+        let rows = crate::io::read_csv_data(&path).unwrap().rows;
+        assert!(rows[0].is_comment);
+        assert!(!rows[1].is_comment);
+        assert_eq!(rows[0].data["name"], "#disabled");
+        let entry = saved.history.undo_stack.last().unwrap().id;
+        let undone = write_transactions::replay(
+            &manifest.session_id,
+            &manifest.mod_root,
+            FileChangeReplayDirection::Undo,
+            entry,
+            saved.history.revision,
+        )
+        .unwrap();
+        let rows = crate::io::read_csv_data(&path).unwrap().rows;
+        assert_eq!(rows[1].data["name"], "#quoted");
+        assert!(!rows[1].is_comment);
+        write_transactions::replay(
+            &manifest.session_id,
+            &manifest.mod_root,
+            FileChangeReplayDirection::Redo,
+            entry,
+            undone.history.revision,
+        )
+        .unwrap();
+        let replayed = query_csv_table_window(
+            &manifest.session_id,
+            CsvTableKey::Ships,
+            0,
+            20,
+            None,
+            CsvFactionFilter::All,
+        )
+        .unwrap();
+        assert_eq!(replayed.rows[1].data["name"], "#edited");
+        assert!(!replayed.rows[1].is_comment);
+        close_project_session(manifest.session_id).unwrap();
+        let mut reopened_trace = project::PerformanceTrace::new("project.openSession");
+        let reopened = open_project_session_traced(&root, None, &mut reopened_trace).unwrap();
+        assert_eq!(reopened.table_entity_summaries[&CsvTableKey::Ships], 5);
+        close_project_session(reopened.session_id).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn save_csv_patch_creates_associated_spec_in_one_changeset() {
         let root = temp_dir("save_csv_patch_create_assoc");
         std::fs::create_dir_all(root.join("data/hulls")).unwrap();
@@ -671,6 +820,7 @@ mod tests {
             &session_id,
             CsvTableKey::Ships,
             vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: "ships:new:1".to_string(),
                 action: CsvRowPatchAction::Upsert,
@@ -733,12 +883,14 @@ mod tests {
             CsvTableKey::Ships,
             vec![
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: window.rows[0].row_key.clone(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:new:0".to_string(),
                     action: CsvRowPatchAction::Upsert,
@@ -772,6 +924,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Ships,
             vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: survivor_key,
                 action: CsvRowPatchAction::Upsert,
@@ -834,6 +987,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Delete,
@@ -894,6 +1048,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,
@@ -959,6 +1114,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,
@@ -1014,6 +1170,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,
@@ -1067,6 +1224,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Weapons,
             vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: window.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,
@@ -1111,6 +1269,7 @@ mod tests {
             &manifest.session_id,
             CsvTableKey::Ships,
             vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: "ships:row:missing:new:1".to_string(),
                 action: CsvRowPatchAction::Upsert,
@@ -1130,11 +1289,13 @@ mod tests {
     fn apply_csv_row_patches_allocates_uncolliding_key_after_delete() {
         let mut rows = vec![
             SessionCsvRow {
+                is_comment: false,
                 row_key: "ships:row:0".to_string(),
                 data: row_with_id("id", "a"),
                 faction_id: None,
             },
             SessionCsvRow {
+                is_comment: false,
                 row_key: "ships:row:1".to_string(),
                 data: row_with_id("id", "b"),
                 faction_id: None,
@@ -1148,12 +1309,14 @@ mod tests {
             &mut next_row_seq,
             vec![
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:row:0".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:new:1".to_string(),
                     action: CsvRowPatchAction::Upsert,
@@ -1174,11 +1337,13 @@ mod tests {
     fn apply_csv_row_patches_updates_surviving_row_after_delete_without_new_keys() {
         let mut rows = vec![
             SessionCsvRow {
+                is_comment: false,
                 row_key: "ships:row:0".to_string(),
                 data: row_with_id("id", "a"),
                 faction_id: None,
             },
             SessionCsvRow {
+                is_comment: false,
                 row_key: "ships:row:1".to_string(),
                 data: row_with_id("id", "b"),
                 faction_id: None,
@@ -1192,12 +1357,14 @@ mod tests {
             &mut next_row_seq,
             vec![
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:row:0".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:row:1".to_string(),
                     action: CsvRowPatchAction::Upsert,
@@ -1217,11 +1384,13 @@ mod tests {
     fn apply_csv_row_patches_keeps_keys_unique_across_interleaved_patches() {
         let mut rows = vec![
             SessionCsvRow {
+                is_comment: false,
                 row_key: "ships:row:0".to_string(),
                 data: row_with_id("id", "a"),
                 faction_id: None,
             },
             SessionCsvRow {
+                is_comment: false,
                 row_key: "ships:row:1".to_string(),
                 data: row_with_id("id", "b"),
                 faction_id: None,
@@ -1235,18 +1404,21 @@ mod tests {
             &mut next_row_seq,
             vec![
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:new:1".to_string(),
                     action: CsvRowPatchAction::Upsert,
                     row: row_with_id("id", "c"),
                 },
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:row:1".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:new:2".to_string(),
                     action: CsvRowPatchAction::Upsert,
@@ -1270,11 +1442,13 @@ mod tests {
     fn apply_csv_row_patches_does_not_reset_keys_after_full_table_delete() {
         let mut rows = vec![
             SessionCsvRow {
+                is_comment: false,
                 row_key: "ships:row:0".to_string(),
                 data: row_with_id("id", "a"),
                 faction_id: None,
             },
             SessionCsvRow {
+                is_comment: false,
                 row_key: "ships:row:1".to_string(),
                 data: row_with_id("id", "b"),
                 faction_id: None,
@@ -1288,24 +1462,28 @@ mod tests {
             &mut next_row_seq,
             vec![
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:row:0".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:row:1".to_string(),
                     action: CsvRowPatchAction::Delete,
                     row: Map::new(),
                 },
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:new:1".to_string(),
                     action: CsvRowPatchAction::Upsert,
                     row: row_with_id("id", "c"),
                 },
                 CsvRowPatch {
+                    is_comment: false,
                     insert_at: None,
                     row_key: "ships:new:2".to_string(),
                     action: CsvRowPatchAction::Upsert,

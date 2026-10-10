@@ -76,6 +76,7 @@ export interface AssociatedSpecWrite {
 export type CsvRowPatchAction = 'upsert' | 'delete';
 
 export interface CsvRowPatch {
+  isComment: boolean;
   insertAt?: number;
   rowKey: string;
   action: CsvRowPatchAction;

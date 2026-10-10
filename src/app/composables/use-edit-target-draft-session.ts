@@ -4,7 +4,7 @@ import { useDraftSession, type DraftSessionOptions } from '@/app/composables/use
 import { deepClone } from '@/shared/lib/starsector';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
 import { withCause } from '@/shared/lib/errors';
-import { createQueryReadOwner, isReadInvalidated } from '@/shared/runtime/read-request';
+import { createReadTicketOwner, isReadInvalidated } from '@/shared/runtime/read-request';
 import type { EditContext, FileVersion } from '@/shared/types';
 
 type MaybePromise<T> = T | Promise<T>;
@@ -84,7 +84,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
   const context = shallowRef<EditContext | null>(null);
   const savedSnapshot = shallowRef<Snapshot | null>(null);
   const pendingSynchronization = shallowRef<Snapshot | null>(null);
-  const reads = createQueryReadOwner();
+  const reads = createReadTicketOwner();
   const loading = ref(false);
   const saving = ref(false);
   const baselineSnapshot = computed(() => session.baseValue.value);
@@ -152,8 +152,7 @@ export function useEditTargetDraftSession<TValue, TTarget, TMeta = unknown>(
     lastCommitId = Math.max(lastCommitId, snapshot.commitId ?? -1);
     currentTarget.value = snapshot.target;
     currentTargetKey.value = options.targetKey(snapshot.target);
-    session.commitSavedBaseline(snapshot);
-    session.setDraft({ ...snapshot, value: draft });
+    session.commitSaved(snapshot, { ...snapshot, value: draft });
     publishContext(handoff);
     return true;
   }

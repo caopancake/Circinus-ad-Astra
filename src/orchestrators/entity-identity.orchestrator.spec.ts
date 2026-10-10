@@ -28,7 +28,8 @@ vi.mock('@/windows/tauri.events', () => ({
 }));
 vi.mock('@/orchestrators/table-save.orchestrator', () => ({ saveTableChanges: mocks.save }));
 vi.mock('@/orchestrators/project-session-refresh.orchestrator', () => ({ applyCommittedWriteCacheInvalid: vi.fn() }));
-vi.mock('@/services/editor.service', () => ({ queryEditorEditInfo: mocks.query, queryEditorIdentityIntent: vi.fn() }));
+vi.mock('@/services/editor.service', () => ({ queryEditorIdentityIntent: vi.fn() }));
+vi.mock('@/services/entity-query.service', () => ({ querySessionEntityEditTarget: mocks.query }));
 vi.mock('@/services/window.service', () => ({
   reserveNativeWindowTargets: mocks.reserve,
   releaseNativeWindowTargets: mocks.release,
@@ -83,6 +84,27 @@ beforeEach(() => {
 });
 
 describe('entity table preparation', () => {
+  it('releases an old identity receipt without applying it to a reopened session', async () => {
+    const stop = await listenEntityTablePreparation(feedback, async () => []);
+    const client = await createEntitySavePreparation();
+    const receipt = savedWriteFixture();
+    receipt.identityChanges = [{ before: source, after: { ...source, id: 'new' } }];
+    await client.withPreparation('s1', root, source, async () => {
+      const reopened = { ...manifest, sessionId: 's2' };
+      useProjectStore().registerProjectManifest(reopened);
+      useTablesStore().initializeModTables({ sessionId: 's2', modRoot: root, manifest: reopened });
+      expect(useTablesStore().currentTableLocked).toBe(false);
+      const state = useTablesStore().getModTableState(root)!;
+      state.tables.ships = [csvDraftRow({ id: 'reopened' }, 'ships:row:0', 0)];
+      state.originalTables.ships = [csvDraftRow({ id: 'reopened' }, 'ships:row:0', 0)];
+      await client.finish(receipt);
+      expect(state.tables.ships[0]?.data.id).toBe('reopened');
+      expect(state.originalTables.ships[0]?.data.id).toBe('reopened');
+      return true;
+    });
+    client.dispose();
+    stop();
+  });
   it('saves the declared table, holds its lock and accepts the identity receipt before release', async () => {
     const stop = await listenEntityTablePreparation(feedback, async () => []);
     const client = await createEntitySavePreparation();

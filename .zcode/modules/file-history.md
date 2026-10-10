@@ -12,12 +12,12 @@
 `src/orchestrators/file-history-write.orchestrator.ts`：保存 receipt 的同步提交与错误呈现 owner。
 `src/orchestrators/project-session-refresh.orchestrator.ts`：历史摘要与会话更新的统一接纳 owner。
 `src/orchestrators/file-history-replay.orchestrator.ts`：回放编排 owner，拥有回放计划、确认交互、执行与确认 UI。
-`src/services/file-history.service.ts`：历史读取与清空能力包装。
 `src/services/file-history.service.ts`：历史读取、清空与按条目回放能力包装。
 `src/orchestrators/main-history-command.orchestrator.ts`：主窗口历史分派 owner。
 `src-tauri/src/services/file_changes.rs`：后端 changeset 回放 owner。
 `src-tauri/src/commands/file_changes.rs`：回放 command 边界。
 `src/app/composables/editors/use-file-history-view-model.ts`：文件历史视图 ViewModel。
+`src/app/components/config/ConfigFileHistoryView.vue`：历史摘要、确认与回放动作的展示入口。
 
 ## 边界
 

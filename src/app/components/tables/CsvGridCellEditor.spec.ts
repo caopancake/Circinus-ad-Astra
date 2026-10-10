@@ -23,6 +23,11 @@ const SETTINGS = {
 
 const sourceIndex: CsvSourceIndex = { optionsBySource: new Map(), valueIndexBySource: new Map(), valueSetsBySource: new Map() };
 
+const media = vi.hoisted(() => ({ replace: vi.fn(async () => {}), sprite: vi.fn(() => undefined) }));
+vi.mock('@/app/composables/tables/use-schema-select-media', () => ({
+  useSchemaSelectMedia: () => ({ schemaSelectSprite: media.sprite, replaceSchemaSelectSprites: media.replace }),
+}));
+
 function columnFixture(control: string): CsvGridColumn {
   return {
     className: `schema-col-${control}`,
@@ -50,7 +55,7 @@ function mountEditor(props: Record<string, unknown>) {
     },
     {
       anchorElement: null,
-      row: { rowKey: 'key-0', factionId: null, data: { size: 'MEDIUM' } },
+      row: { rowKey: 'key-0', isComment: false, factionId: null, data: { size: 'MEDIUM' } },
       sourceIndex,
       ...props,
     },
@@ -61,8 +66,30 @@ function mountEditor(props: Record<string, unknown>) {
 
 describe('CsvGridCellEditor', () => {
   beforeEach(() => {
+    media.replace.mockClear();
     setActivePinia(createPinia());
     initializeSettingsStore({ ...SETTINGS });
+  });
+
+  it('registers the selected image with the active reference control', () => {
+    const resource = {
+      source: 'mod' as const,
+      relPath: 'graphics/selected.png',
+      ownerKind: 'ship' as const,
+      ownerId: 'MEDIUM',
+      key: 'sprite',
+    };
+    const option = { label: 'Selected', value: 'MEDIUM', resourceRef: resource };
+    const editor = mountEditor({
+      column: { ...columnFixture('reference'), schema: { key: 'size', control: 'reference', source: 'csv:ships.id' } },
+      sourceIndex: {
+        optionsBySource: new Map([['csv:ships.id', [option]]]),
+        valueSetsBySource: new Map([['csv:ships.id', new Set(['MEDIUM'])]]),
+        valueIndexBySource: new Map([['csv:ships.id', new Map([['MEDIUM', { group: '', option }]])]]),
+      },
+    });
+    expect(editor.text()).toContain('Selected');
+    expect(media.replace).toHaveBeenCalledWith('sess-1', 'selected', [resource]);
   });
 
   it('commits edited native input on blur and on enter', async () => {
@@ -184,7 +211,7 @@ describe('CsvGridCellEditor', () => {
     await editor.get('input').setValue('later');
     fixture.props.value = {
       ...fixture.props.value,
-      row: { rowKey: 'ships:row:9', sourceRowIndex: 9, factionId: null, data: { size: 'MEDIUM' } },
+      row: { rowKey: 'ships:row:9', isComment: false, sourceRowIndex: 9, factionId: null, data: { size: 'MEDIUM' } },
     };
     await editor.vm.$nextTick();
     await fixture.inputs.commit();

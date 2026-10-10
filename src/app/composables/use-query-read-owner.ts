@@ -1,8 +1,8 @@
 import { onScopeDispose } from 'vue';
-import { createQueryReadOwner } from '@/shared/runtime/read-request';
+import { createReadTicketOwner } from '@/shared/runtime/read-request';
 
 export function useQueryReadOwner() {
-  const owner = createQueryReadOwner();
+  const owner = createReadTicketOwner();
   onScopeDispose(owner.revoke);
   return owner;
 }

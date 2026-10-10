@@ -84,6 +84,24 @@ afterEach(() => {
 });
 
 describe('formal reading protocols', () => {
+  it('captures live draft parameters once and sends that captured snapshot to the command', async () => {
+    let reads = 0;
+    const nested = { path: 'graphics/original.png' };
+    const input = {
+      hullId: 'demo',
+      get sprite() {
+        reads++;
+        return nested;
+      },
+    };
+    invoke.mockResolvedValue({});
+    const pending = querySessionEditorDraftResources(sessionId, 'ship', 'demo', input);
+    nested.path = 'graphics/later.png';
+    const args = invoke.mock.lastCall![1] as { payload: { draft: { sprite: { path: string } } } };
+    expect(args.payload.draft.sprite.path).toBe('graphics/original.png');
+    expect(reads).toBe(1);
+    await pending;
+  });
   it.each([
     ['csv-table-window', 80],
     ['csv-source-options', 240],

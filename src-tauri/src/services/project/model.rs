@@ -300,6 +300,7 @@ pub(super) struct SessionCsvTable {
 pub(super) struct SessionCsvRow {
     pub row_key: String,
     pub data: Map<String, Value>,
+    pub is_comment: bool,
     pub faction_id: Option<String>,
 }
 
@@ -375,13 +376,6 @@ pub(super) fn weapon_sprite_path(weapon: &Value) -> Option<String> {
         .find_map(|key| string_field(weapon, key))
 }
 
-pub(super) fn is_comment_row(row: &Map<String, Value>) -> bool {
-    row.values()
-        .filter_map(Value::as_str)
-        .find(|value| !value.trim().is_empty())
-        .is_some_and(|value| value.trim_start().starts_with('#'))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,14 +386,6 @@ mod tests {
             .iter()
             .map(|(key, value)| (key.to_string(), Value::String(value.to_string())))
             .collect()
-    }
-
-    #[test]
-    fn is_comment_row_flags_rows_whose_first_value_starts_with_hash() {
-        assert!(is_comment_row(&row(&[("id", " #disabled")])));
-        assert!(is_comment_row(&row(&[("name", ""), ("id", "#x")])));
-        assert!(!is_comment_row(&row(&[("id", "active")])));
-        assert!(!is_comment_row(&row(&[("id", "C#not-a-comment")])));
     }
 
     #[test]

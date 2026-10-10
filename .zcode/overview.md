@@ -73,4 +73,3 @@ Circinus ad Astra 是一个 Windows 桌面 Starsector Mod 配置工具，统一�
 - workspace、settings、日志和派生索引只允许写工具私有目录；Mod、Core 和用户外部目录必须由所属 path owner 授权。
 - 子窗口只允许消费主窗口 settings snapshot；主窗口拥有 settings 持久化，子窗口不得自行读盘、补默认值或广播镜像。
 - 结构化错误必须保留稳定码、原始诊断、路径、行列、action、command 和 payload；用户文案、日志诊断和恢复授权不得互相推导。
-- 所有跨层公开入口、command owner、能力依赖和生产文件主归属必须由静态检查与模块索引登记；新增绕过入口必须被规则拒绝。

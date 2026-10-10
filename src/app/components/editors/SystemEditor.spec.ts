@@ -29,6 +29,7 @@ vi.mock('@/shared/runtime/dialog.runtime', () => ({
 }));
 
 import SystemEditor from './SystemEditor.vue';
+import JsonFieldEditor from '@/shared/ui/JsonFieldEditor.vue';
 
 let wrapper: import('@vue/test-utils').VueWrapper | null = null;
 
@@ -58,6 +59,20 @@ describe('SystemEditor type switching', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     installCanvas2DStub();
+  });
+
+  it('keeps prototype-named extra fields through the real extra-field handoff', async () => {
+    const source: RowData = JSON.parse('{"id":"sys1","type":"STAT_MOD","__proto__":{"value":1},"constructor":"business"}');
+    const editor = mountEditor(source);
+    const extra = editor.findComponent(JsonFieldEditor);
+    expect(Object.keys(extra.props('modelValue'))).toEqual(['__proto__', 'constructor']);
+    extra.vm.$emit('update:modelValue', JSON.parse('{"__proto__":{"value":2},"constructor":"changed"}'));
+    await nextTick();
+    const saved = editor.emitted('draft-changed')?.at(-1)?.[0] as RowData;
+    expect(JSON.stringify(saved)).toContain('"__proto__":{"value":2}');
+    expect(saved.constructor).toBe('changed');
+    expect(saved.id).toBe('sys1');
+    expect(JSON.stringify(source)).toContain('"__proto__":{"value":1}');
   });
 
   it('preserves shared effects and unknown fields when the system type changes', async () => {

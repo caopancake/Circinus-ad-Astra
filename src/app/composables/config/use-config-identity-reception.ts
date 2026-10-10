@@ -5,7 +5,6 @@ import { useDraftSessionsStore } from '@/stores/draft-sessions.store';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { normalizeFsPath } from '@/shared/lib/paths';
 import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
-import { isReadInvalidated } from '@/shared/runtime/read-request';
 import type { ConfigIdentityHandoff, EntityEditTarget } from '@/shared/types';
 
 export function useConfigIdentityReception<T>(options: {
@@ -29,17 +28,34 @@ export function useConfigIdentityReception<T>(options: {
       );
       if (!change) return;
       const request = ++sequence;
-      const current = () => !disposed && options.target()?.id === target.id && options.target()?.sessionId === target.sessionId;
+      const current = () =>
+        !disposed &&
+        request === sequence &&
+        options.target()?.id === target.id &&
+        options.target()?.sessionId === target.sessionId &&
+        options.target()?.modRoot === target.modRoot &&
+        options.target()?.kind === target.kind;
       receiving.value = true;
       try {
         await Promise.resolve();
         const saving = useSaveCommandStore().waitForSaves(target.modRoot);
         if (saving && !(await saving)) return;
         if (!current()) return;
-        const record = await reads.read('identity', { sessionId: target.sessionId, kind: target.kind, id: change.after.id }, (signal) =>
-          options.read(target.sessionId, change.after.id, signal),
+        let record: T | null = null;
+        const accepted = await reads.consume(
+          'identity',
+          { sessionId: target.sessionId, kind: target.kind, id: change.after.id },
+          (signal) => options.read(target.sessionId, change.after.id, signal),
+          {
+            ready: (value) => {
+              record = value;
+            },
+            error: (error) => {
+              if (current()) feedback.error(error, '同步配置实体身份失败');
+            },
+          },
         );
-        if (!record || !current()) return;
+        if (!accepted || !record || !current()) return;
         const preserveDraft = useDraftSessionsStore().hasDirtyDraftForMod(target.modRoot);
         if (preserveDraft) {
           const choice = await feedback.choose({
@@ -52,7 +68,7 @@ export function useConfigIdentityReception<T>(options: {
         handoff.value = { sourceId: target.id, record, preserveDraft, commitId: event.result.commitId };
         options.accept(record, change.after.id);
       } catch (error) {
-        if (current() && !isReadInvalidated(error)) feedback.error(error, '同步配置实体身份失败');
+        if (current()) feedback.error(error, '同步配置实体身份失败');
       } finally {
         if (request === sequence) receiving.value = false;
       }

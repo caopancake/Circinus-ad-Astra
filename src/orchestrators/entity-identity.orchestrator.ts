@@ -13,8 +13,10 @@ import { applyCommittedWriteCacheInvalid } from '@/orchestrators/project-session
 import { useTablesStore } from '@/stores/tables.store';
 import { useProjectStore } from '@/stores/project.store';
 import { useTablesEditHistoryStore } from '@/stores/tables-edit-history.store';
-import { queryEditorIdentityIntent, queryEditorEditInfo } from '@/services/editor.service';
+import { queryEditorIdentityIntent } from '@/services/editor.service';
+import { querySessionEntityEditTarget } from '@/services/entity-query.service';
 import { reserveNativeWindowTargets, releaseNativeWindowTargets, retargetNativeWindow } from '@/services/window.service';
+import { focusEntityIdentityConflict } from '@/orchestrators/window-target-focus.orchestrator';
 import { editorWindowTitle } from '@/domain/editors/editor-definitions';
 import { AppError, formatError } from '@/shared/lib/errors';
 import { isReadInvalidated } from '@/shared/runtime/read-request';
@@ -44,7 +46,10 @@ export function releaseCommittedIdentityTargets() {
 }
 
 export async function reserveEntityIntent(sessionId: string, modRoot: string, source: EntityEditTarget, draft: RowData) {
-  const intent = await queryEditorIdentityIntent(sessionId, source, draft);
+  const intent = await queryEditorIdentityIntent(sessionId, source, draft).catch(async (error) => {
+    await focusEntityIdentityConflict(sessionId, modRoot, error);
+    throw error;
+  });
   const kind = source.kind as EditorSpecKind;
   const identities: WindowIdentity[] = [
     { type: 'spec', sessionId, modRoot, kind, id: intent.nextId },
@@ -184,7 +189,7 @@ export async function listenEntityTablePreparation(
                   )
                 : null;
             const source = identity?.after ?? request.source;
-            const info = cloneQuerySnapshot<EntityEditInfo>(await queryEditorEditInfo(request.sessionId, source.kind, source.id));
+            const info = cloneQuerySnapshot<EntityEditInfo>(await querySessionEntityEditTarget(request.sessionId, source.kind, source.id));
             if (info.target.id !== source.id || info.target.state !== source.state || info.target.write.path !== source.write.path) {
               throw new AppError('规格目标在表格准备期间发生变化，请接纳外部身份后重试', { action: 'prepare-entity-table' });
             }
@@ -256,6 +261,7 @@ export async function listenEntityTablePreparation(
 }
 
 function adoptTableIdentityResult(request: EntityTablePrepareEvent, receipt: WriteResult) {
+  if (useProjectStore().getSessionId(request.modRoot) !== request.sessionId) return;
   const tables = useTablesStore();
   const state = tables.getModTableState(request.modRoot);
   const linked = request.source.linkedRecord;

@@ -24,6 +24,7 @@ import { computed, getCurrentInstance, ref } from 'vue';
 import { useRawFieldInput, type InputConversion } from '@/shared/runtime/raw-field-input';
 import { parseInputNumber } from '@/shared/lib/input-number';
 import { focusFieldInput } from '@/shared/runtime/focus-field-input';
+import { cell } from '@/shared/lib/starsector';
 
 const props = withDefaults(
   defineProps<{
@@ -58,7 +59,7 @@ const controlGeneration = ref(0);
 const { raw, invalid, update, commit } = useRawFieldInput<number | null>({
   key: props.inputKey ?? 'number/' + getCurrentInstance()!.uid,
   label: props.label,
-  text: () => (props.value == null ? '' : String(props.value)),
+  text: () => cell(props.value),
   convert,
   apply: (converted) => {
     if (converted.kind === 'remove') emit('remove');

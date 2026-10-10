@@ -17,6 +17,7 @@ import { isAbsoluteFsPath, joinRootRelativePath, normalizeFsPath } from '@/share
 import { captureAssociatedSpecTarget } from '@/services/csv-table.service';
 import { reserveNativeWindowTargets, releaseNativeWindowTargets } from '@/services/window.service';
 import type { WindowIdentity } from '@/shared/types';
+import { focusEntityIdentityConflict } from '@/orchestrators/window-target-focus.orchestrator';
 
 export type TableSaveResult = { status: 'saved'; receipt: import('@/shared/types').WriteResult } | { status: 'noop' | 'cancelled' };
 
@@ -95,7 +96,14 @@ async function saveTarget(target: CapturedTableSaveTarget, options: TableSaveOpt
     candidates.length > 0
       ? await Promise.all(
           candidates.map(
-            async (candidate) => [candidate.key, await captureAssociatedSpecTarget(manifest.sessionId, table, candidate.change)] as const,
+            async (candidate) =>
+              [
+                candidate.key,
+                await captureAssociatedSpecTarget(manifest.sessionId, table, candidate.change).catch(async (error) => {
+                  await focusEntityIdentityConflict(manifest.sessionId, modRoot, error);
+                  throw error;
+                }),
+              ] as const,
           ),
         )
       : [],
@@ -171,9 +179,15 @@ function isTableSaveTargetCurrent(target: CapturedTableSaveTarget): boolean {
 function buildCurrentTablePatches(state: ModTableState, table: TableKey): CsvRowPatch[] {
   const dirty = state.dirty[table] ?? {};
   return Object.entries(dirty).map(([rowKey, changes]) => {
-    if (isCsvDeletedRow(changes)) return { rowKey, action: 'delete', row: {} };
+    if (isCsvDeletedRow(changes)) return { rowKey, action: 'delete', row: {}, isComment: false };
     const row = state.tables[table].find((candidate) => isLoadedCsvTableRow(candidate) && candidate.rowKey === rowKey)!;
     const cleanRow = deepClone(row.data);
-    return { rowKey, action: 'upsert', row: cleanRow, ...(row.insertAt !== null ? { insertAt: row.insertAt } : {}) };
+    return {
+      rowKey,
+      action: 'upsert',
+      row: cleanRow,
+      isComment: row.isComment,
+      ...(row.insertAt !== null ? { insertAt: row.insertAt } : {}),
+    };
   });
 }

@@ -22,7 +22,7 @@ export function getAssociatedSpecCandidates(
   const candidates: AssociatedSpecCandidate[] = [];
   for (const [rowKey, dirty] of Object.entries(state.dirty[table])) {
     const original = originalRows.get(rowKey);
-    const previousId = original ? rowSpecId(original.data, table) : '';
+    const previousId = original && !original.isComment ? rowSpecId(original.data, table) : '';
     if (isCsvDeletedRow(dirty)) {
       if (previousId)
         candidates.push({
@@ -34,14 +34,14 @@ export function getAssociatedSpecCandidates(
       continue;
     }
     const current = currentRows.get(rowKey)!;
-    const id = rowSpecId(current.data, table);
-    if (!id || (original && (!previousId || previousId === id))) continue;
+    const id = current.isComment ? '' : rowSpecId(current.data, table);
+    if (!id || previousId === id) continue;
     const create = associatedSpecCreateParams(table, id, current.data);
-    const change: AssociatedSpecChange = original ? { action: 'rename', previousId, create } : { action: 'create', create };
+    const change: AssociatedSpecChange = previousId ? { action: 'rename', previousId, create } : { action: 'create', create };
     candidates.push({
       key: JSON.stringify([table, change.action, previousId, id]),
       table,
-      label: original ? `重命名关联 spec ${previousId} -> ${id}` : `创建关联 spec ${id}`,
+      label: previousId ? `重命名关联 spec ${previousId} -> ${id}` : `创建关联 spec ${id}`,
       change,
     });
   }

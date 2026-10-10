@@ -16,6 +16,7 @@ export const commandOwners = {
   ],
   'src/services/window.service.ts': [
     'open_managed_window',
+    'focus_managed_window',
     'update_managed_window_status',
     'reserve_window_targets',
     'release_window_targets',

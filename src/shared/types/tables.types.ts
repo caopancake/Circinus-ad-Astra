@@ -39,9 +39,13 @@ export type CsvFactionFilter = { kind: 'all' } | { kind: 'faction'; factionId: s
 
 export type CsvDirtyRow = { action: 'upsert'; cells: Record<string, string> } | { action: 'delete' };
 
-export interface CsvRowRecord {
-  rowKey: string;
+export interface CsvRow {
   data: RowData;
+  isComment: boolean;
+}
+
+export interface CsvRowRecord extends CsvRow {
+  rowKey: string;
   factionId: string | null;
 }
 

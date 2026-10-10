@@ -6,7 +6,6 @@ import { isCsvSource } from '@/domain/tables/csv-source-options';
 import type { ResourceRef } from '@/shared/types';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
-import { isReadInvalidated } from '@/shared/runtime/read-request';
 
 export function useSchemaSourceOptions(args: {
   field: () => FieldSchema;
@@ -16,7 +15,6 @@ export function useSchemaSourceOptions(args: {
   const loadedOptions = ref<SelectOption[]>([]);
   const feedback = useAppFeedback();
   const reads = useQueryReadOwner();
-  let disposed = false;
   let stopInvalidation: (() => void) | null = null;
 
   // Context identity tracks entity-dependent catalogs; selected values remain ghost options.
@@ -46,7 +44,6 @@ export function useSchemaSourceOptions(args: {
   );
 
   onUnmounted(() => {
-    disposed = true;
     stopInvalidation?.();
   });
 
@@ -54,21 +51,21 @@ export function useSchemaSourceOptions(args: {
     const context = args.runtimeContext();
     const sessionId = context?.sessionId ?? null;
     const source = args.field().source ?? null;
+    reads.revoke('consumer', 'source');
     if (!sessionId || !source || (!isCsvSource(source) && source !== 'hull:builtInWeaponSlots')) {
       loadedOptions.value = [];
       return;
     }
 
-    try {
-      const groups = await reads.read('source', { sessionId, source }, async (signal) => context?.querySourceOptions?.(source, signal));
-      if (disposed || sessionId !== args.runtimeContext()?.sessionId || source !== args.field().source) return;
-      loadedOptions.value = groups ? mapSourceGroupsToSelectOptions(groups) : [];
-    } catch (error) {
-      if (isReadInvalidated(error)) return;
-      if (disposed) return;
-      loadedOptions.value = [];
-      feedback.error(error, '加载字段来源失败');
-    }
+    await reads.consume('source', { sessionId, source }, async (signal) => context?.querySourceOptions?.(source, signal), {
+      ready: (groups) => {
+        loadedOptions.value = groups ? mapSourceGroupsToSelectOptions(groups) : [];
+      },
+      error: (error) => {
+        loadedOptions.value = [];
+        feedback.error(error, '加载字段来源失败');
+      },
+    });
   }
 
   function loadedSourceResourceRefs(): ResourceRef[] {

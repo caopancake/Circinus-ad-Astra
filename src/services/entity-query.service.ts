@@ -33,7 +33,7 @@ export function querySessionEntityEditTarget(
 ): Promise<QueryValue<'entity-edit-target'>> {
   return queryLive(
     { sessionId, queryKind: 'entity-edit-target', parameters: { kind, id } },
-    () => invokeCommand('query_entity_edit_target', { payload: { sessionId, kind, id } }),
+    (captured) => invokeCommand('query_entity_edit_target', { payload: { sessionId: captured.sessionId, ...captured.parameters } }),
     signal,
   );
 }
@@ -47,7 +47,7 @@ export function querySessionEntityIdentityIntent(
   const parameters = { source, nextId };
   return queryLive(
     { sessionId, queryKind: 'entity-identity-intent', parameters },
-    () => invokeCommand('query_entity_identity_intent', { payload: { sessionId, ...parameters } }),
+    (captured) => invokeCommand('query_entity_identity_intent', { payload: { sessionId: captured.sessionId, ...captured.parameters } }),
     signal,
   );
 }
@@ -62,7 +62,7 @@ export function querySessionEditorDraftResources(
   const parameters = { kind, id, draft };
   return queryLive<'editor-draft-resources'>(
     { sessionId, queryKind: 'editor-draft-resources', parameters },
-    () => invokeCommand('query_editor_draft_resources', { payload: { sessionId, ...parameters } }),
+    (captured) => invokeCommand('query_editor_draft_resources', { payload: { sessionId: captured.sessionId, ...captured.parameters } }),
     signal,
   );
 }

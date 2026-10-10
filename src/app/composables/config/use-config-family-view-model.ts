@@ -1,5 +1,4 @@
 import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
-import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import {
   createSkinAction,
@@ -35,6 +34,7 @@ import { warningNotice } from '@/shared/lib/errors';
 import type { SelectOption } from '@/domain/schema/schema-options';
 import { hasEntityInvalidation, hasQueryInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
+import { focusEntityWindowTarget } from '@/orchestrators/window-target-focus.orchestrator';
 
 export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
   const files = ref<ConfigFamilyFile[]>([]);
@@ -97,73 +97,75 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     }
     if (!activeSessionId || disposed) return false;
     listLoadStartedAt.value = performance.now();
-    try {
-      const records =
-        family.id === 'variant'
-          ? await reads.read('list', { sessionId: activeSessionId, kind: 'variant' }, (signal) =>
-              listVariantRecords(activeSessionId, signal),
-            )
-          : await reads.read('list', { sessionId: activeSessionId, kind: 'skin' }, (signal) => listSkinRecords(activeSessionId, signal));
-      if (disposed || key !== sessionKey()) return false;
-      const previousSelected = files.value.find((file) => idOf(file) === selectedId.value);
-      files.value = records.map((record) => record.file);
-      selection.reconcile(
-        [...files.value].sort((a, b) => compareFamilyFiles(family, a, b)).map((file) => file.id),
-        identity.receiving.value,
-      );
-      if (previousSelected && selectedId.value === previousSelected.id && !files.value.some((file) => file.id === previousSelected.id))
-        heldFile.value = previousSelected;
-      else if (files.value.some((file) => file.id === selectedId.value)) heldFile.value = null;
-      spriteRefs.value = Object.fromEntries(records.map((record) => [record.file.id, record.spriteRef]));
-      const nextSelected = files.value.find((file) => idOf(file) === selectedId.value);
-      if (selectedEntityDataChanged(previousSelected, nextSelected)) dataRevision.value += 1;
-      if (family.usesHullNames) {
-        await loadFamilyHullNames(activeSessionId, files.value);
-      }
-      return true;
-    } catch (error) {
-      if (disposed || key !== sessionKey() || isReadInvalidated(error)) return false;
-      feedback.error(error, `加载${family.displayName}失败`);
-      return false;
+    const accepted = await reads.consume(
+      'list',
+      { sessionId: activeSessionId, kind: family.id },
+      (signal) => (family.id === 'variant' ? listVariantRecords(activeSessionId, signal) : listSkinRecords(activeSessionId, signal)),
+      {
+        ready: (records) => {
+          const previousSelected = files.value.find((file) => idOf(file) === selectedId.value);
+          files.value = records.map((record) => record.file);
+          selection.reconcile(
+            [...files.value].sort((a, b) => compareFamilyFiles(family, a, b)).map((file) => file.id),
+            identity.receiving.value,
+          );
+          if (previousSelected && selectedId.value === previousSelected.id && !files.value.some((file) => file.id === previousSelected.id))
+            heldFile.value = previousSelected;
+          else if (files.value.some((file) => file.id === selectedId.value)) heldFile.value = null;
+          spriteRefs.value = Object.fromEntries(records.map((record) => [record.file.id, record.spriteRef]));
+          const nextSelected = files.value.find((file) => idOf(file) === selectedId.value);
+          if (selectedEntityDataChanged(previousSelected, nextSelected)) dataRevision.value += 1;
+        },
+        error: (error) => feedback.error(error, `加载${family.displayName}失败`),
+      },
+    );
+    if (!accepted || disposed || key !== sessionKey()) return false;
+    if (family.usesHullNames) {
+      await loadFamilyHullNames(activeSessionId, files.value);
     }
+    return true;
   }
 
   async function loadFamilyHullNames(activeSessionId: string, sourceFiles: ConfigFamilyFile[]): Promise<void> {
+    reads.revoke('consumer', 'names');
     if (sourceFiles.length === 0) {
       hullNames.value = {};
       return;
     }
-    try {
-      const hullIds = sourceFiles.map((file) => familyFileCompanion(family, file));
-      const result = await reads.read('names', { sessionId: activeSessionId, hullIds }, (signal) =>
-        querySessionHullReferences(activeSessionId, hullIds, signal),
-      );
-      if (disposed || activeSessionId !== project.activeSessionId) return;
-      hullNames.value = result.hullNames;
-    } catch (error) {
-      if (disposed || activeSessionId !== project.activeSessionId || isReadInvalidated(error)) return;
-      feedback.error(error, `读取${family.displayName}引用失败`);
-    }
+    const hullIds = sourceFiles.map((file) => familyFileCompanion(family, file));
+    await reads.consume(
+      'names',
+      { sessionId: activeSessionId, hullIds },
+      (signal) => querySessionHullReferences(activeSessionId, hullIds, signal),
+      {
+        ready: (result) => {
+          hullNames.value = result.hullNames;
+        },
+        error: (error) => feedback.error(error, `读取${family.displayName}引用失败`),
+      },
+    );
   }
 
   async function loadHullOptions() {
     const activeSessionId = project.activeSessionId;
+    reads.revoke('consumer', 'options');
     if (!activeSessionId || settings.isPlainEditMode) {
       hullOptions.value = [];
       hullOptionsLoaded.value = false;
       return;
     }
-    try {
-      const options = await reads.read('options', { sessionId: activeSessionId, kind: 'hull-options' }, (signal) =>
-        queryHullReferenceOptions(activeSessionId, [], signal),
-      );
-      if (disposed || activeSessionId !== project.activeSessionId) return;
-      hullOptions.value = options;
-      hullOptionsLoaded.value = true;
-    } catch (error) {
-      if (disposed || activeSessionId !== project.activeSessionId || isReadInvalidated(error)) return;
-      feedback.error(error, '读取舰船引用失败');
-    }
+    await reads.consume(
+      'options',
+      { sessionId: activeSessionId, kind: 'hull-options' },
+      (signal) => queryHullReferenceOptions(activeSessionId, [], signal),
+      {
+        ready: (options) => {
+          hullOptions.value = options;
+          hullOptionsLoaded.value = true;
+        },
+        error: (error) => feedback.error(error, '读取舰船引用失败'),
+      },
+    );
   }
 
   async function createFamilyEntity(createSessionId: string, createModRoot: string, companionId: string, id: string): Promise<boolean> {
@@ -183,6 +185,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       return false;
     }
     if (hasConfigEntityIdConflict(files.value, id, null, idOf)) {
+      await focusEntityWindowTarget(createSessionId, createModRoot, files.value.find((file) => file.id === id)!.target);
       feedback.warning(warningNotice(`${family.displayName} "${id}" 已存在`, 'config.entity_exists', `Family ID exists: ${id}`));
       return false;
     }
@@ -270,6 +273,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
       return null;
     }
     if (hasConfigEntityIdConflict(files.value, nextId, currentId, idOf)) {
+      await focusEntityWindowTarget(saveSessionId, saveModRoot, files.value.find((file) => file.id === nextId)!.target);
       feedback.warning(warningNotice(`${family.displayName} "${nextId}" 已存在`, 'config.entity_exists', `Family ID exists: ${nextId}`));
       return null;
     }
@@ -319,6 +323,7 @@ export function useConfigFamilyViewModel(family: ConfigEntityFamilyDefinition) {
     () => settings.isPlainEditMode,
     () => {
       if (settings.isPlainEditMode) {
+        reads.revoke('consumer', 'options');
         hullOptions.value = [];
         hullOptionsLoaded.value = false;
       }

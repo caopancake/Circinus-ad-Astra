@@ -7,14 +7,14 @@
 ## 参考
 
 `src-tauri/src/commands/project_session.rs`：session 生命周期 command 主归属。
-`src-tauri/src/services/project/cache/`：按实体类型的懒加载缓存 owner。
+`src-tauri/src/services/project/cache/`：会话缓存、实体来源及共享缓存注册表的装配维护。
 `src-tauri/src/services/project/cache/spec_records.rs`：实际来源根、相对路径、加载 ID 与业务内容的记录 owner。
-`src-tauri/src/services/project/query/`：只读实体与表格 query owner。
+`src-tauri/src/services/project/query/`：实体、表格、来源与资源读取能力的后端交接装配。
 `src-tauri/src/services/project/query/entity_targets.rs`：实际编辑目标、身份意图及正式版本范围 owner。
-`src-tauri/src/services/project/resources/`：Mod/Core 资源解析 owner。
-`src-tauri/src/services/project/root.rs`：canonical 游戏根与持久化缓存 owner。
-`src-tauri/src/services/project/session.rs`：session 注册表与状态锁 owner，拥有打开、关闭与 session 查询。
-`src-tauri/src/services/project/write/`：写入 owner，返回 changes、结构化 invalidation 与刷新结果。
+`src-tauri/src/services/project/resources/`：会话 query 消费的资源解析交接。
+`src-tauri/src/services/project/root.rs`：Mod 信息、战役计数与项目打开装配。
+`src-tauri/src/services/project/session.rs`：会话打开、关闭与投影生命周期，注册表句柄经缓存运行时交接。
+`src-tauri/src/services/project/write/`：领域写入能力的后端交接装配，返回 changes、结构化 invalidation 与刷新结果。
 `src-tauri/src/services/project_session.rs`：游戏根与 Mod 根授权、建立会话及性能记录主归属。
 `src-tauri/src/services/write_transactions/committed.rs`：已写盘提交的投影结果、恢复记录和根序号 owner。
 `src/orchestrators/project-session-refresh.orchestrator.ts`：提交接纳 owner，拥有投影恢复、历史与 manifest 接纳、缓存失效、统一通知及重试进度。
@@ -77,9 +77,9 @@
 ## 规范
 
 - CSV 写后 refresh 必须保留当前缓存与 changeset after 文本一致的行身份和键分配序列；重新读取的外部版本必须按正式加载入口建立行身份。
-- CSV 查询必须显式投影 sourceRowIndex 与 factionId；搜索必须消费业务值与势力投影，势力过滤只允许消费 factionId。
+- CSV 查询必须显式投影 isComment、sourceRowIndex 与 factionId；搜索必须消费业务值与势力投影，势力过滤只允许消费 factionId。
 - Core 弹体必须保留 Core 实际来源，同时必须声明当前 Mod 的覆盖创建目标；失效重建必须消费相同来源组合。
-- ID 归属的实体视图、表计数与失效快照只枚举非注释且实体 ID 非空的行；缺 ID 行仍属于表格、草稿与保存链路。
+- ID 归属的实体视图、关联目标、来源目录、表计数、行预览与失效快照必须消费解析器 isComment；实体登记只允许枚举非注释且实体 ID 非空的行。
 - Variant 与 Skin 必须分别持有索引和诊断，统计必须消费所属记录数量；manifest 诊断必须按 Variant、Skin 顺序聚合。
 - Variant 与 Skin 的业务输出必须是文件内容；加载身份、文件目标、版本与资源必须分别归正式记录。
 - WriteResult 必须携带 sessionUpdates；每项必须表达 sessionId、modRoot、commitId 与 ready 或 pending，ready 必须携带 manifest、invalidation 和 projectionRevision。
@@ -87,7 +87,7 @@
 - detail、list 与编辑目标查询必须消费同一目标定义；规格目标必须承载实际来源、所属根、写入目标、加载身份及关联行。
 - manifest 接纳必须核对 session 与单调投影代次；提交接纳与事件消费必须按根、提交序号去重。
 - pending 提交与前端同步登记必须保存稳定码、原始 message 与 nullable location，呈现必须消费所属文案投影。
-- 会话与 Core CSV 缓存必须分别保存业务 data、rowKey 与势力投影 factionId，严禁覆盖文件中的同名业务键。
+- 会话与 Core CSV 缓存必须分别保存业务 data、isComment、rowKey 与势力投影 factionId，严禁覆盖文件中的同名业务键。
 - 写后失效对无法解析的实体只发出该实体种类的 `id: null` scope，严禁阻断其它实体或扩大失效范围。
 - 初始化、缓存恢复和失效重建必须消费同一所属来源构造；每次投影中的受影响族必须去重且各构造一次。
 - 多文件版本必须覆盖实际规格与所属 CSV、势力索引与授权规格、任务索引与任务目录；新建必须携带目标不存在凭据。
@@ -99,7 +99,7 @@
 - 投影 pending 期间的新查询必须返回 session.projection_pending，当前草稿与展示必须保留。
 - 投影构造必须先完成全部受影响索引、诊断、统计与版本，再原子发布；失败必须保留原投影并登记 pending。
 - 持久化索引只存于工具私有目录并按 canonical `modRoot` 分片；只保存可由源文件重新推导的规格、阵营、任务和表计数。
-- 持久化缓存必须消费格式版本 6 的来源记录、行记录与两族独立结构化诊断，并按源指纹和格式标识核对恢复内容。
+- 持久化缓存必须消费格式版本 7 的来源记录、正式注释行记录与两族独立结构化诊断，并按源指纹和格式标识核对恢复内容。
 - 提交投影恢复必须消费会话读取归属；Core 写入授权必须归实际写盘和回放入口，投影恢复必须保持已提交内容。
 - 来源指纹、缓存恢复与目录加载必须经同一根边界授权实际文件及父链；索引引用必须纳入源指纹与版本范围。
 - 缓存损坏或不可写只降级为重建，严禁读取旧快照。

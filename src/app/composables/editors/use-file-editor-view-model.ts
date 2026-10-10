@@ -19,6 +19,7 @@ import {
   retargetFileWindow,
   releaseCommittedIdentityTargets,
 } from '@/orchestrators/entity-identity.orchestrator';
+import { focusEntityIdentityConflict } from '@/orchestrators/window-target-focus.orchestrator';
 import { listenEntityIdentityApplied } from '@/orchestrators/entity-events.orchestrator';
 import type { EntityIdentityAppliedEvent } from '@/windows/window.events';
 import type { EntityIdentityChange } from '@/shared/types';
@@ -82,7 +83,10 @@ export function useFileEditorViewModel(params: FileEditorViewModelParams) {
       const entity = draftSession.baselineSnapshot.value!.meta.entity;
       let versions = baseVersions;
       if (entity && target.sessionId) {
-        const intent = await queryFileTextIdentityIntent(target.sessionId, entity.target, draft);
+        const intent = await queryFileTextIdentityIntent(target.sessionId, entity.target, draft).catch(async (error) => {
+          await focusEntityIdentityConflict(target.sessionId!, target.modRoot, error);
+          throw error;
+        });
         await reserveFileIdentityIntent(target.sessionId, target.modRoot, intent);
         versions = captureIdentityVersions(baseVersions, intent.destinationVersion);
       }

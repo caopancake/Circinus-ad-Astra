@@ -17,6 +17,9 @@ const diagnostic = {
 };
 
 describe('error diagnostic projections', () => {
+  it.each(['constructor', '__proto__', 'toString'])('keeps an unmapped code %s as its raw diagnostic', (code) => {
+    expect(formatError({ code, message: 'Raw unknown detail', location: null })).toBe('Raw unknown detail');
+  });
   it('keeps the stable code, raw context chain and structured location through wrappers', () => {
     const error = withCause('保存失败', withCause('写盘失败', diagnostic, 'write'), 'save');
     expect(errorDiagnosticOf(error)).toEqual({

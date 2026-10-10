@@ -80,6 +80,7 @@ describe('schema registry', () => {
 
   it('returns null for unknown schema ids', () => {
     expect(getSchema('does-not-exist')).toBeNull();
+    for (const id of ['constructor', '__proto__', 'toString']) expect(getSchema(id)).toBeNull();
   });
 
   it('loads column schemas for every registered csv table with valid controls', () => {

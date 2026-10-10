@@ -5,7 +5,7 @@ use super::super::cache::{
 use super::super::resources::{resource_ref, skin_resource_ref};
 use super::super::{
     cache::{load_core_ship_files, load_core_skin_files},
-    model::{ProjectSession, SessionCsvRow, is_comment_row, string_field, string_from_row},
+    model::{ProjectSession, SessionCsvRow, string_field, string_from_row},
 };
 use crate::{
     errors::AppResult,
@@ -358,7 +358,7 @@ fn ship_names_from_rows(
 
 fn all_ship_names_from_rows(rows: &[SessionCsvRow]) -> BTreeMap<String, String> {
     rows.iter()
-        .filter(|row| !is_comment_row(&row.data))
+        .filter(|row| !row.is_comment)
         .filter_map(|row| {
             let id = string_from_row(&row.data, "id")?;
             let name = string_from_row(&row.data, "name")?;

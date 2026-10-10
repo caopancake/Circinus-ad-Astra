@@ -154,10 +154,9 @@ pub fn query_entity_identity_intent(
     if (destination.exists() && (source.state == EntityTargetState::Create || !same_file))
         || (next_id != source.id && next_target.state == EntityTargetState::Existing)
     {
-        return Err(crate::errors::AppError::message(
-            "spec.target_exists",
-            "实体目标已存在",
-        ));
+        return Err(crate::errors::AppError::EntityTargetExists {
+            target: Box::new(next_target),
+        });
     }
     let mut next_write = source.write.clone();
     next_write.rel_path = relative;
@@ -226,6 +225,9 @@ pub(in crate::services::project) fn prepare_entity_targets(
             .get(table.as_str())
             .expect("registered table");
         for row in state.rows.as_ref().expect("associated rows are loaded") {
+            if row.is_comment {
+                continue;
+            }
             if let Some(id) = string_from_row(&row.data, "id") {
                 linked.entry(id).or_insert_with(|| EntityLinkedRecord::Csv {
                     table,
@@ -265,6 +267,9 @@ pub(in crate::services::project) fn prepare_entity_targets(
             .iter()
             .enumerate()
         {
+            if row.is_comment {
+                continue;
+            }
             if let Some(id) = string_from_row(&row.data, "mission") {
                 linked
                     .entry(id)

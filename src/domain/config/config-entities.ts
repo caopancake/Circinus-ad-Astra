@@ -88,7 +88,7 @@ export function buildFactionIndexRow(id: string): RowData {
 
 export function buildMissionIndexRow(rows: RowData[], header: string[], mission: string): RowData {
   const row = rows.find((item) => missionIdFromRow(item) === mission) ?? {};
-  const result: RowData = {};
+  const result: RowData = Object.create(null);
   for (const col of header.length ? header : ['mission']) {
     result[col] = row[col] ?? '';
   }

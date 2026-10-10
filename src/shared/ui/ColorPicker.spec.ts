@@ -4,6 +4,7 @@ import { h, ref } from 'vue';
 import { createFieldInputs, provideFieldInputs } from '@/shared/runtime/field-inputs';
 import ColorPicker from './ColorPicker.vue';
 import { editorUiStubs } from '@/test/ui-stubs';
+import { deepClone } from '@/shared/lib/starsector';
 
 let wrapper: import('@vue/test-utils').VueWrapper | null = null;
 
@@ -21,6 +22,13 @@ function mountPicker(modelValue: number[], props: Record<string, unknown> = {}) 
 }
 
 describe('ColorPicker', () => {
+  it('projects JSON object channels without mutating the original field', () => {
+    const value = deepClone([{ custom: 1 }, 20, 30, 255]);
+    wrapper = mount(ColorPicker, { props: { modelValue: value }, global: { stubs: editorUiStubs } });
+    expect((wrapper.get('.color-picker-text-input').element as HTMLInputElement).value).toBe('0,20,30,255');
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+    expect(value).toEqual([{ custom: 1 }, 20, 30, 255]);
+  });
   it('renders the current value as comma text in the text input', () => {
     const picker = mountPicker([10, 20, 30, 255]);
     const input = picker.get('.color-picker-text-input');

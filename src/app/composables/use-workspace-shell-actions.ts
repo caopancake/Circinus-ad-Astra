@@ -31,7 +31,7 @@ import {
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { recordLogBestEffort } from '@/services/app-log.service';
 import { logFields } from '@/shared/lib/log-fields';
-import { queryEditorEditInfo } from '@/services/editor.service';
+import { querySessionEntityEditTarget } from '@/services/entity-query.service';
 import { useWriteSyncStore } from '@/stores/write-sync.store';
 import { retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
 
@@ -317,7 +317,7 @@ export function useWorkspaceShellActions(feedback: AppFeedback) {
 
   function handleDetailAction(action: TableDetailAction) {
     if (action.type === 'file-editor') {
-      void queryEditorEditInfo(action.sessionId, action.kind, action.id)
+      void querySessionEntityEditTarget(action.sessionId, action.kind, action.id)
         .then((info) =>
           openRequestedFileEditor({
             modRoot: action.modRoot,

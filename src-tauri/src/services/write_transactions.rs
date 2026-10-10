@@ -655,7 +655,8 @@ mod tests {
         assert_eq!(
             crate::io::read_csv_data(&root.join("data/missions/mission_list.csv"))
                 .unwrap()
-                .rows[0]["custom"],
+                .rows[0]
+                .data["custom"],
             "keep"
         );
         let undone = replay(
@@ -831,6 +832,7 @@ mod tests {
             mod_root: manifest.mod_root.clone(),
             table: CsvTableKey::Ships,
             patches: vec![CsvRowPatch {
+                is_comment: false,
                 insert_at: None,
                 row_key: original.rows[0].row_key.clone(),
                 action: CsvRowPatchAction::Upsert,

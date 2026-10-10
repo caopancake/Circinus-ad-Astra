@@ -71,6 +71,35 @@ describe('media collection ownership', () => {
     wrapper.unmount();
   });
 
+  it('indexes 1000 missing resources once when delivering their failures', async () => {
+    mocks.ensure.mockImplementationOnce(async (_session: string, resources: ResourceRef[]) => ({
+      failedResources: resources,
+      uncachedDataUrls: new Map(),
+    }));
+    const { registry, wrapper } = harness();
+    await registry.replaceCollections(
+      'a',
+      Array.from({ length: 1000 }, (_, id) => ({ id: `row:${id}`, resources: [resource(id)] })),
+    );
+    expect(mocks.key).toHaveBeenCalledTimes(2000);
+    expect(mocks.ensure).toHaveBeenCalledOnce();
+    expect(mocks.failures.mock.lastCall![0]).toHaveLength(1000);
+    wrapper.unmount();
+  });
+
+  it('retries a failed read when an active collection explicitly requests the same resource', async () => {
+    mocks.ensure.mockRejectedValueOnce(new Error('transport failed'));
+    const { registry, wrapper } = harness();
+    await registry.replaceCollection('a', 'selected', [resource(1)]);
+    expect(mocks.error).toHaveBeenCalledOnce();
+    await registry.replaceCollection('a', 'menu', [resource(1)]);
+    expect(mocks.ensure).toHaveBeenCalledTimes(2);
+    expect(registry.dataUrl('a', resource(1))).toBe('data:graphics/1.png');
+    await registry.releaseCollection('menu');
+    expect(registry.dataUrl('a', resource(1))).toBe('data:graphics/1.png');
+    wrapper.unmount();
+  });
+
   it('retains shared selected content while independent menus close', async () => {
     const { registry, wrapper } = harness();
     await registry.replaceCollection('a', 'selected', [resource(1)]);

@@ -20,6 +20,7 @@ import { parserBoundaryRule } from './parser-boundary.mjs';
 import { projectSessionBoundaryRule } from './project-session-boundary.mjs';
 import { projectResourcesBoundaryRule } from './project-resources-boundary.mjs';
 import { resourceBoundaryRule } from './resource-boundary.mjs';
+import { readTicketBoundaryRule } from './read-ticket-boundary.mjs';
 import { rustProjectLayerBoundaryRule } from './rust-project-layer-boundary.mjs';
 import { rustServiceEdgeBoundaryRule } from './rust-service-edge-boundary.mjs';
 import { schemaModuleBoundaryRule } from './schema-module-boundary.mjs';
@@ -41,6 +42,7 @@ export const rules = [
   writeBoundaryRule,
   commandBoundaryRule,
   resourceBoundaryRule,
+  readTicketBoundaryRule,
   fileHistoryBoundaryRule,
   directoryOpeningBoundaryRule,
   editorConfigBackendBoundaryRule,

@@ -7,7 +7,7 @@
 ## 参考
 
 `src-tauri/src/commands/entity_query.rs`：实体读取 command 的参数及返回模型主归属。
-`src/app/composables/use-query-read-owner.ts`：消费者等待、请求通道与释放主归属。
+`src/app/composables/use-query-read-owner.ts`：ReadTicket 消费者等待、请求通道与释放主归属。
 `src/services/entity-query.service.ts`：详情、列表、实际目标、身份意图及草稿资源能力主归属。
 `src/services/query-cache.service.ts`：六类缓存、single-flight、失效匹配与实时读取 owner。
 `src/shared/lib/query-snapshot.ts`：只读记录到所属独立可写快照的交接。
@@ -23,6 +23,7 @@
 - 缓存必须拥有 LRU、single-flight、项目失效和通知；展示 owner 必须拥有目标与读取接纳权。
 - 每次读取必须由一张 ReadTicket 同时持有 query identity、AbortSignal、Promise、接纳状态和结束原因；消费者不得另维护读取序号。
 - 读取 owner 必须按通道登记 ReadTicket，释放必须结束所属等待；调度只合并尚未开始的触发。
+- 展示结果、读取错误与收尾必须经通道 consume 的 ready、error 与 settled 回调接纳；动作继续执行必须消费返回的接纳结果。
 - 项目失效必须由 ProjectSession 刷新编排消费，会话清理必须由工作区生命周期消费。
 
 ## 链路
@@ -50,8 +51,10 @@
 - 查询失败必须释放 pending，下一次读取必须重新执行所属 loader。
 - 查询容量必须为 CSV 窗口 80、来源 240、行预览 400、Hull/详情/列表各 128，缓存键必须包含 session。
 - 查询结果必须通过深度只读类型公开，可写快照必须具有独立嵌套内容和版本数组。
+- 实时查询参数必须在 queryLive 捕获一次独立快照，所属 loader 必须消费该捕获身份装配 command；草稿资源调用方只允许提交当前正式草稿。
 - 正常生命周期失效必须由 ReadTicket owner 消费，真实错误必须进入所属反馈。
 - 消费者释放只允许结束自己的等待，共享在途请求必须继续服务其它消费者。
+- 单通道撤销只允许清理所属票据与调度；目标清空必须撤销所属读取，多通道释放必须保持其他通道的待执行刷新。
 - 迟到成功、错误和收尾必须由 ReadTicket 的接纳状态核对；替代请求的 pending 与缓存必须保持正式归属。
 - 实体列表必须在单次列表查询内准备来源、关联记录和版本；列表结果不得逐实体重新读取索引或目标。
 

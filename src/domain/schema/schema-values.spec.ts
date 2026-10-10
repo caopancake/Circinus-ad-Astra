@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { applySchemaFieldUpdate, convertSchemaScalarInput, parseSchemaPlainNumber, schemaJsonInputShape } from './schema-values';
+import {
+  applySchemaFieldUpdate,
+  convertSchemaScalarInput,
+  getNestedValue,
+  parseSchemaPlainNumber,
+  schemaArrayStringValues,
+  schemaJsonInputShape,
+  schemaKeyValueOutput,
+  schemaTagValues,
+  setNestedValue,
+} from './schema-values';
+import { deepClone } from '@/shared/lib/starsector';
 
 describe('whole-value plain numbers', () => {
   it.each(['12foo', '1e3', '1.5', '9007199254740992', '0x10'])('preserves integer input %s', (raw) => {
@@ -20,6 +31,25 @@ describe('whole-value plain numbers', () => {
 });
 
 describe('schema scalar commit contract', () => {
+  it('projects object items in string and tag arrays through the scalar text contract', () => {
+    const values = deepClone([{ unknown: 1 }, 'tag', null]);
+    expect(schemaArrayStringValues(values)).toEqual(['{"unknown":1}', 'tag', '']);
+    expect(schemaTagValues(values)).toEqual(['{"unknown":1}', 'tag', '']);
+    expect(schemaTagValues({ tags: values })).toEqual(['{"unknown":1}', 'tag', '']);
+    expect(values).toEqual([{ unknown: 1 }, 'tag', null]);
+  });
+  it('keeps prototype-named nested fields and key-value entries as ordinary business keys', () => {
+    const source = JSON.parse('{"nested":{"__proto__":{"value":1},"keep":2}}');
+    const updated = setNestedValue(source, 'nested.__proto__.value', 3);
+    expect(JSON.stringify(updated)).toBe('{"nested":{"__proto__":{"value":3},"keep":2}}');
+    expect(JSON.stringify(source)).toBe('{"nested":{"__proto__":{"value":1},"keep":2}}');
+    expect(getNestedValue({}, 'constructor')).toBeUndefined();
+    expect(getNestedValue(updated, 'nested.__proto__.value')).toBe(3);
+    expect(JSON.stringify(setNestedValue({}, '__proto__.value', 3))).toBe('{"__proto__":{"value":3}}');
+    const removed = applySchemaFieldUpdate(updated, 'nested.__proto__.value', { kind: 'remove' });
+    expect(JSON.stringify(removed)).toBe('{"nested":{"__proto__":{},"keep":2}}');
+    expect(schemaKeyValueOutput([{ key: '__proto__', val: 'business' }], undefined)).toEqual(JSON.parse('{"__proto__":"business"}'));
+  });
   it('returns an explicit error for incomplete and unsafe numeric input', () => {
     const field = { key: 'count', label: '数量', type: 'integer' as const };
     expect(convertSchemaScalarInput('-', field)).toMatchObject({ kind: 'error' });

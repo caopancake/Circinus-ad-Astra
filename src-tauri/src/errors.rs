@@ -52,6 +52,10 @@ pub enum AppError {
     Tauri(#[from] tauri::Error),
     #[error("JSON 格式保留需要确认")]
     JsonRewriteRequired { files: Vec<JsonRewriteFile> },
+    #[error("实体目标已存在")]
+    EntityTargetExists {
+        target: Box<crate::models::EntityEditTarget>,
+    },
 }
 
 impl AppError {
@@ -82,6 +86,7 @@ impl AppError {
             Self::Base64(_) => "data.base64",
             Self::Tauri(_) => "window.native",
             Self::JsonRewriteRequired { .. } => "json.rewrite_confirmation_required",
+            Self::EntityTargetExists { .. } => "spec.target_exists",
         }
     }
 
@@ -133,6 +138,16 @@ impl AppError {
             _ => None,
         }
     }
+
+    fn conflicting_target(&self) -> Option<&crate::models::EntityEditTarget> {
+        match self {
+            Self::EntityTargetExists { target } => Some(target),
+            Self::Context { source, .. } | Self::Located { source, .. } => {
+                source.conflicting_target()
+            }
+            _ => None,
+        }
+    }
 }
 
 impl Serialize for AppError {
@@ -147,6 +162,9 @@ impl Serialize for AppError {
         state.serialize_field("location", &self.location())?;
         if let Some(files) = self.rewrite_files() {
             state.serialize_field("files", files)?;
+        }
+        if let Some(target) = self.conflicting_target() {
+            state.serialize_field("target", target)?;
         }
         state.end()
     }
@@ -195,6 +213,27 @@ mod tests {
         assert_eq!(value["code"], "spec.missing");
         assert_eq!(value["message"], "outer: inner detail");
         assert!(value["location"].is_null());
+    }
+
+    #[test]
+    fn wrapped_identity_conflicts_keep_the_authoritative_target_payload() {
+        let target: crate::models::EntityEditTarget = serde_json::from_value(serde_json::json!({
+            "kind":"ship", "id":"Alpha", "state":"existing", "linkedRecord":null,
+            "source":{"source":"mod","root":"D:/Mod","path":"D:/Mod/nested/custom.ship","relPath":"nested/custom.ship"},
+            "write":{"source":"mod","root":"D:/Mod","path":"D:/Mod/nested/custom.ship","relPath":"nested/custom.ship"}
+        })).unwrap();
+        let error = AppError::context(
+            "prepare",
+            AppError::EntityTargetExists {
+                target: Box::new(target),
+            },
+        )
+        .at_path("D:/Mod/nested/custom.ship");
+        let wire = serde_json::to_value(error).unwrap();
+        assert_eq!(wire["code"], "spec.target_exists");
+        assert_eq!(wire["target"]["id"], "Alpha");
+        assert_eq!(wire["target"]["write"]["path"], "D:/Mod/nested/custom.ship");
+        assert_eq!(wire["location"]["path"], "D:/Mod/nested/custom.ship");
     }
 
     #[test]

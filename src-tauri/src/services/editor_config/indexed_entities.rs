@@ -15,8 +15,14 @@ use serde_json::{Map, Value};
 use std::path::Path;
 
 const MISSION_INDEX: &str = "data/missions/mission_list.csv";
-fn mission_row_id(row: &Map<String, Value>) -> Option<&str> {
-    row.get("mission").and_then(Value::as_str).map(str::trim)
+fn mission_row_id(row: &crate::models::CsvRow) -> Option<&str> {
+    if row.is_comment {
+        return None;
+    }
+    row.data
+        .get("mission")
+        .and_then(Value::as_str)
+        .map(str::trim)
 }
 
 pub struct MissionSaveInput<'a> {
@@ -82,7 +88,7 @@ pub fn save_mission_with_json(
         ));
     }
     let mut row = previous_position
-        .map(|position| index.rows[position].clone())
+        .map(|position| index.rows[position].data.clone())
         .unwrap_or_default();
     row.extend(input.index_row);
     row.insert("mission".to_string(), Value::String(next_id.to_string()));
@@ -93,9 +99,12 @@ pub fn save_mission_with_json(
     }
     let next_position = previous_position.unwrap_or(index.rows.len());
     if let Some(position) = previous_position {
-        index.rows[position] = row;
+        index.rows[position].data = row;
     } else {
-        index.rows.push(row);
+        index.rows.push(crate::models::CsvRow {
+            data: row,
+            is_comment: false,
+        });
     }
     let descriptor = input.entity_data.get("descriptor").ok_or_else(|| {
         AppError::message(
@@ -122,7 +131,11 @@ pub fn save_mission_with_json(
         MISSION_INDEX,
         Some(render_csv_text(
             &index.header,
-            &index.rows.iter().collect::<Vec<_>>(),
+            &index
+                .rows
+                .iter()
+                .map(|row| (&row.data, row.is_comment))
+                .collect::<Vec<_>>(),
         )?),
     )?;
     let rename = previous_id.is_some() && source_id != next_id;
@@ -231,7 +244,7 @@ pub fn delete_mission_entity(
     let position = index
         .rows
         .iter()
-        .position(|row| row.get("mission").and_then(Value::as_str).map(str::trim) == Some(id))
+        .position(|row| mission_row_id(row) == Some(id))
         .ok_or_else(|| {
             AppError::message("config.index_missing", format!("战役索引不存在: {id}"))
         })?;
@@ -241,7 +254,11 @@ pub fn delete_mission_entity(
         MISSION_INDEX,
         Some(render_csv_text(
             &index.header,
-            &index.rows.iter().collect::<Vec<_>>(),
+            &index
+                .rows
+                .iter()
+                .map(|row| (&row.data, row.is_comment))
+                .collect::<Vec<_>>(),
         )?),
     )?;
     if delete_target {
@@ -380,6 +397,104 @@ mod tests {
         services::file_changes::apply_file_change_set,
     };
     use std::fs;
+
+    #[test]
+    fn mission_index_ownership_skips_comments_during_read_save_delete_and_replay() {
+        let root = temp_dir("mission_comment_identity");
+        let index = root.join(MISSION_INDEX);
+        fs::create_dir_all(root.join("data/missions/old")).unwrap();
+        write_utf8_no_bom(
+            &index,
+            "a,mission,note\n# old note,old,kept\n# next note,next,kept too\nactive,old,business\n",
+        )
+        .unwrap();
+        write_utf8_no_bom(
+            &root.join("data/missions/old/descriptor.json"),
+            "{title:'Old'}",
+        )
+        .unwrap();
+        write_utf8_no_bom(&root.join("data/missions/old/mission_text.txt"), "Old").unwrap();
+        let mut trace = crate::services::project::PerformanceTrace::new("project.openSession");
+        let manifest =
+            crate::services::project::open_project_session_traced(&root, None, &mut trace).unwrap();
+        let info = crate::services::project::query_entity_edit_target(
+            &manifest.session_id,
+            EntityKind::Mission,
+            "old",
+        )
+        .unwrap();
+        assert!(matches!(
+            info.target.linked_record,
+            Some(EntityLinkedRecord::Index { row_index: 2, .. })
+        ));
+        let saved = crate::commands::save_indexed_config_entity(
+            crate::models::command_payloads::IndexedConfigEntityPayload {
+                session_id: manifest.session_id.clone(),
+                mod_root: manifest.mod_root.clone(),
+                base_versions: info.base_versions,
+                kind: IndexedConfigKind::Mission,
+                previous_id: Some("old".into()),
+                next_id: "next".into(),
+                index_row: Map::new(),
+                entity_data: serde_json::json!({"descriptor":{"title":"Next"},"text":"Next"}),
+                json_write: Default::default(),
+                ordered_json: None,
+            },
+        )
+        .unwrap();
+        let rows = read_csv_data(&index).unwrap().rows;
+        assert_eq!(rows[0].data["mission"], "old");
+        assert_eq!(rows[1].data["mission"], "next");
+        assert_eq!(rows[2].data["mission"], "next");
+        assert_eq!(rows[2].data["note"], "business");
+        let next = crate::services::project::query_entity_edit_target(
+            &manifest.session_id,
+            EntityKind::Mission,
+            "next",
+        )
+        .unwrap();
+        let deleted = crate::commands::delete_indexed_config_entity(
+            crate::models::command_payloads::DeleteIndexedConfigEntityPayload {
+                session_id: manifest.session_id.clone(),
+                mod_root: manifest.mod_root.clone(),
+                base_versions: next.base_versions,
+                kind: IndexedConfigKind::Mission,
+                id: "next".into(),
+                delete_target: true,
+            },
+        )
+        .unwrap();
+        let rows = read_csv_data(&index).unwrap().rows;
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].data["a"], "# old note");
+        assert_eq!(rows[1].data["a"], "# next note");
+        let undone = crate::services::write_transactions::replay(
+            &manifest.session_id,
+            &manifest.mod_root,
+            FileChangeReplayDirection::Undo,
+            deleted.history.undo_stack.last().unwrap().id,
+            deleted.history.revision,
+        )
+        .unwrap();
+        assert_eq!(
+            read_csv_data(&index).unwrap().rows[2].data["mission"],
+            "next"
+        );
+        crate::services::write_transactions::replay(
+            &manifest.session_id,
+            &manifest.mod_root,
+            FileChangeReplayDirection::Undo,
+            saved.history.undo_stack.last().unwrap().id,
+            undone.history.revision,
+        )
+        .unwrap();
+        assert_eq!(
+            read_csv_data(&index).unwrap().rows[2].data["mission"],
+            "old"
+        );
+        crate::services::project::close_project_session(manifest.session_id).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn faction_save_preserves_spec_comments_and_order() {

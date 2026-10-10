@@ -23,6 +23,7 @@ export default defineConfig({
     strictPort: true,
   },
   test: {
+    include: ['src/**/*.spec.ts'],
     environment: 'jsdom',
     clearMocks: true,
   },

@@ -22,6 +22,10 @@ declare module 'css-tree' {
   }
   interface SelectorList extends NodeBase {
     type: 'SelectorList';
+    children: List<Selector>;
+  }
+  export interface Selector extends NodeBase {
+    type: 'Selector';
     children: List<CssNode>;
   }
   interface Block extends NodeBase {
@@ -47,9 +51,9 @@ declare module 'css-tree' {
     unit: string;
   }
   interface OtherNode extends NodeBase {
-    type: 'StyleSheet' | 'Selector' | 'Raw' | 'Operator' | 'Number' | 'Percentage' | 'Hash' | 'String';
+    type: 'StyleSheet' | 'Raw' | 'Operator' | 'Number' | 'Percentage' | 'Hash' | 'String' | 'Combinator';
   }
-  export type CssNode = Declaration | Rule | SelectorList | Block | Value | FunctionNode | Identifier | Dimension | OtherNode;
+  export type CssNode = Declaration | Rule | SelectorList | Selector | Block | Value | FunctionNode | Identifier | Dimension | OtherNode;
   export function parse(source: string, options?: { positions?: boolean; parseCustomProperty?: boolean }): CssNode;
   export function generate(node: CssNode): string;
   export function walk<T extends CssNode['type']>(

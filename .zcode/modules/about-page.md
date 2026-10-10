@@ -10,7 +10,6 @@
 `src/app/AppContent.vue`：挂载入口，按当前视图挂载关于页面。
 `src/stores/workspace.store.ts`：视图状态 owner，只持有 `currentView='about'`。
 `src/app/TitleBar.vue`：标题栏入口，触发 `showAbout` 导航。
-`src/app/components/AboutPage.vue`：`CHANGELOG.md?raw` 构建时内联声明。
 
 ## 边界
 
@@ -24,8 +23,8 @@
 
 ### 打开关于页
 
-1. 用户在侧栏点击关于入口。
-2. 侧栏调用 `workspace.showAbout`。
+1. 用户在标题栏菜单点击关于入口。
+2. 标题栏调用导航动作，等待保存与草稿确认后接纳 `workspace.showAbout`。
 3. AppContent 按 `currentView='about'` 挂载关于页面。
 4. 组件以 marked 渲染构建时内联的 changelog。
 

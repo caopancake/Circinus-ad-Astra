@@ -11,7 +11,7 @@
 `src-tauri/src/io/csv_files.rs`：CSV 文件读写与路径上下文 owner。
 `src-tauri/src/io/json_files.rs`：JSON 文件读取与目录遍历 owner。
 `src-tauri/src/io/faction_index.rs`：索引引用的实际根与父链授权 owner。
-`src-tauri/src/io/text.rs`：UTF-8 文本读取 owner，拥有 BOM 拒绝与 CP1252 归一化入口。
+`src-tauri/src/io/text.rs`：UTF-8 文本读取 owner，拥有 BOM 剥离与 CP1252 归一化入口。
 `src-tauri/src/models/`：CP1252 归一化映射与 FileChangeRecord 模型 owner。
 `src-tauri/src/services/file_changes.rs`：变更服务实现 owner。
 `src-tauri/src/commands/file_changes.rs`：变更 command 边界。
@@ -30,7 +30,7 @@
 ### 文本读取
 
 1. 保存链路或编辑器请求读取目标文件。
-2. IO 读取字节并拒绝 UTF-8 BOM。
+2. IO 读取字节并剥离 UTF-8 BOM。
 3. 已知 CP1252 智能引号按统一映射归一化。
 4. 返回文本与路径上下文。
 

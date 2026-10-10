@@ -1,10 +1,8 @@
 import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
-import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { completeConfigSave } from '@/orchestrators/config-save.orchestrator';
 import { warningNotice } from '@/shared/lib/errors';
 import type { ConfigEditTarget } from '@/shared/types';
 import { computed, onScopeDispose, ref, watch, type Ref } from 'vue';
-import { deepClone } from '@/shared/lib/starsector';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useConfigEditorDraftSession } from '@/app/composables/config/use-config-editor-draft-session';
 import { configMissionEditingId, configMissionEditorModel, configMissionSaveDraft } from '@/domain/config/config-entities';
@@ -181,18 +179,19 @@ export function useConfigMissionEditorViewModel(params: {
     iconSrc.value = '';
     const missionId = loadedMissionId.value;
     const targetSessionId = params.sessionId.value;
+    reads.revoke('consumer', 'icon');
     if (!params.modRoot.value || !targetSessionId || !missionId) return;
-    try {
-      const icon = await reads.read('icon', { sessionId: targetSessionId, missionId }, (signal) =>
-        params.queryMissionIcon(targetSessionId, missionId, deepClone(draftData.value), signal),
-      );
-      if (disposed || targetSessionId !== params.sessionId.value || missionId !== loadedMissionId.value) return;
-      iconSrc.value = icon;
-    } catch (error) {
-      if (disposed || targetSessionId !== params.sessionId.value || missionId !== loadedMissionId.value) return;
-      if (isReadInvalidated(error)) return;
-      feedback.error(error, '刷新战役图标失败');
-    }
+    await reads.consume(
+      'icon',
+      { sessionId: targetSessionId, missionId },
+      (signal) => params.queryMissionIcon(targetSessionId, missionId, draftData.value, signal),
+      {
+        ready: (icon) => {
+          iconSrc.value = icon;
+        },
+        error: (error) => feedback.error(error, '刷新战役图标失败'),
+      },
+    );
   }
 
   async function save() {

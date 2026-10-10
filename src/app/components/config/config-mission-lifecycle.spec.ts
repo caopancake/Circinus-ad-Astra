@@ -73,7 +73,7 @@ function saved(nextId: string, title = 'Submitted') {
   return {
     entity: {
       entityId: nextId,
-      indexRows: [{ mission: nextId }],
+      indexRows: [{ data: { mission: nextId }, isComment: false }],
       entityData: { descriptor: { title }, text: 'Mission text' },
       baseVersions: [{ path: `M:/mod/${nextId}`, fingerprint: 'v2' }],
     },

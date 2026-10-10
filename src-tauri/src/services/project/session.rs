@@ -884,6 +884,7 @@ mod tests {
                         &session_id,
                         CsvTableKey::Ships,
                         vec![CsvRowPatch {
+                            is_comment: false,
                             insert_at: None,
                             row_key: format!("ships:new:{thread_index}-{round}"),
                             action: CsvRowPatchAction::Upsert,

@@ -5,7 +5,7 @@ export function deepClone<T>(value: T): T {
     return value.map((item) => deepClone(item)) as T;
   }
   if (value && typeof value === 'object') {
-    const clone: Record<string, unknown> = {};
+    const clone: Record<string, unknown> = Object.create(null);
     for (const [key, item] of Object.entries(value)) {
       clone[key] = deepClone(item);
     }
@@ -14,11 +14,11 @@ export function deepClone<T>(value: T): T {
   return value;
 }
 
-export function cell(value: JsonValue | undefined): string {
+export function cell(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? '';
 }
 
 export function formatModVersion(value: JsonValue | undefined): string {

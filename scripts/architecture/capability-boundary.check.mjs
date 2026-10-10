@@ -40,6 +40,7 @@ const cases = [
   ],
   ['projection-read-owner', 'src/services/query-cache.service.ts', 'src/shared/runtime/project-projection.ts', 'requireProjectionReady'],
   ['window-open', 'src/windows/managed.window.ts', 'src/services/window.service.ts', 'openNativeManagedWindow'],
+  ['window-focus', 'src/orchestrators/window-target-focus.orchestrator.ts', 'src/services/window.service.ts', 'focusNativeManagedWindow'],
   ['window-status', 'src/app/composables/use-dirty-window-close-guard.ts', 'src/services/window.service.ts', 'updateNativeWindowStatus'],
   [
     'window-close-cancel',
@@ -57,6 +58,18 @@ const cases = [
   ['window-release', 'src/orchestrators/table-save.orchestrator.ts', 'src/services/window.service.ts', 'releaseNativeWindowTargets'],
   ['window-retarget', 'src/orchestrators/entity-identity.orchestrator.ts', 'src/services/window.service.ts', 'retargetNativeWindow'],
   ['entity-target-query', 'src/services/editor.service.ts', 'src/services/entity-query.service.ts', 'querySessionEntityEditTarget'],
+  [
+    'identity-target-query',
+    'src/orchestrators/entity-identity.orchestrator.ts',
+    'src/services/entity-query.service.ts',
+    'querySessionEntityEditTarget',
+  ],
+  [
+    'file-open-target-query',
+    'src/app/composables/use-workspace-shell-actions.ts',
+    'src/services/entity-query.service.ts',
+    'querySessionEntityEditTarget',
+  ],
   ['entity-intent-query', 'src/services/editor.service.ts', 'src/services/entity-query.service.ts', 'querySessionEntityIdentityIntent'],
   ['config-write', 'src/orchestrators/config-save.orchestrator.ts', 'src/services/config-entity.service.ts', 'saveModInfo'],
   ['table-write', 'src/orchestrators/table-save.orchestrator.ts', 'src/services/csv-table.service.ts', 'saveCsvPatch'],

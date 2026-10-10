@@ -19,7 +19,7 @@ use walkdir::WalkDir;
 
 use super::super::model::{CoreCache, SpecBundle, csv_table_specs};
 
-const CACHE_FORMAT_VERSION: u32 = 6;
+const CACHE_FORMAT_VERSION: u32 = 7;
 const CACHE_DIRECTORY: &str = "project-index-cache";
 const MOD_INDEX_DIRECTORY: &str = "mods";
 const CORE_INDEX_DIRECTORY: &str = "core";

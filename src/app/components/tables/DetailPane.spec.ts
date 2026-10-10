@@ -6,7 +6,7 @@ import { useProjectStore } from '@/stores/project.store';
 import { useTablesStore } from '@/stores/tables.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 import { TABLE_KEYS } from '@/shared/types';
-import type { ProjectManifest } from '@/shared/types';
+import type { CsvTableWindow, ProjectManifest } from '@/shared/types';
 import DetailPane from './DetailPane.vue';
 
 function tableSummariesFixture(): ProjectManifest['tableSummaries'] {
@@ -118,8 +118,8 @@ describe('DetailPane', () => {
       header: ['id', 'name'],
       totalRows: 1,
       filteredRows: 1,
-      rows: [{ rowKey: 'key-XY', sourceRowIndex: 0, factionId: null, data: { id: 'XY', name: 'Ruler' } }],
-    } as never;
+      rows: [{ rowKey: 'key-XY', isComment: false, sourceRowIndex: 0, factionId: null, data: { id: 'XY', name: 'Ruler' } }],
+    } satisfies CsvTableWindow;
     tables.applyTableWindow({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, window);
     tables.selectRowByKey({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, 'key-XY');
     void manifest;
@@ -144,8 +144,8 @@ describe('DetailPane', () => {
       header: ['id'],
       totalRows: 1,
       filteredRows: 1,
-      rows: [{ rowKey: 'key-XY', sourceRowIndex: 0, factionId: null, data: { id: 'XY' } }],
-    } as never;
+      rows: [{ rowKey: 'key-XY', isComment: false, sourceRowIndex: 0, factionId: null, data: { id: 'XY', name: '#quoted' } }],
+    } satisfies CsvTableWindow;
     tables.applyTableWindow({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, window);
     tables.selectRowByKey({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, 'key-XY');
 
@@ -165,12 +165,14 @@ describe('DetailPane', () => {
       header: ['id'],
       totalRows: 1,
       filteredRows: 1,
-      rows: [{ rowKey: 'key-c', sourceRowIndex: 0, factionId: null, data: { id: '#note' } }],
-    } as never;
+      rows: [{ rowKey: 'key-c', isComment: true, sourceRowIndex: 0, factionId: null, data: { id: '#note' } }],
+    } satisfies CsvTableWindow;
     tables.applyTableWindow({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, window);
     tables.selectRowByKey({ sessionId: 'sess-1', modRoot: 'M:/mod', table: 'ships' }, 'key-c');
 
     const pane = mountPane();
     expect(pane.html()).toContain('#note');
+    expect(pane.html()).toContain('注释行只允许编辑 CSV 内容');
+    expect(pane.html()).not.toContain('舰船编辑器');
   });
 });

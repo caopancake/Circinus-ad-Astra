@@ -66,10 +66,12 @@ export function useConfigListSelection(options: {
   async function prepare(changesTarget: boolean): Promise<boolean> {
     if (writing.value) return false;
     const captured = key.value;
+    const modRoot = options.modRoot.value!;
     const sequence = commands.beginTransition();
-    const saving = commands.waitForSaves(options.modRoot.value);
+    const saving = commands.waitForSaves(modRoot);
     if (saving && !(await saving)) return false;
-    await retryPendingWritesForMod(options.modRoot.value!);
+    if (disposed || captured !== key.value || !commands.isTransitionCurrent(sequence)) return false;
+    await retryPendingWritesForMod(modRoot);
     await acceptHandoff();
     const capturedId = selectedId.value;
     const current = () => !disposed && captured === key.value && capturedId === selectedId.value && commands.isTransitionCurrent(sequence);
@@ -102,12 +104,13 @@ export function useConfigListSelection(options: {
 
   async function select(id: string | null) {
     if (id === selectedId.value && !deletedTarget.value) return;
+    const captured = key.value;
     try {
       if (!(await prepare(true))) return;
       selectedId.value = id;
       deletedTarget.value = false;
     } catch (error) {
-      feedback.error(error, `切换${options.label}失败`);
+      if (!disposed && captured === key.value) feedback.error(error, `切换${options.label}失败`);
     }
   }
 
@@ -145,17 +148,17 @@ export function useConfigListSelection(options: {
     accept: () => Promise<boolean>;
   }): Promise<boolean> {
     if (disposed || params.sessionId !== options.sessionId.value || params.modRoot !== options.modRoot.value) return false;
+    const current = () => !disposed && options.sessionId.value === params.sessionId && options.modRoot.value === params.modRoot;
     try {
       if (!(await prepare(params.changesTarget))) return false;
     } catch (error) {
-      feedback.error(error, `${params.label}失败`);
+      if (current()) feedback.error(error, `${params.label}失败`);
       return false;
     }
     locked.value = params.changesTarget;
     writing.value = true;
     confirmedTarget = params.changesTarget ? selectedId.value : null;
     const sourceId = selectedId.value;
-    const current = () => !disposed && options.sessionId.value === params.sessionId && options.modRoot.value === params.modRoot;
     operation = (async () => {
       try {
         const receipt = await params.write();

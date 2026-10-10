@@ -2,7 +2,7 @@
 
 ## 定义
 
-配置系统管理 mod_info、Faction、Mission、Variant 与 Skin 的列表、目标草稿、实体 query/write 与文件级 history。
+配置系统提供 Mod 信息、势力和战役编辑，以及配置实体的列表与目标交接。
 
 ## 参考
 
@@ -14,9 +14,9 @@
 `src-tauri/src/services/editor_config/`：任务索引、任务目录及单文件实体族的保存 owner。
 `src-tauri/src/services/project/write/faction_identity.rs`：势力索引、实际规格目标及保存删除 owner。
 `src/app/components/config/ConfigTargetNotice.vue`：目标交接与外部删除提示的展示入口。
-`src/app/components/config/`：配置页面组件目录，拥有列表、编辑器、Mod 信息与文件历史视图。
+`src/app/components/config/ConfigFaction*.vue`、`ConfigMission*.vue`、`ConfigModInfoEditor.vue`：势力、战役与 Mod 信息的展示及事件入口。
+`src/app/components/config/ConfigWorkspace.vue`：配置页组合入口，消费所属实体视图与文件历史展示。
 `src/app/composables/config/use-config-faction-view-model.ts`：势力列表与新建 ViewModel。
-`src/app/composables/config/use-config-family-view-model.ts`：装配/皮肤族列表 ViewModel。
 `src/app/composables/config/use-config-identity-reception.ts`：配置身份读取、确认、记录接纳与释放主归属。
 `src/app/composables/config/use-config-list-selection.ts`：列表选择、草稿确认、动作锁定及提交接纳 owner。
 `src/app/composables/config/use-config-mission-view-model.ts`：战役列表与编辑 ViewModel。
@@ -53,7 +53,7 @@
 
 1. 页面加载时查询实体列表与资源引用。
 2. 新建对话框校验必填、ID 合法性与冲突。
-3. 创建动作经保存编排写入索引与实体文件并登记历史。
+3. 创建动作经保存编排更新所属索引、实体文件或任务目录并登记历史。
 4. 列表交接 owner 等待正式投影接纳，再刷新列表并选中新实体。
 
 ### 实体编辑与删除
@@ -80,6 +80,8 @@
 
 ## 规范
 
+- Faction 与 Mission 索引必须消费 CsvRow 的 data 和 isComment；保存回执的 indexRows 必须保留两者，实体选择只允许消费非注释的正式 ID 行。
+- 列表动作准备必须捕获所属 Mod 和 session；等待保存后的同步必须消费捕获根，错误呈现必须核对所属会话及视图生命周期。
 - Faction、Variant 与 Skin 的本地改名必须由编辑会话先接纳目标与实际基线，再共同更新列表及选择，保存期间的新输入必须保持原控件与所属会话。
 - Mission 与 Faction 的写入职责必须分别归任务目录 owner 与势力身份 owner；修改 ID 必须按所属格式执行完整改名。
 - Mission 必须消费索引顺序，Faction 必须消费 ID 排序，Variant 与 Skin 必须消费所属 companion 与 ID 排序。

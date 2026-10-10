@@ -50,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, useTemplateRef } from 'vue';
+import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { cell } from '@/shared/lib/starsector';
 import type { CsvRowRecord } from '@/shared/types';
 import type { CsvGridColumn } from '@/domain/tables/csv-grid-model';
@@ -86,7 +86,7 @@ const emit = defineEmits<{
 
 const mode = useInputEditMode();
 const context = useCsvTableInputs();
-const { schemaSelectSprite } = useSchemaSelectMedia();
+const { schemaSelectSprite, replaceSchemaSelectSprites } = useSchemaSelectMedia();
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef');
 const pickerAnchor = ref<{ height: number; left: number; top: number; width: number } | null>(null);
 
@@ -124,6 +124,14 @@ const sprite = computed(() => {
   if (!match?.option.resourceRef) return undefined;
   return schemaSelectSprite(context.target.sessionId, match.option.resourceRef);
 });
+
+watch(
+  () => [context.target.sessionId, referenceMatch.value?.option.resourceRef, mode.value] as const,
+  ([sessionId, resource, editMode]) => {
+    void replaceSchemaSelectSprites(sessionId, 'selected', editMode === 'smart' && resource ? [resource] : []);
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
   nextTick(() => {

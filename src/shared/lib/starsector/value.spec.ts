@@ -35,6 +35,17 @@ describe('cell', () => {
 });
 
 describe('deepClone', () => {
+  it('preserves every JSON business key at the root, in objects and in array entries', () => {
+    const source: { __proto__: { tag: string }; nested: Record<string, unknown>; list: unknown[] } = JSON.parse(
+      '{"__proto__":{"tag":"root"},"nested":{"__proto__":{"tag":"nested"},"constructor":"business"},"list":[{"__proto__":"entry"}]}',
+    );
+    const cloned = deepClone(source);
+    expect(JSON.stringify(cloned)).toBe(JSON.stringify(source));
+    expect(Object.hasOwn(cloned, '__proto__')).toBe(true);
+    expect(Object.getPrototypeOf(cloned)).toBeNull();
+    cloned.__proto__.tag = 'edited';
+    expect(source.__proto__.tag).toBe('root');
+  });
   it('clones nested structures without aliasing', () => {
     const source = { list: [{ n: 1 }], flag: true, nil: null };
     const cloned = deepClone(source);

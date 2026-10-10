@@ -148,9 +148,10 @@ export const useTablesStore = defineStore('tables', () => {
   });
   const filteredRows = computed(() => rows.value);
   const filteredRowCount = computed(() => getActiveState()?.filteredRows[currentTab.value] ?? 0);
-  const selectedRow = computed(
-    () => rows.value.find((row): row is CsvDraftRow => isLoadedCsvTableRow(row) && row.rowKey === selectedRowKey.value)?.data,
+  const selectedRowRecord = computed(() =>
+    rows.value.find((row): row is CsvDraftRow => isLoadedCsvTableRow(row) && row.rowKey === selectedRowKey.value),
   );
+  const selectedRow = computed(() => selectedRowRecord.value?.data);
   const tableInfo = computed(() => {
     const state = getActiveState();
     if (!state) return '显示 0 / 0 行';
@@ -177,6 +178,9 @@ export const useTablesStore = defineStore('tables', () => {
   // --- Per-Mod lifecycle ---
 
   function initializeModTables(target: { sessionId: string; modRoot: string; manifest: ProjectManifest }) {
+    for (const [key, lock] of identityLocks) {
+      if (normalizeFsPath(lock.target.modRoot) === normalizeFsPath(target.modRoot)) identityLocks.delete(key);
+    }
     const state = createModTableState();
     applyManifestSummaries(state, target.manifest);
     stateMap.set(target.modRoot, state);
@@ -384,6 +388,7 @@ export const useTablesStore = defineStore('tables', () => {
     saving,
     searchText,
     selectedRow,
+    selectedRowRecord,
     selectedRowKey,
     tableInfo,
     tables,

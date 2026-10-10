@@ -112,6 +112,34 @@ function hydrateActiveTable() {
 describe('table-save orchestrator', () => {
   beforeEach(() => setActivePinia(createPinia()));
 
+  it('captures the parser flag with the row and retains later comment changes through save and undo', async () => {
+    const project = useProjectStore();
+    const manifest = buildManifest();
+    project.manifests.set(MOD_ROOT, manifest);
+    const state = hydrateActiveTable();
+    state.tables.ships[0]!.data.id = '#quoted';
+    state.originalTables.ships = deepClone(state.tables.ships);
+    const tables = useTablesStore();
+    tables.updateCellValue({ sessionId: SESSION_ID, modRoot: MOD_ROOT, table: 'ships', rowKey: 'ships:r1', column: 'hullName' }, 'Written');
+    let finish!: (receipt: WriteResult) => void;
+    writeCsvPatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const saving = saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] });
+    tables.updateCellValue({ sessionId: SESSION_ID, modRoot: MOD_ROOT, table: 'ships', rowKey: 'ships:r1', column: 'id' }, '#disabled');
+    finish(writeResult());
+    await saving;
+    expect(writeCsvPatch.mock.lastCall![3][0]).toMatchObject({ row: { id: '#quoted', hullName: 'Written' }, isComment: false });
+    expect(state.originalTables.ships[0]).toMatchObject({ data: { id: '#quoted', hullName: 'Written' }, isComment: false });
+    expect(state.tables.ships[0]).toMatchObject({ data: { id: '#disabled' }, isComment: true });
+    expect(tables.undoCurrentTableEdit()).toBeTruthy();
+    expect(state.tables.ships[0]?.isComment).toBe(false);
+    expect(state.dirty.ships).toEqual({});
+  });
+
   it('commits pending input before taking the CSV and history snapshot', async () => {
     const project = useProjectStore();
     const manifest = buildManifest();
@@ -140,7 +168,7 @@ describe('table-save orchestrator', () => {
     writeCsvPatch.mockResolvedValueOnce(writeResult());
     await saveTableChanges({ table: 'ships', manifest, selectAssociatedSpecs: async () => [] });
     expect(writeCsvPatch.mock.calls.at(-1)?.[3]).toEqual([
-      { rowKey: 'ships:r1', action: 'upsert', row: { id: 'npc1', hullName: 'typed' } },
+      { rowKey: 'ships:r1', action: 'upsert', isComment: false, row: { id: 'npc1', hullName: 'typed' } },
     ]);
     expect(useDraftSessionsStore().hasUnsavedWorkForMod(MOD_ROOT)).toBe(false);
   });
@@ -264,7 +292,7 @@ describe('table-save orchestrator', () => {
       'sess-1',
       MOD_ROOT,
       'ships',
-      [{ rowKey: 'ships:r1', action: 'upsert', row: { id: 'npc1', hullName: 'B' } }],
+      [{ rowKey: 'ships:r1', action: 'upsert', isComment: false, row: { id: 'npc1', hullName: 'B' } }],
       [],
       { preserveOriginalJson: false, confirmedSources: [] },
       [],
@@ -295,7 +323,7 @@ describe('table-save orchestrator', () => {
       'sess-1',
       MOD_ROOT,
       'ships',
-      [{ rowKey: 'ships:r1', action: 'delete', row: {} }],
+      [{ rowKey: 'ships:r1', action: 'delete', isComment: false, row: {} }],
       [],
       {
         preserveOriginalJson: false,
@@ -428,7 +456,9 @@ describe('table-save orchestrator', () => {
     expect(state.dirty.ships[restoredKey]?.action).toBe('upsert');
     writeCsvPatch.mockResolvedValueOnce(writeResult({ keyMap: [{ previousKey: restoredKey, nextKey: 'ships:row:3', rowIndex: 0 }] }));
     await saveTableChanges({ table: 'ships', manifest: project.getManifest(MOD_ROOT), selectAssociatedSpecs: async () => [] });
-    expect(writeCsvPatch.mock.calls.at(-1)?.[3]).toEqual([{ rowKey: restoredKey, action: 'upsert', insertAt: 0, row: { id: 'first' } }]);
+    expect(writeCsvPatch.mock.calls.at(-1)?.[3]).toEqual([
+      { rowKey: restoredKey, action: 'upsert', isComment: false, insertAt: 0, row: { id: 'first' } },
+    ]);
     expect(state.tables.ships.map((row) => row?.data.id)).toEqual(['first', 'second']);
     expect(state.tables.ships.map((row) => row?.sourceRowIndex)).toEqual([0, 1]);
     expect(state.dirty.ships).toEqual({});

@@ -48,6 +48,6 @@ test('scoped aliases and shadowed parameters retain their lexical ownership', ()
 
 test('every declared command has exactly one capability owner', () => {
   const commands = Object.values(commandOwners).flat();
-  assert.equal(commands.length, 60);
-  assert.equal(new Set(commands).size, 60);
+  assert.equal(commands.length, 61);
+  assert.equal(new Set(commands).size, 61);
 });

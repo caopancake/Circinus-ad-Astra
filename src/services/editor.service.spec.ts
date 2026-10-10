@@ -70,7 +70,7 @@ describe('queryEditorEntityBundle', () => {
   });
 
   it('loads a ship bundle with its sprite and isNew=false for existing specs', async () => {
-    const spriteRef = { key: 'sprite', mod: 'alpha', path: 'graphics/ship.png' } as unknown as ResourceRef;
+    const spriteRef: ResourceRef = { key: 'sprite', source: 'mod', relPath: 'graphics/ship.png', ownerKind: 'ship', ownerId: 'XY' };
     mocks.querySessionEntity.mockResolvedValue(entity({ hullId: 'XY' }, { sprite: spriteRef }));
     mocks.queryResourceDataUrls.mockResolvedValue(['data:image/png;base64,AAA']);
 
@@ -112,9 +112,12 @@ describe('queryEditorEntityBundle', () => {
   it('loads preview dependencies from the current draft weapon reference', async () => {
     mocks.querySessionEntity.mockImplementation(async (_sessionId: string, kind: string, id: string) => {
       if (kind === 'weapon') {
-        return entity({ id, spec: { id, projectileSpecId: 'proj_a', turretSprite: 'graphics/a.png' }, csvRow: { id } }, {
-          turretSprite: { source: 'mod', relPath: 'graphics/saved.png', ownerKind: 'weapon', ownerId: id, key: 'turretSprite' },
-        } as unknown as Record<string, ResourceRef>);
+        return entity(
+          { id, spec: { id, projectileSpecId: 'proj_a', turretSprite: 'graphics/a.png' }, csvRow: { id } },
+          {
+            turretSprite: { source: 'mod', relPath: 'graphics/saved.png', ownerKind: 'weapon', ownerId: id, key: 'turretSprite' },
+          },
+        );
       }
       if (kind === 'projectile' && id === 'proj_b') return entity({ id, specClass: 'projectile', length: 42 }, {});
       if (kind === 'projectile' && id === 'proj_a') return entity({ id, specClass: 'projectile', length: 10 }, {});
@@ -188,7 +191,7 @@ describe('bundle refresh', () => {
   });
 
   it('refreshes the ship sprite data from the sprite resource ref', async () => {
-    const spriteRef = { key: 'sprite', mod: 'alpha', path: 'graphics/ship.png' } as unknown as ResourceRef;
+    const spriteRef: ResourceRef = { key: 'sprite', source: 'mod', relPath: 'graphics/ship.png', ownerKind: 'ship', ownerId: 'XY' };
     mocks.querySessionEntity.mockResolvedValue(entity({ hullId: 'XY' }, { sprite: spriteRef }));
     mocks.queryResourceDataUrls.mockResolvedValue(['data:image/png;base64,BBB']);
     const bundle = await queryEditorEntityBundle('s1', 'ship', 'XY');

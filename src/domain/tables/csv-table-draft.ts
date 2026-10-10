@@ -47,7 +47,7 @@ export function applyCsvTableWindowDraft(
       stableDeepEqual(state.baseVersions[table], record.baseVersions) &&
       record.rows.every((entry) => {
         const original = originalRows.get(entry.rowKey);
-        return original !== undefined && stableDeepEqual(original.data, entry.data);
+        return original !== undefined && original.isComment === entry.isComment && stableDeepEqual(original.data, entry.data);
       });
     if (sameBaseline) {
       for (const entry of record.rows) {
@@ -72,6 +72,7 @@ export function applyCsvTableWindowDraft(
   const rows: CsvDraftRow[] = record.rows.map((entry) => ({
     rowKey: entry.rowKey,
     data: deepClone(entry.data) as RowData,
+    isComment: entry.isComment,
     factionId: entry.factionId,
     sourceRowIndex: entry.sourceRowIndex,
     insertAt: null,
@@ -97,13 +98,27 @@ export function setCsvCellValueDraft(state: ModTableState, tab: TableKey, rowKey
   const row = findLoadedRow(state, tab, rowKey);
   if (!row) return { changed: false };
   const previousValue = cell(row.data[col]);
+  const previousIsComment = row.isComment;
   row.data[col] = value;
-  refreshCsvCellDirty(state, tab, rowKey, col, value);
+  if (col === state.headers[tab][0] && value !== previousValue) {
+    const original = findOriginalRow(state, tab, rowKey);
+    row.isComment = original && value === cell(original.data[col]) ? original.isComment : value.startsWith('#');
+  }
+  refreshCsvCellDirty(state, tab, row, col, value);
   if (value === previousValue) return { changed: true };
   return {
     changed: true,
     historyLabel: `编辑 ${tab} [${col}]`,
-    historyOperation: { type: 'cell-value-set', tab, rowKey, col, previousValue, newValue: value },
+    historyOperation: {
+      type: 'cell-value-set',
+      tab,
+      rowKey,
+      col,
+      previousValue,
+      newValue: value,
+      previousIsComment,
+      newIsComment: row.isComment,
+    },
   };
 }
 
@@ -113,6 +128,7 @@ export function createCsvRowDraft(state: ModTableState, now: number): CsvDraftRe
   const row: CsvDraftRow = {
     rowKey: createTableRowKey(tab, state.nextRowKey++),
     data: Object.fromEntries(state.headers[tab].map((col) => [col, ''])),
+    isComment: false,
     factionId: defaultCsvFactionId(),
     sourceRowIndex: null,
     insertAt: null,
@@ -169,6 +185,7 @@ export function applyCsvDraftOperation(
       operation.rowKey,
       operation.col,
       direction === 'undo' ? operation.previousValue : operation.newValue,
+      direction === 'undo' ? operation.previousIsComment : operation.newIsComment,
     );
   }
   if (operation.type === 'row-created') {
@@ -245,6 +262,7 @@ export function commitCsvTableSaveDraft(state: ModTableState, tab: TableKey, pat
       keyMap.find((mapping) => mapping.nextKey === rowKey)?.rowIndex ?? (index >= 0 ? original[index]?.sourceRowIndex : undefined);
     const savedRow: CsvDraftRow = {
       data: deepClone(patch.row),
+      isComment: patch.isComment,
       rowKey,
       factionId: findLoadedRow(state, tab, rowKey)?.factionId ?? null,
       sourceRowIndex: sourceIndex ?? null,
@@ -292,11 +310,19 @@ export function applySavedCsvRowKeyMapDraft(state: ModTableState, tab: TableKey,
   }
 }
 
-function setCsvCellValueForReplay(state: ModTableState, tab: TableKey, rowKey: string, col: string, value: string): boolean {
+function setCsvCellValueForReplay(
+  state: ModTableState,
+  tab: TableKey,
+  rowKey: string,
+  col: string,
+  value: string,
+  isComment: boolean,
+): boolean {
   const row = findLoadedRow(state, tab, rowKey);
   if (!row) return false;
   row.data[col] = value;
-  refreshCsvCellDirty(state, tab, rowKey, col, value);
+  if (col === state.headers[tab][0]) row.isComment = isComment;
+  refreshCsvCellDirty(state, tab, row, col, value);
   return true;
 }
 
@@ -326,10 +352,11 @@ function adjustCsvTableRowCounts(state: ModTableState, tab: TableKey, delta: num
   state.filteredRows[tab] = Math.max(0, state.filteredRows[tab] + delta);
 }
 
-function refreshCsvCellDirty(state: ModTableState, tab: TableKey, rowKey: string, col: string, value: string): void {
+function refreshCsvCellDirty(state: ModTableState, tab: TableKey, row: CsvDraftRow, col: string, value: string): void {
+  const rowKey = row.rowKey;
   const original = findOriginalRow(state, tab, rowKey);
   const originalValue = cell(original?.data[col]);
-  if (value !== originalValue) {
+  if (value !== originalValue || (col === state.headers[tab][0] && row.isComment !== original?.isComment)) {
     ensureCsvDirtyCells(state, tab, rowKey)[col] = value;
     return;
   }
@@ -350,7 +377,11 @@ function rebuildCsvDirty(state: ModTableState, tab: TableKey): void {
     currentKeys.add(rowKey);
     const original = originalByKey.get(rowKey);
     for (const [key, value] of Object.entries(row.data)) {
-      if (!original || cell(value) !== cell(original.data[key])) {
+      if (
+        !original ||
+        cell(value) !== cell(original.data[key]) ||
+        (key === state.headers[tab][0] && row.isComment !== original.isComment)
+      ) {
         ensureCsvDirtyCells(state, tab, rowKey)[key] = cell(value);
       }
     }
@@ -376,7 +407,8 @@ function markCsvRowDirty(state: ModTableState, tab: TableKey, rowKey: string, ro
   for (const [key, value] of Object.entries(row.data)) {
     const next = cell(value);
     const prev = cell(original.data[key]);
-    if (next !== prev) ensureCsvDirtyCells(state, tab, rowKey)[key] = next;
+    if (next !== prev || (key === state.headers[tab][0] && row.isComment !== original.isComment))
+      ensureCsvDirtyCells(state, tab, rowKey)[key] = next;
   }
 }
 

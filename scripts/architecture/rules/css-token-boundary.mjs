@@ -59,6 +59,8 @@ export const cssTokenBoundaryRule = {
     const dark = new Set();
     /** @type {Map<string, string[]>} */
     const local = new Map();
+    /** @type {Map<string, import('css-tree').Selector>} */
+    const selectorNodes = new Map();
     /** @type {Array<{ file: { rel: string }, node: import('css-tree').Declaration, value: string, selectors: string[] }>} */
     const declarations = [];
     for (const file of files.filter((file) => file.rel.startsWith('src/styles/') && file.rel.endsWith('.css'))) {
@@ -73,7 +75,11 @@ export const cssTokenBoundaryRule = {
         visit: 'Rule',
         enter(rule) {
           if (rule.prelude.type !== 'SelectorList') return;
-          const selectors = rule.prelude.children.toArray().map((selector) => csstree.generate(selector));
+          const selectors = rule.prelude.children.toArray().map((selector) => {
+            const text = csstree.generate(selector);
+            selectorNodes.set(text, selector);
+            return text;
+          });
           for (const node of rule.block.children) {
             if (node.type !== 'Declaration') continue;
             const value = csstree.generate(node.value);
@@ -88,8 +94,6 @@ export const cssTokenBoundaryRule = {
               (selector) => selector === ':root' || selector === ':root[data-theme="light"]' || selector === ':root[data-theme="dark"]',
             );
             if (roots.length) {
-              if (file.rel !== CSS_TOKEN_OWNER)
-                failures.push(diagnostic(file, node, selectors, 'shared CSS tokens must be defined in base.css'));
               global.add(node.property);
               if (roots.some((selector) => selector !== ':root[data-theme="dark"]')) base.add(node.property);
               if (roots.includes(':root[data-theme="dark"]')) dark.add(node.property);
@@ -102,7 +106,8 @@ export const cssTokenBoundaryRule = {
         },
       });
     }
-    for (const token of REQUIRED_TOKENS) if (!base.has(token)) failures.push(`src/styles/base.css: missing base token ${token}`);
+    for (const token of new Set([...REQUIRED_TOKENS, ...global]))
+      if (!base.has(token)) failures.push(`src/styles/base.css: missing base token ${token}`);
     for (const token of new Set([
       ...DARK_REQUIRED_TOKENS,
       ...[...global].filter((token) => token.startsWith('--color-') || token.startsWith('--shadow-')),
@@ -110,6 +115,8 @@ export const cssTokenBoundaryRule = {
       if (!dark.has(token)) failures.push(`src/styles/base.css: missing dark theme token ${token}`);
 
     for (const { file, node, value, selectors } of declarations) {
+      if (node.property.startsWith('--') && global.has(node.property) && file.rel !== CSS_TOKEN_OWNER)
+        failures.push(diagnostic(file, node, selectors, 'shared CSS tokens must be defined in base.css'));
       /** @type {string[]} */
       const vars = [];
       csstree.walk(node.value, {
@@ -125,7 +132,17 @@ export const cssTokenBoundaryRule = {
         } else if (!global.has(property)) {
           const scopes = local.get(property) ?? [];
           const injected = file.rel === CSS_TOKEN_OWNER && selectors.every((selector) => DOM_PROPERTIES.get(property)?.includes(selector));
-          if (!injected && !selectors.every((selector) => scopes.some((scope) => withinScope(selector, scope)))) {
+          if (
+            !injected &&
+            !selectors.every((selector) =>
+              scopes.some((scope) =>
+                withinScope(
+                  /** @type {import('css-tree').Selector} */ (selectorNodes.get(selector)),
+                  /** @type {import('css-tree').Selector} */ (selectorNodes.get(scope)),
+                ),
+              ),
+            )
+          ) {
             const message = scopes.length ? `CSS variable outside its scope ${property}` : `undefined CSS variable ${property}`;
             failures.push(diagnostic(file, node, selectors, message));
           }
@@ -157,9 +174,13 @@ export const cssTokenBoundaryRule = {
   },
 };
 
-/** @param {string} selector @param {string} scope */
+/** @param {import('css-tree').Selector} selector @param {import('css-tree').Selector} scope */
 function withinScope(selector, scope) {
-  return selector === scope || selector.startsWith(`${scope} `) || selector.startsWith(`${scope}>`) || selector.startsWith(`${scope}:`);
+  const nodes = selector.children.toArray();
+  const owner = scope.children.toArray();
+  if (owner.length > nodes.length || owner.some((node, index) => csstree.generate(node) !== csstree.generate(nodes[index]))) return false;
+  const relation = nodes.slice(owner.length).find((node) => node.type === 'Combinator');
+  return relation === undefined || [' ', '>'].includes(csstree.generate(relation));
 }
 
 /** @param {{rel: string}} file @param {string[]} selectors @param {string} property */

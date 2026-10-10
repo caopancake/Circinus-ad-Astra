@@ -159,26 +159,39 @@ export async function listenCommittedWrites(
   let listeners = commitListeners.get(sync);
   if (!listeners) {
     const subscribers = new Set<CommitSubscriber>();
+    const dispatches = new Map<string, Promise<void>>();
+    async function deliver(event: CommittedWriteEvent, key: string) {
+      if (event.originWindowLabel === currentWindowLabel()) return;
+      const current = useProjectStore().getManifest(event.modRoot);
+      if (current && event.sessionId && current.sessionId !== event.sessionId) return;
+      const selected = [...subscribers].filter((subscriber) => subscriber.matches(event) && !subscriber.delivered.has(key));
+      const identities = selected
+        .filter((subscriber) => subscriber.phase === 'identity')
+        .map((subscriber) => {
+          const operation = Promise.resolve().then(() => {
+            if (subscribers.has(subscriber)) return subscriber.handler(event);
+          });
+          return operation.then(() => subscriber.delivered.add(key));
+        });
+      acceptCommittedWrite(event);
+      await Promise.all(identities);
+      const latest = useProjectStore().getManifest(event.modRoot);
+      if (latest && event.sessionId && latest.sessionId !== event.sessionId) return;
+      for (const subscriber of selected.filter((subscriber) => subscriber.phase === 'projection')) {
+        if (!subscribers.has(subscriber)) continue;
+        await subscriber.handler(event);
+        subscriber.delivered.add(key);
+      }
+    }
     const registration = listenWindowEvent<CommittedWriteEvent>(
       WINDOW_EVENTS.committedWriteApplied,
-      async (event) => {
-        if (event.originWindowLabel === currentWindowLabel()) return;
-        const current = useProjectStore().getManifest(event.modRoot);
-        if (current && event.sessionId && current.sessionId !== event.sessionId) return;
-        const key = JSON.stringify([event.modRoot, event.result.commitId]);
-        const selected = [...subscribers].filter((subscriber) => subscriber.matches(event) && !subscriber.delivered.has(key));
-        const identities = selected
-          .filter((subscriber) => subscriber.phase === 'identity')
-          .map((subscriber) => {
-            const operation = Promise.resolve(subscriber.handler(event));
-            return operation.then(() => subscriber.delivered.add(key));
-          });
-        acceptCommittedWrite(event);
-        await Promise.all(identities);
-        for (const subscriber of selected.filter((subscriber) => subscriber.phase === 'projection')) {
-          await subscriber.handler(event);
-          subscriber.delivered.add(key);
-        }
+      (event) => {
+        const key = JSON.stringify([event.sessionId, event.modRoot, event.result.commitId]);
+        const running = dispatches.get(key);
+        if (running) return running;
+        const operation = deliver(event, key).finally(() => dispatches.delete(key));
+        dispatches.set(key, operation);
+        return operation;
       },
       recordWindowEventHandlerError,
     );

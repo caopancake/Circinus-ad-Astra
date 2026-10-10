@@ -44,6 +44,8 @@ interface Harness {
   onSaved: ReturnType<typeof vi.fn>;
   missionId: Ref<string>;
   schema: Ref<unknown>;
+  iconRefreshToken: Ref<number>;
+  queryMissionIcon: ReturnType<typeof vi.fn>;
 }
 
 function editorDataFixture(missionId: string): ConfigMissionEditorData {
@@ -67,6 +69,8 @@ function mountEditor() {
     ],
   } as never);
   const queryMissionEditorData = vi.fn(async (_sessionId: string, id: string) => editorDataFixture(id));
+  const iconRefreshToken = ref(0);
+  const queryMissionIcon = vi.fn(async () => 'data:icon');
   const saveMission = vi.fn(async (_sessionId: string, _modRoot: string, _previousId: string, local: RowData) => {
     return { id: String((local.list as RowData)?.mission ?? 'm1'), data: local, receipt: savedWriteFixture(), baseVersions: [] };
   });
@@ -77,12 +81,12 @@ function mountEditor() {
       setup() {
         vm = useConfigMissionEditorViewModel({
           editorReloadToken: ref(0),
-          iconRefreshToken: ref(0),
+          iconRefreshToken,
           missionId,
           modRoot: ref('M:/mod'),
           onSaved,
           queryMissionEditorData,
-          queryMissionIcon: async () => 'data:icon',
+          queryMissionIcon,
           saveMission,
           schema: schema as never,
           sessionId: ref('sess-1'),
@@ -92,7 +96,7 @@ function mountEditor() {
     },
     { global: { plugins: [getActivePinia()!] } },
   );
-  return { vm, queryMissionEditorData, saveMission, onSaved, missionId, schema } as Harness;
+  return { vm, queryMissionEditorData, queryMissionIcon, iconRefreshToken, saveMission, onSaved, missionId, schema } as Harness;
 }
 
 describe('useConfigMissionEditorViewModel', () => {
@@ -163,12 +167,15 @@ describe('useConfigMissionEditorViewModel', () => {
   });
 
   it('refreshes only the icon on the icon refresh token', async () => {
-    const { vm, queryMissionEditorData } = mountEditor();
+    const { vm, queryMissionEditorData, queryMissionIcon, iconRefreshToken } = mountEditor();
     await vi.waitFor(() => expect(vm.loadedMissionId.value).toBe('m1'));
     queryMissionEditorData.mockClear();
-    queryMissionEditorData.mockResolvedValue({ ...editorDataFixture('m1'), iconSrc: 'data:icon2' });
-    // Icon refresh is driven by the iconRefreshToken watcher inside the component scope.
-    await vm.save();
+    queryMissionIcon.mockClear();
+    queryMissionIcon.mockResolvedValue('data:icon2');
+    iconRefreshToken.value++;
+    await vi.waitFor(() => expect(vm.iconSrc.value).toBe('data:icon2'));
+    expect(queryMissionIcon).toHaveBeenCalledTimes(1);
+    expect(queryMissionEditorData).not.toHaveBeenCalled();
     expect(mocks.feedback.error).not.toHaveBeenCalled();
   });
 });

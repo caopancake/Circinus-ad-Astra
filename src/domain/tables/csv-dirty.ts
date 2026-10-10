@@ -1,7 +1,8 @@
 import type { CsvDirtyRow } from '@/shared/types';
 
 export function createCsvDirtyCells(): CsvDirtyRow {
-  return { action: 'upsert', cells: {} };
+  const cells: Record<string, string> = Object.create(null);
+  return { action: 'upsert', cells };
 }
 
 export function createCsvDeletedRow(): CsvDirtyRow {

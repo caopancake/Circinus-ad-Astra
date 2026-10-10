@@ -1,5 +1,4 @@
 import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
-import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useProjectStore } from '@/stores/project.store';
@@ -79,7 +78,11 @@ export function useCsvTableViewModel() {
   const effectiveColumns = computed(() =>
     gridModel.value.columns.map((col) => ({
       ...col,
-      widthPx: columnWidthOverrides.value[col.key] ?? lockedColumnWidths.value[col.key] ?? col.widthPx,
+      widthPx: Object.hasOwn(columnWidthOverrides.value, col.key)
+        ? columnWidthOverrides.value[col.key]!
+        : Object.hasOwn(lockedColumnWidths.value, col.key)
+          ? lockedColumnWidths.value[col.key]!
+          : col.widthPx,
     })),
   );
   const effectiveTotalWidthPx = computed(() => effectiveColumns.value.reduce((sum, col) => sum + col.widthPx, 0));
@@ -218,14 +221,14 @@ export function useCsvTableViewModel() {
     if (!hasLoadedRows && tables.filteredRowCount > 0) return;
     const hasLocked = Object.keys(lockedColumnWidths.value).length > 0;
     if (!hasLocked) {
-      const widths: Record<string, number> = {};
-      for (const col of model.columns) widths[col.key] = col.widthPx;
-      lockedColumnWidths.value = widths;
+      lockedColumnWidths.value = Object.fromEntries(model.columns.map((col) => [col.key, col.widthPx]));
       return;
     }
     lockedColumnWidths.value = {
       ...lockedColumnWidths.value,
-      ...Object.fromEntries(model.columns.filter((col) => !(col.key in lockedColumnWidths.value)).map((col) => [col.key, col.widthPx])),
+      ...Object.fromEntries(
+        model.columns.filter((col) => !Object.hasOwn(lockedColumnWidths.value, col.key)).map((col) => [col.key, col.widthPx]),
+      ),
     };
   }
 
@@ -236,7 +239,6 @@ export function useCsvTableViewModel() {
     const modRoot = tables.activeModRoot!;
     const generation = tables.tableReadGeneration(modRoot, table);
     const tableState = tables.getModTableState(modRoot);
-    const identity = targetKey.value;
     const searchText = tables.searchText;
     const faction = tables.currentFaction;
     const factionOptionValue = tables.currentFactionOptionValue;
@@ -245,40 +247,26 @@ export function useCsvTableViewModel() {
     const key = stableStringify([sessionId, table, searchText, factionOptionValue, alignedStart, windowCount, generation]);
     if (loadedWindowKeys.value.has(key)) return;
     loadedWindowKeys.value.add(key);
-    try {
-      const window = await reads.read(`window:${key}`, { sessionId, modRoot, table, key }, (signal) =>
-        queryTableWindow(sessionId, table, alignedStart, windowCount, searchText, faction, signal),
-      );
-      if (tables.saving || tables.currentTableLocked) {
-        loadedWindowKeys.value.delete(key);
-        return;
-      }
-      if (
-        disposed ||
-        identity !== targetKey.value ||
-        generation !== tables.tableReadGeneration(modRoot, table) ||
-        tableState !== tables.getModTableState(modRoot) ||
-        sessionId !== project.activeSessionId ||
-        table !== tables.currentTab ||
-        searchText !== tables.searchText ||
-        factionOptionValue !== tables.currentFactionOptionValue
-      ) {
-        return;
-      }
-      tables.applyTableWindow({ sessionId, modRoot, table }, window);
-    } catch (error) {
-      // Release the window key so a retry can re-query the failed window.
-      loadedWindowKeys.value.delete(key);
-      if (
-        disposed ||
-        identity !== targetKey.value ||
-        generation !== tables.tableReadGeneration(modRoot, table) ||
-        sessionId !== project.activeSessionId
-      )
-        return;
-      if (isReadInvalidated(error)) return;
-      feedback.error(error, '加载表格数据失败');
-    }
+    await reads.consume(
+      `window:${key}`,
+      { sessionId, modRoot, table, key },
+      (signal) => queryTableWindow(sessionId, table, alignedStart, windowCount, searchText, faction, signal),
+      {
+        ready: (window) => {
+          if (tables.saving || tables.currentTableLocked) {
+            loadedWindowKeys.value.delete(key);
+            return;
+          }
+          if (generation !== tables.tableReadGeneration(modRoot, table) || tableState !== tables.getModTableState(modRoot)) return;
+          tables.applyTableWindow({ sessionId, modRoot, table }, window);
+        },
+        error: (error) => {
+          loadedWindowKeys.value.delete(key);
+          if (generation === tables.tableReadGeneration(modRoot, table) && tableState === tables.getModTableState(modRoot))
+            feedback.error(error, '加载表格数据失败');
+        },
+      },
+    );
   }
 
   async function reloadVisibleSourceOptions() {
@@ -286,33 +274,34 @@ export function useCsvTableViewModel() {
     if (!sessionId) return;
     const table = tables.currentTab;
     const sources = [...visibleSourceIds()];
-    try {
-      const entries = await Promise.all(
-        sources.map(async (source) => {
-          const groups = await reads.read(`source:${source}`, { sessionId, table, source }, (signal) =>
-            querySourceOptionCatalog(sessionId, source, signal),
-          );
-          const options = groups.map((group) => ({
-            type: 'group' as const,
-            label: sourceGroupLabel(group.origin),
-            value: sourceGroupLabel(group.origin),
-            children: group.options.map((option) => ({
-              label: option.label,
-              value: option.value,
-              description: option.description,
-              resourceRef: option.resourceRef ?? null,
-            })),
-          }));
-          return [source, options] as const;
-        }),
-      );
-      if (disposed || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
-      loadedSourceOptions.value = new Map(entries);
-    } catch (error) {
-      if (disposed || sessionId !== project.activeSessionId || table !== tables.currentTab) return;
-      if (isReadInvalidated(error)) return;
-      feedback.error(error, '加载来源选项失败');
-    }
+    await reads.consume(
+      'sources',
+      { sessionId, table, sources },
+      (signal) =>
+        Promise.all(
+          sources.map(async (source) => {
+            const groups = await querySourceOptionCatalog(sessionId, source, signal);
+            const options = groups.map((group) => ({
+              type: 'group' as const,
+              label: sourceGroupLabel(group.origin),
+              value: sourceGroupLabel(group.origin),
+              children: group.options.map((option) => ({
+                label: option.label,
+                value: option.value,
+                description: option.description,
+                resourceRef: option.resourceRef ?? null,
+              })),
+            }));
+            return [source, options] as const;
+          }),
+        ),
+      {
+        ready: (entries) => {
+          loadedSourceOptions.value = new Map(entries);
+        },
+        error: (error) => feedback.error(error, '加载来源选项失败'),
+      },
+    );
   }
 
   function visibleSourceIds(): Set<string> {

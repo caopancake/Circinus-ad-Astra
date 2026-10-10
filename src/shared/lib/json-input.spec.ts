@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { formatJsonInput, parseJsonInput } from './json-input';
 
 describe('json input semantics', () => {
+  it.each(['1e309', '{"value":1e309}', '[{"value":-1e309}]'])('rejects overflowing numbers in %s before wire serialization', (raw) => {
+    expect(parseJsonInput(raw, 'json')).toEqual({ kind: 'error', message: 'JSON 数值必须为有限数值' });
+    expect(parseJsonInput(raw.replaceAll('309', '308'), 'json').kind).toBe('value');
+  });
   it.each([
     ['object', '{"id":"demo"}', { id: 'demo' }],
     ['array', '[1,null,"demo"]', [1, null, 'demo']],

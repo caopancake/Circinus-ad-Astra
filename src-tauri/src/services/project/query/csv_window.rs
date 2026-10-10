@@ -40,6 +40,7 @@ pub fn query_csv_table_window(
             row_key: row.row_key.clone(),
             source_row_index: *index,
             data: row.data.clone(),
+            is_comment: row.is_comment,
             faction_id: row.faction_id.clone(),
         })
         .collect();
@@ -82,7 +83,9 @@ pub fn query_csv_row_preview(
         .iter()
         .find(|row| row.row_key == row_key);
     Ok(CsvRowPreview {
-        resource_ref: row.and_then(|row| csv_table_row_resource_ref(&session, table, &row.data)),
+        resource_ref: row
+            .filter(|row| !row.is_comment)
+            .and_then(|row| csv_table_row_resource_ref(&session, table, &row.data)),
     })
 }
 
@@ -120,6 +123,7 @@ mod tests {
             row.insert(field.to_string(), json!(value));
         }
         SessionCsvRow {
+            is_comment: false,
             row_key: key.to_string(),
             data: row,
             faction_id: None,
@@ -168,6 +172,7 @@ mod tests {
         row.insert("id".to_string(), json!("XY"));
         row.insert("_faction".to_string(), json!("business-faction"));
         let entry = SessionCsvRow {
+            is_comment: false,
             row_key: "k".to_string(),
             data: row,
             faction_id: Some("tritachyon".to_string()),

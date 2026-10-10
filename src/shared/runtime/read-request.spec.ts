@@ -1,9 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createReadTicket, createQueryReadOwner, waitForRead } from './read-request';
+import { createReadTicket, createReadTicketOwner, waitForRead } from './read-request';
 
 describe('read request ownership', () => {
+  it('rejects a resolved ticket replaced before acceptance runs', async () => {
+    let finish!: (value: number) => void;
+    const owner = createReadTicketOwner();
+    const ready = vi.fn();
+    const first = owner.consume('list', { sessionId: 'a' }, () => new Promise<number>((resolve) => (finish = resolve)), { ready });
+    finish(1);
+    const latest = owner.consume('list', { sessionId: 'a' }, async () => 2, { ready });
+    await expect(first).resolves.toBe(false);
+    await expect(latest).resolves.toBe(true);
+    expect(ready).toHaveBeenCalledExactlyOnceWith(2);
+  });
+
   it('coalesces reload intents and releases scheduled work with its owner', async () => {
-    const owner = createQueryReadOwner();
+    const owner = createReadTicketOwner();
     const first = vi.fn(),
       latest = vi.fn();
     owner.schedule('list', first);
@@ -15,6 +27,18 @@ describe('read request ownership', () => {
     owner.revoke();
     await Promise.resolve();
     expect(first).not.toHaveBeenCalled();
+  });
+
+  it('releases one channel without dropping another channel scheduled refresh', async () => {
+    const owner = createReadTicketOwner();
+    const names = vi.fn();
+    const options = vi.fn();
+    owner.schedule('names', names);
+    owner.schedule('options', options);
+    owner.revoke('consumer', 'names');
+    await Promise.resolve();
+    expect(names).not.toHaveBeenCalled();
+    expect(options).toHaveBeenCalledOnce();
   });
 
   it('revokes acceptance after transport resolution before consumer publication', async () => {
@@ -55,5 +79,29 @@ describe('read request ownership', () => {
     await ended;
     finish(8);
     await expect(second).resolves.toBe(8);
+  });
+
+  it('delivers transport failures once and releases the consumer listener', async () => {
+    const consumer = new AbortController();
+    const remove = vi.spyOn(consumer.signal, 'removeEventListener');
+    const error = new Error('transport failed');
+    const waiting = waitForRead(Promise.reject(error), { sessionId: 'failed' }, consumer.signal);
+    await expect(waiting).rejects.toBe(error);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(remove).toHaveBeenCalledOnce();
+  });
+
+  it('consumes a late transport failure after the consumer ends its wait', async () => {
+    let reject!: (error: unknown) => void;
+    const transport = new Promise<number>((_resolve, fail) => {
+      reject = fail;
+    });
+    const consumer = new AbortController();
+    const waiting = waitForRead(transport, { sessionId: 'released' }, consumer.signal);
+    const ended = expect(waiting).rejects.toMatchObject({ code: 'query.invalidated' });
+    consumer.abort();
+    await ended;
+    reject(new Error('late transport failure'));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   });
 });

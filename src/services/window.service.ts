@@ -12,6 +12,9 @@ export async function openNativeManagedWindow(request: NativeWindowRequest) {
 export function updateNativeWindowStatus(status: ManagedWindowStatus) {
   return invokeCommand<void>('update_managed_window_status', { payload: status });
 }
+export function focusNativeManagedWindow(identity: WindowIdentity): Promise<boolean> {
+  return invokeCommand('focus_managed_window', { identity });
+}
 export function reserveNativeWindowTargets(identities: WindowIdentity[]) {
   return invokeCommand<void>('reserve_window_targets', { identities });
 }

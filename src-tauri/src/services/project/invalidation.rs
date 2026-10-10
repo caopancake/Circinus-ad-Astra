@@ -416,13 +416,13 @@ fn snapshot_csv_rows(
     }
     let mut rows = BTreeMap::new();
     for row in csv.rows {
-        if super::model::is_comment_row(&row) {
+        if row.is_comment {
             continue;
         }
-        let Some(id) = super::model::string_from_row(&row, id_field) else {
+        let Some(id) = super::model::string_from_row(&row.data, id_field) else {
             continue;
         };
-        rows.entry(id).or_insert_with(Vec::new).push(row);
+        rows.entry(id).or_insert_with(Vec::new).push(row.data);
     }
     Some(rows)
 }

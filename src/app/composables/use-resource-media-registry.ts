@@ -41,14 +41,17 @@ export function useResourceMediaRegistry(options: {
       capturedSession,
       entries.map(([, entry]) => entry.resource),
       options.surface,
-    );
+    ).then((result) => ({
+      failedKeys: new Set(result.failedResources.map((resource) => resourceCacheKey(capturedSession, resource))),
+      uncachedDataUrls: result.uncachedDataUrls,
+    }));
     let reportedError = false;
     const failures: Array<{ key: string; entry: MediaReference }> = [];
     await Promise.all(
       entries.map(async ([key, entry]) => {
         const ticket = createReadTicket({ sessionId: capturedSession, resource: entry.resource }, () =>
           batch.then((result) => {
-            if (result.failedResources.some((resource) => resourceCacheKey(capturedSession, resource) === key)) return null;
+            if (result.failedKeys.has(key)) return null;
             return result.uncachedDataUrls.get(key) ?? '';
           }),
         );
@@ -59,6 +62,7 @@ export function useResourceMediaRegistry(options: {
           if (value === null) failures.push({ key, entry });
           else if (value) temporary.set(key, value);
         } catch (error) {
+          if (entry.ticket === ticket) entry.ticket = null;
           if (!isReadInvalidated(error) && !ticket.signal.aborted && !reportedError) {
             reportedError = true;
             options.onError(error);
@@ -78,6 +82,7 @@ export function useResourceMediaRegistry(options: {
     }
     if (!sessionId) return Promise.resolve();
     const deltas = new Map<string, { resource: ResourceRef; count: number }>();
+    const requestedKeys = new Set<string>();
     function changeCount(key: string, resource: ResourceRef, count: number) {
       const current = deltas.get(key);
       deltas.set(key, { resource, count: (current?.count ?? 0) + count });
@@ -85,12 +90,12 @@ export function useResourceMediaRegistry(options: {
     for (const change of changes) {
       const previous = collections.get(change.id);
       const next = new Map(change.resources.map((resource) => [resourceCacheKey(sessionId!, resource), resource]));
+      for (const key of next.keys()) requestedKeys.add(key);
       for (const [key, resource] of previous ?? []) if (!next.has(key)) changeCount(key, resource, -1);
       for (const [key, resource] of next) if (!previous?.has(key)) changeCount(key, resource, 1);
       if (next.size) collections.set(change.id, next);
       else collections.delete(change.id);
     }
-    const missing: string[] = [];
     for (const [key, delta] of deltas) {
       const entry = references.get(key) ?? { resource: delta.resource, count: 0, ticket: null };
       entry.count += delta.count;
@@ -100,9 +105,9 @@ export function useResourceMediaRegistry(options: {
         temporary.delete(key);
       } else {
         references.set(key, entry);
-        if (!entry.ticket) missing.push(key);
       }
     }
+    const missing = [...requestedKeys].filter((key) => references.has(key) && !references.get(key)!.ticket);
     return missing.length ? read(missing) : Promise.resolve();
   }
 

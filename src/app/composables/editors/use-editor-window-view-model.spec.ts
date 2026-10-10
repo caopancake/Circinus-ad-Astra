@@ -176,6 +176,21 @@ async function initializedViewModel(kind = 'ship', bundle = shipBundleFixture())
 }
 
 describe('useEditorWindowViewModel save gating', () => {
+  it('can retry the same identity receipt after a failed authoritative read', async () => {
+    const vm = await initializedViewModel();
+    const next = { ...shipBundleFixture(), target: entityTargetFixture('ship', 'next'), ship: { hullId: 'next', hullName: 'Renamed' } };
+    const result = writeResultFixture();
+    result.identityChanges = [{ before: entityTargetFixture('ship', 'XY'), after: next.target }];
+    result.commitId = 10;
+    mocks.queryEditorEntityBundle.mockRejectedValueOnce(new Error('read failed'));
+    await expect(mocks.identityHandler!({ sessionId: 's1', modRoot: 'M:/mod', result })).rejects.toThrow('read failed');
+    expect(vm.currentTarget.value?.id).toBe('XY');
+    mocks.queryEditorEntityBundle.mockResolvedValueOnce(next);
+    await mocks.identityHandler!({ sessionId: 's1', modRoot: 'M:/mod', result });
+    expect(vm.currentTarget.value?.id).toBe('next');
+    expect(vm.shipEditorData.value?.ship.hullId).toBe('next');
+  });
+
   it('keeps the preview instance attached to the renamed weapon', async () => {
     const bundle = {
       kind: 'weapon-preview' as const,
@@ -214,6 +229,7 @@ describe('useEditorWindowViewModel save gating', () => {
     await mocks.identityHandler!({ sessionId: 's1', modRoot: 'm:/MOD/', result });
     expect(vm.currentTarget.value?.id).toBe('next');
     expect(vm.draftValue.value).toEqual({ hullId: 'next', hullName: 'Local' });
+    expect(vm.shipEditorData.value?.ship).toEqual({ hullId: 'next', hullName: 'Local' });
     expect(vm.draftDirty.value).toBe(true);
     expect(vm.editContext.value?.handoff).toBe('external');
   });

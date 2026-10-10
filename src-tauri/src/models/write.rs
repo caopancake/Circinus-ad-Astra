@@ -16,6 +16,7 @@ pub struct CsvRowPatch {
     pub row_key: String,
     pub action: CsvRowPatchAction,
     pub row: Map<String, Value>,
+    pub is_comment: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -285,7 +286,7 @@ pub struct IndexedEntityRefresh {
     pub entity_id: String,
     pub index_path: String,
     pub index_header: Vec<String>,
-    pub index_rows: Vec<Map<String, Value>>,
+    pub index_rows: Vec<crate::models::CsvRow>,
     pub entity_data: Value,
 }
 

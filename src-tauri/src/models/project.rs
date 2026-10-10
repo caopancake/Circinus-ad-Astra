@@ -89,8 +89,15 @@ impl CsvFactionFilter {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CsvTable {
     pub header: Vec<String>,
-    pub rows: Vec<Map<String, Value>>,
+    pub rows: Vec<CsvRow>,
     pub path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CsvRow {
+    pub data: Map<String, Value>,
+    pub is_comment: bool,
 }
 
 pub type ProjectSessionId = String;
@@ -237,6 +244,7 @@ pub struct CsvWindowRow {
     pub row_key: String,
     pub source_row_index: usize,
     pub data: Map<String, Value>,
+    pub is_comment: bool,
     pub faction_id: Option<String>,
 }
 

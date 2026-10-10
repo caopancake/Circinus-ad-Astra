@@ -29,7 +29,7 @@ function windowRecord(): CsvTableWindow {
     header: ['id', 'name'],
     totalRows: 1,
     filteredRows: 1,
-    rows: [{ rowKey: 'row', data: { id: 'demo', name: 'Name' }, sourceRowIndex: 0, factionId: null }],
+    rows: [{ rowKey: 'row', isComment: false, data: { id: 'demo', name: 'Name' }, sourceRowIndex: 0, factionId: null }],
   };
 }
 function harness() {
@@ -76,6 +76,22 @@ beforeEach(() => {
 afterEach(() => wrapper?.unmount());
 
 describe('CSV explicit targets and column ownership', () => {
+  it('measures and persists prototype-named columns as ordinary header keys', async () => {
+    const record = windowRecord();
+    record.header = ['id', '__proto__', 'constructor'];
+    record.rows[0]!.data = JSON.parse('{"id":"demo","__proto__":"value","constructor":"other"}');
+    const manifest = useProjectStore().getManifest(a.modRoot)!;
+    manifest.tableSummaries.ships.header = record.header;
+    useTablesStore().initializeModTables({ sessionId: a.sessionId, modRoot: a.modRoot, manifest });
+    mocks.query.mockResolvedValue(record);
+    const vm = harness();
+    await flushPromises();
+    expect(vm.effectiveColumns.value.every((column) => Number.isFinite(column.widthPx))).toBe(true);
+    vm.setColumnWidth('__proto__', 190);
+    expect(vm.effectiveColumns.value.find((column) => column.key === '__proto__')?.widthPx).toBe(190);
+    expect(useWorkspaceStore().getColumnWidths(a.modRoot, a.table)?.['__proto__']).toBe(190);
+    expect(Number.isFinite(vm.effectiveTotalWidthPx.value)).toBe(true);
+  });
   it.each([false, true])('loads the destination widths before handling its dirty=%s state', async (dirty) => {
     const vm = harness();
     await flushPromises();

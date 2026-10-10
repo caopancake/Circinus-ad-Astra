@@ -14,24 +14,23 @@ pub fn parse_faction_index(table: &CsvTable) -> AppResult<Vec<FactionIndexRow>> 
     let file_column = column(&table.header, &["file", "path", "filename", "factionFile"]);
     let mut rows = Vec::new();
     for (row_index, row) in table.rows.iter().enumerate() {
-        if row
-            .get(&table.header[0])
-            .and_then(Value::as_str)
-            .is_some_and(|text| text.trim_start().starts_with('#'))
+        if row.is_comment
             || row
+                .data
                 .values()
                 .all(|value| value.as_str().is_none_or(|text| text.trim().is_empty()))
         {
             continue;
         }
-        let parsed =
-            parse_row(row, &id_column, file_column.as_deref(), row_index).map_err(|error| {
+        let parsed = parse_row(&row.data, &id_column, file_column.as_deref(), row_index).map_err(
+            |error| {
                 AppError::context(
                     format!("解析 factions.csv 失败: row {}", row_index + 2),
                     error,
                 )
                 .at_path(&table.path)
-            })?;
+            },
+        )?;
         rows.push(parsed);
     }
     Ok(rows)

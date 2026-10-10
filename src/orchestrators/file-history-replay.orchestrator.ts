@@ -5,7 +5,7 @@ import type { useTablesStore } from '@/stores/tables.store';
 import { useFileHistoryStore } from '@/stores/file-history.store';
 import { replayFileChangeSet } from '@/services/file-history.service';
 import { publishCommittedWrite, retryPendingWritesForMod } from '@/orchestrators/project-session-refresh.orchestrator';
-import type { FileChangeRecord, FileChangeReplayDirection, FileSaveHistoryEntry } from '@/shared/types';
+import type { FileChangeReplayDirection, FileSaveHistoryEntry } from '@/shared/types';
 import { AppError } from '@/shared/lib/errors';
 import { recordLogBestEffort } from '@/services/app-log.service';
 import { logFields } from '@/shared/lib/log-fields';
@@ -27,8 +27,6 @@ export interface FileHistoryReplayPlan {
 interface FileHistoryReplayBehavior {
   actionText: string;
   peekEntry: (modRoot: string) => FileSaveHistoryEntry | null;
-  textForChange: (change: FileChangeRecord) => string | null;
-  hasBinaryContent: (change: FileChangeRecord) => boolean;
 }
 
 export function replayNextFileUndo(project: ProjectStore, tables: TablesStore, feedback: AppFeedback) {
@@ -160,14 +158,10 @@ function replayBehavior(direction: FileHistoryReplayDirection): FileHistoryRepla
     return {
       actionText: '撤销',
       peekEntry: (modRoot) => fileHistory.peekSavedWriteUndo(modRoot),
-      textForChange: (change) => change.beforeText ?? null,
-      hasBinaryContent: (change) => Boolean(change.beforeDataBase64),
     };
   }
   return {
     actionText: '重做',
     peekEntry: (modRoot) => fileHistory.peekSavedWriteRedo(modRoot),
-    textForChange: (change) => change.afterText ?? null,
-    hasBinaryContent: (change) => Boolean(change.afterDataBase64),
   };
 }

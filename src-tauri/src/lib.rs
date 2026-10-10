@@ -56,6 +56,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::open_managed_window,
+            commands::focus_managed_window,
             commands::request_session_window_close,
             commands::cancel_window_close_request,
             commands::update_managed_window_status,

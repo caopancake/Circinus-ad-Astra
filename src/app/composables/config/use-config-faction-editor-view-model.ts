@@ -1,8 +1,7 @@
 import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
-import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { completeConfigSave } from '@/orchestrators/config-save.orchestrator';
 import type { ConfigEditTarget } from '@/shared/types';
-import { computed, onScopeDispose, ref, watch, type Ref } from 'vue';
+import { computed, ref, watch, type Ref } from 'vue';
 import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useConfigEditorDraftSession } from '@/app/composables/config/use-config-editor-draft-session';
 import { configFactionEditorModel } from '@/domain/config/config-entities';
@@ -99,10 +98,6 @@ export function useConfigFactionEditorViewModel(params: {
   });
   const logoSrc = ref('');
   const crestSrc = ref('');
-  let disposed = false;
-  onScopeDispose(() => {
-    disposed = true;
-  });
 
   watch(
     () => [params.factionId.value, params.dataRevision.value, params.sessionId.value, params.modRoot.value] as const,
@@ -158,22 +153,24 @@ export function useConfigFactionEditorViewModel(params: {
     crestSrc.value = '';
     const factionId = params.factionId.value;
     const sessionId = params.sessionId.value;
+    reads.revoke('consumer', 'images');
     if (!sessionId) {
       logoSrc.value = '';
       crestSrc.value = '';
       return;
     }
-    try {
-      const images = await reads.read('images', { sessionId, factionId }, (signal) =>
-        params.queryPreviewImages(sessionId, factionId, deepClone(factionFile.value), signal),
-      );
-      if (disposed || sessionId !== params.sessionId.value || factionId !== params.factionId.value) return;
-      logoSrc.value = images.logoSrc;
-      crestSrc.value = images.crestSrc;
-    } catch (error) {
-      if (disposed || isReadInvalidated(error)) return;
-      feedback.error(error, '刷新势力预览失败');
-    }
+    await reads.consume(
+      'images',
+      { sessionId, factionId },
+      (signal) => params.queryPreviewImages(sessionId, factionId, factionFile.value, signal),
+      {
+        ready: (images) => {
+          logoSrc.value = images.logoSrc;
+          crestSrc.value = images.crestSrc;
+        },
+        error: (error) => feedback.error(error, '刷新势力预览失败'),
+      },
+    );
   }
 
   async function save() {

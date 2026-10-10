@@ -2,7 +2,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useTablesStore } from '@/stores/tables.store';
 import { TABLE_KEYS, type CsvTableWindow, type ProjectManifest, type TableSummary } from '@/shared/types';
-import { applyCsvTableWindowDraft, setCsvCellValueDraft } from './csv-table-draft';
+import { applyCsvDraftOperation, applyCsvTableWindowDraft, commitCsvTableSaveDraft, setCsvCellValueDraft } from './csv-table-draft';
+import { getAssociatedSpecCandidates } from './associated-spec-candidates';
 
 beforeEach(() => setActivePinia(createPinia()));
 
@@ -35,6 +36,7 @@ function fixture() {
     rows: [
       {
         rowKey: 'ships:row:0',
+        isComment: false,
         sourceRowIndex: 0,
         factionId: 'derived',
         data: { id: 'ship', _rowKey: 'business-key', _faction: 'business-faction', _insertAt: '001', _sourceRowIndex: '02' },
@@ -46,6 +48,80 @@ function fixture() {
 }
 
 describe('CSV business content and metadata acceptance', () => {
+  it('edits prototype-named business columns and records their dirty cells as own keys', () => {
+    const { state, window } = fixture();
+    window.header = ['id', '__proto__', 'constructor'];
+    window.rows[0]!.data = JSON.parse('{"id":"ship","__proto__":"original"}');
+    applyCsvTableWindowDraft(state, window);
+    expect(state.tables.ships[0]!.data.constructor).toBeUndefined();
+    const edit = setCsvCellValueDraft(state, 'ships', 'ships:row:0', '__proto__', 'edited');
+    expect(Object.hasOwn(state.tables.ships[0]!.data, '__proto__')).toBe(true);
+    expect(state.tables.ships[0]!.data.__proto__).toBe('edited');
+    expect(state.dirty.ships['ships:row:0']).toEqual({ action: 'upsert', cells: JSON.parse('{"__proto__":"edited"}') });
+    applyCsvDraftOperation(state, edit.historyOperation!, 'undo');
+    expect(state.tables.ships[0]!.data.__proto__).toBe('original');
+    expect(state.dirty.ships).toEqual({});
+  });
+  it('retains quoted hash data during other edits and restores its exact flag through history', () => {
+    const { state, window } = fixture();
+    window.rows[0]!.data.id = '#quoted';
+    applyCsvTableWindowDraft(state, window);
+    setCsvCellValueDraft(state, 'ships', 'ships:row:0', '_rowKey', '#other-column');
+    expect(state.tables.ships[0]?.isComment).toBe(false);
+    const edit = setCsvCellValueDraft(state, 'ships', 'ships:row:0', 'id', '#disabled');
+    expect(state.tables.ships[0]?.isComment).toBe(true);
+    applyCsvDraftOperation(state, edit.historyOperation!, 'undo');
+    expect(state.tables.ships[0]).toMatchObject({ data: { id: '#quoted' }, isComment: false });
+    expect(state.dirty.ships['ships:row:0']).toEqual({ action: 'upsert', cells: { _rowKey: '#other-column' } });
+    applyCsvDraftOperation(state, edit.historyOperation!, 'redo');
+    expect(state.tables.ships[0]?.isComment).toBe(true);
+    setCsvCellValueDraft(state, 'ships', 'ships:row:0', 'id', '#quoted');
+    expect(state.tables.ships[0]?.isComment).toBe(false);
+    setCsvCellValueDraft(state, 'ships', 'ships:row:0', 'id', ' #space');
+    expect(state.tables.ships[0]?.isComment).toBe(false);
+  });
+
+  it('retains a later comment edit against the captured saved baseline', () => {
+    const { state, window } = fixture();
+    window.rows[0]!.data.id = '#quoted';
+    applyCsvTableWindowDraft(state, window);
+    const edit = setCsvCellValueDraft(state, 'ships', 'ships:row:0', 'id', '#comment');
+    commitCsvTableSaveDraft(
+      state,
+      'ships',
+      [{ rowKey: 'ships:row:0', action: 'upsert', row: { ...window.rows[0]!.data }, isComment: false }],
+      [],
+    );
+    expect(state.originalTables.ships[0]).toMatchObject({ data: { id: '#quoted' }, isComment: false });
+    expect(state.tables.ships[0]).toMatchObject({ data: { id: '#comment' }, isComment: true });
+    applyCsvDraftOperation(state, edit.historyOperation!, 'undo');
+    expect(state.tables.ships[0]?.isComment).toBe(false);
+    expect(state.dirty.ships).toEqual({});
+    applyCsvDraftOperation(state, edit.historyOperation!, 'redo');
+    expect(state.dirty.ships['ships:row:0']).toEqual({ action: 'upsert', cells: { id: '#comment' } });
+  });
+
+  it('compares comment semantics in external baselines and associated spec candidates', () => {
+    const { state, window } = fixture();
+    window.header = ['name', 'id'];
+    window.rows[0]!.data = { name: '#note', id: 'ship' };
+    window.rows[0]!.isComment = true;
+    applyCsvTableWindowDraft(state, window);
+    setCsvCellValueDraft(state, 'ships', 'ships:row:0', 'id', 'renamed');
+    expect(getAssociatedSpecCandidates(state, 'ships', ['ships'])).toEqual([]);
+    state.dirty.ships['ships:row:0'] = { action: 'delete' };
+    expect(getAssociatedSpecCandidates(state, 'ships', ['ships'])).toEqual([]);
+    setCsvCellValueDraft(state, 'ships', 'ships:row:0', 'name', 'active');
+    expect(getAssociatedSpecCandidates(state, 'ships', ['ships'])[0]?.change).toMatchObject({
+      action: 'create',
+      create: { id: 'renamed' },
+    });
+    const refreshed = { ...window, rows: [{ ...window.rows[0]!, isComment: false }] };
+    applyCsvTableWindowDraft(state, refreshed, true);
+    expect(state.pendingExternalTableUpdates.ships).toBe(true);
+    expect(state.tables.ships[0]?.data.name).toBe('active');
+  });
+
   it('keeps colliding business columns editable under their formal row identity', () => {
     const { state } = fixture();
     setCsvCellValueDraft(state, 'ships', 'ships:row:0', '_rowKey', 'changed-business');

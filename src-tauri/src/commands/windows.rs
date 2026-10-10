@@ -11,6 +11,15 @@ pub fn open_managed_window(
 ) -> Result<ManagedWindowOpened, AppError> {
     services::windows::open_managed_window(&app, payload)
 }
+
+#[tauri::command(async)]
+pub fn focus_managed_window(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    identity: WindowIdentity,
+) -> Result<bool, AppError> {
+    services::windows::focus_managed_window(&app, window.label(), &identity)
+}
 #[tauri::command]
 pub fn update_managed_window_status(
     window: tauri::WebviewWindow,

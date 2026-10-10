@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   saveIndexedEntityAction: vi.fn(async () => ({
     entity: {
       entityId: 'm2',
-      indexRows: [{ mission: 'm2', title: 'Renamed' }],
+      indexRows: [{ data: { mission: 'm2', title: 'Renamed' }, isComment: false }],
       entityData: { descriptor: { title: 'Renamed' }, text: 'body' },
       baseVersions: [],
     },

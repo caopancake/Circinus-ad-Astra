@@ -4,7 +4,7 @@ use super::super::{
         ABILITIES_SPEC, COMMODITIES_SPEC, CoreSourceData, CsvTableSpec, DESCRIPTIONS_SPEC,
         HULLMODS_SPEC, INDUSTRIES_SPEC, MARKET_CONDITIONS_SPEC, ProjectSession, SHIP_SYSTEMS_SPEC,
         SHIPS_SPEC, SIM_OPPONENTS_SPEC, SKILLS_SPEC, SPECIAL_ITEMS_SPEC, SUBMARKETS_SPEC,
-        WEAPONS_SPEC, WINGS_SPEC, csv_table_spec, is_comment_row, string_field, string_from_row,
+        WEAPONS_SPEC, WINGS_SPEC, csv_table_spec, string_field, string_from_row,
         weapon_sprite_path,
     },
     resources::{resource_ref, skin_resource_ref},
@@ -129,8 +129,8 @@ pub(in crate::services::project) fn count_valid_csv_entities(
     Ok(csv
         .rows
         .iter()
-        .filter(|row| !is_comment_row(row))
-        .filter(|row| string_from_row(row, id_field).is_some())
+        .filter(|row| !row.is_comment)
+        .filter(|row| string_from_row(&row.data, id_field).is_some())
         .count())
 }
 

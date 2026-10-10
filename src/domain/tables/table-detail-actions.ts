@@ -1,5 +1,5 @@
 import { rowSpecId } from '@/shared/lib/starsector';
-import type { EditorWindowKind, EntityKind, RowData, TableKey } from '@/shared/types';
+import type { EditorWindowKind, EntityKind, CsvRow, TableKey } from '@/shared/types';
 import { isCsvCommentRow } from '@/domain/tables/csv-comment-row';
 import { associatedSpecEditorKinds, associatedSpecKind } from '@/domain/tables/associated-specs';
 import { editorWindowLabel } from '@/domain/editors/editor-definitions';
@@ -24,11 +24,11 @@ export interface TableDetailActionContext {
 export function detailActionsForRow(
   context: TableDetailActionContext,
   table: TableKey,
-  row: RowData | null | undefined,
+  row: CsvRow | null | undefined,
 ): TableDetailAction[] {
   if (!row) return [];
-  if (isCsvCommentRow(row, table)) return [];
-  const id = rowSpecId(row, table);
+  if (isCsvCommentRow(row)) return [];
+  const id = rowSpecId(row.data, table);
   if (!id) return [];
   const specKind = associatedSpecKind(table);
   const editorActions: TableDetailAction[] = associatedSpecEditorKinds(table).map((kind) => ({

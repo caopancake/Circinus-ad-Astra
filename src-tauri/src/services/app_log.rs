@@ -25,7 +25,6 @@ pub fn append_app_log(app_handle: tauri::AppHandle, entry: AppLogEntry) -> AppRe
         })?;
     }
     let log_directory = app_settings::log_output_directory(&app_data, &settings)?;
-    rotate_log_file(&log_directory);
     append_log(&log_directory, &entry)
 }
 

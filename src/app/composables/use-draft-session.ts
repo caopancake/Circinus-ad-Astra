@@ -17,7 +17,7 @@ export interface DraftSession<T> {
   revision: Ref<number>;
   applyExternal: (value: T, preserveDraft?: boolean) => void;
   clear: (value: T) => void;
-  commitSaved: (value?: T) => void;
+  commitSaved: (value?: T, draft?: T) => void;
   commitSavedBaseline: (value: T, preservePendingExternal?: boolean) => void;
   loadBase: (value: T) => void;
   loadPendingExternal: () => void;
@@ -67,7 +67,7 @@ export function useDraftSession<T>(initialValue: T, options: DraftSessionOptions
     revision,
     applyExternal: (value, preserveDraft) => dispatch(() => session.applyExternal(value, preserveDraft)),
     clear: (value) => dispatch(() => session.clear(value)),
-    commitSaved: (value) => dispatch(() => session.commitSaved(value)),
+    commitSaved: (value, draft) => dispatch(() => session.commitSaved(value, draft)),
     commitSavedBaseline: (value, preservePendingExternal) => dispatch(() => session.commitSavedBaseline(value, preservePendingExternal)),
     loadBase: (value) => dispatch(() => session.loadBaseline(value)),
     loadPendingExternal: () => dispatch(() => session.loadPendingExternal()),

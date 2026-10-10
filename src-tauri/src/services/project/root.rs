@@ -1,4 +1,3 @@
-use super::model::is_comment_row;
 use crate::{
     errors::AppResult,
     io::{read_csv_data, read_json_file},
@@ -23,10 +22,11 @@ pub(super) fn count_mission_list_entries(mod_root: &Path) -> AppResult<usize> {
             .rows
             .iter()
             .filter(|row| {
-                if is_comment_row(row) {
+                if row.is_comment {
                     return false;
                 }
-                row.get("mission")
+                row.data
+                    .get("mission")
                     .and_then(Value::as_str)
                     .is_some_and(|mission| !mission.trim().is_empty())
             })

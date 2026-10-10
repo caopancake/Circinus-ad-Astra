@@ -7,6 +7,8 @@ export interface CsvCellValueSetOperation {
   col: string;
   previousValue: string;
   newValue: string;
+  previousIsComment: boolean;
+  newIsComment: boolean;
 }
 
 export interface CsvRowCreatedOperation {

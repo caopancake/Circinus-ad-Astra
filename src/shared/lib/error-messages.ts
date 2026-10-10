@@ -102,5 +102,5 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function commandErrorCopy(code: string): string | undefined {
-  return ERROR_MESSAGES[code];
+  return Object.hasOwn(ERROR_MESSAGES, code) ? ERROR_MESSAGES[code] : undefined;
 }

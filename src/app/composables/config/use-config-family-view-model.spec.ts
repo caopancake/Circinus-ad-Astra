@@ -1,7 +1,7 @@
 import { entityTargetFixture } from '@/test/entity-target';
 import { savedWriteFixture } from '@/test/write-result';
 import { useWriteSyncStore } from '@/stores/write-sync.store';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 vi.mock('@/orchestrators/entity-events.orchestrator', () => ({ listenEntityIdentityApplied: vi.fn(async () => () => {}) }));
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   listSkinRecords: vi.fn(async (): Promise<Array<{ file: ConfigFamilyFile; spriteRef: null }>> => []),
   querySessionHullReferences: vi.fn(async () => ({ hullNames: {} })),
   queryHullReferenceOptions: vi.fn(async () => []),
+  focus: vi.fn(async () => false),
   feedback: {
     success: vi.fn(),
     info: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock('@/services/hull-reference.service', () => ({
   querySessionHullReferences: mocks.querySessionHullReferences,
   queryHullReferenceOptions: mocks.queryHullReferenceOptions,
 }));
+vi.mock('@/services/window.service', () => ({ focusNativeManagedWindow: mocks.focus }));
 
 vi.mock('@/services/query-cache.service', () => ({
   hasEntityInvalidation: vi.fn(() => false),
@@ -63,7 +65,7 @@ vi.mock('@/app/composables/use-app-feedback', () => ({
 
 import { useConfigFamilyViewModel } from './use-config-family-view-model';
 import { variantFamily } from '@/domain/config/config-entity-families';
-import { initializeSettingsStore } from '@/stores/settings.store';
+import { initializeSettingsStore, useSettingsStore } from '@/stores/settings.store';
 import { useProjectStore } from '@/stores/project.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 
@@ -146,6 +148,27 @@ describe('useConfigFamilyViewModel loading', () => {
     expect(vm.selectedId.value).toBeNull();
   });
 
+  it('releases the Hull options request when Plain mode clears its projection', async () => {
+    activateProject();
+    let finish!: (options: []) => void;
+    let signal!: AbortSignal;
+    mocks.queryHullReferenceOptions.mockImplementationOnce((_session?: string, _ids?: string[], current?: AbortSignal) => {
+      signal = current!;
+      return new Promise<[]>((resolve) => {
+        finish = resolve;
+      });
+    });
+    const vm = mountViewModel();
+    const reading = vm.loadHullOptions();
+    useSettingsStore().editMode = 'plain';
+    await flushPromises();
+    expect(signal.aborted).toBe(true);
+    finish([]);
+    await reading;
+    expect(vm.hullOptions.value).toEqual([]);
+    expect(mocks.feedback.error).not.toHaveBeenCalled();
+  });
+
   it('loads variant records with hull names and sprite refs', async () => {
     activateProject();
     mocks.listVariantRecords.mockResolvedValue([variantRecord('v1', 'h1'), variantRecord('v2', 'h1')]);
@@ -201,6 +224,12 @@ describe('useConfigFamilyViewModel creation', () => {
     );
 
     await expect(vm.createFamilyEntity('sess-1', 'M:/mod', 'h1', 'v1')).resolves.toBe(false);
+    expect(mocks.focus).toHaveBeenCalledWith({
+      type: 'file',
+      sessionId: 'sess-1',
+      modRoot: 'M:/mod',
+      path: entityTargetFixture('variant', 'v1').write.path,
+    });
     expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.objectContaining({ userMessage: expect.stringContaining('已存在') }));
     expect(mocks.createVariantAction).not.toHaveBeenCalled();
   });
@@ -258,6 +287,12 @@ describe('useConfigFamilyViewModel saving', () => {
     };
 
     await expect(vm.saveFamilyEntity('sess-1', 'M:/mod', current, { variantId: 'v2', hullId: 'h1' })).resolves.toBeNull();
+    expect(mocks.focus).toHaveBeenCalledWith({
+      type: 'file',
+      sessionId: 'sess-1',
+      modRoot: 'M:/mod',
+      path: entityTargetFixture('variant', 'v2').write.path,
+    });
     expect(mocks.feedback.warning).toHaveBeenCalledWith(expect.objectContaining({ userMessage: expect.stringContaining('已存在') }));
   });
 

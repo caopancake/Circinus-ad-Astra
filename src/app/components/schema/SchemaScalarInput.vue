@@ -18,6 +18,7 @@ import type { FieldSchema, SchemaFieldUpdate } from '@/domain/schema/schema.type
 import { convertSchemaScalarInput, schemaPlainBooleanText } from '@/domain/schema/schema-values';
 import { useRawFieldInput } from '@/shared/runtime/raw-field-input';
 import { focusFieldInput } from '@/shared/runtime/focus-field-input';
+import { cell } from '@/shared/lib/starsector';
 
 const props = defineProps<{ field: FieldSchema; value: unknown; inputKey: string }>();
 const emit = defineEmits<{ update: [update: SchemaFieldUpdate] }>();
@@ -25,7 +26,7 @@ const input = ref<{ inputElRef: HTMLInputElement | null; focus: () => void } | n
 const { raw, invalid, update, commit } = useRawFieldInput<unknown>({
   key: props.inputKey,
   label: props.field.label,
-  text: () => (props.field.type === 'boolean' ? schemaPlainBooleanText(props.value) : props.value == null ? '' : String(props.value)),
+  text: () => (props.field.type === 'boolean' ? schemaPlainBooleanText(props.value) : cell(props.value)),
   convert: (text) => {
     const converted = convertSchemaScalarInput(text, props.field);
     return converted.kind === 'set' ? { kind: 'value', value: converted.value } : converted;

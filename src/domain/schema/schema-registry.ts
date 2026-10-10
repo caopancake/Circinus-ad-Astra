@@ -60,7 +60,7 @@ const CSV_COLUMN_SCHEMAS: Record<TableKey, CsvColumnSchema[]> = {
 };
 
 export function getSchema(id: string): FileSchema | null {
-  return SCHEMAS[id] ?? null;
+  return Object.hasOwn(SCHEMAS, id) ? SCHEMAS[id]! : null;
 }
 
 export function getCsvColumnSchemas(table: TableKey): CsvColumnSchema[] {

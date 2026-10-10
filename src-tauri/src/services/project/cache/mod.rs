@@ -36,7 +36,12 @@ pub(super) struct RegisteredSession {
 
 static PROJECT_SESSIONS: LazyLock<Mutex<BTreeMap<ProjectSessionId, RegisteredSession>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
-static CORE_CACHES: LazyLock<Mutex<BTreeMap<String, Arc<CoreCache>>>> =
+pub(super) struct CoreCacheEntry {
+    pub data: CoreCache,
+    pub dirty: bool,
+}
+
+static CORE_CACHES: LazyLock<Mutex<BTreeMap<String, Arc<Mutex<CoreCacheEntry>>>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
 
 pub(super) fn sessions() -> &'static Mutex<BTreeMap<ProjectSessionId, RegisteredSession>> {
@@ -54,13 +59,13 @@ pub(super) fn lock_registry()
 
 /// Lock the core-cache registry; poison maps to the shared AppError form.
 pub(crate) fn lock_core_caches()
--> AppResult<std::sync::MutexGuard<'static, BTreeMap<String, Arc<CoreCache>>>> {
+-> AppResult<std::sync::MutexGuard<'static, BTreeMap<String, Arc<Mutex<CoreCacheEntry>>>>> {
     core_caches()
         .lock()
         .map_err(|_| AppError::message("cache.lock_poisoned", "core cache lock poisoned"))
 }
 
-pub(crate) fn core_caches() -> &'static Mutex<BTreeMap<String, Arc<CoreCache>>> {
+pub(crate) fn core_caches() -> &'static Mutex<BTreeMap<String, Arc<Mutex<CoreCacheEntry>>>> {
     &CORE_CACHES
 }
 

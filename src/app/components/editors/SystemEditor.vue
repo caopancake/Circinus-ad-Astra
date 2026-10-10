@@ -368,25 +368,13 @@ function droneBehaviorUpdated(value: JsonValue[]) {
 
 const structuredKnownKeys = [...SYSTEM_STRUCTURED_FIELD_KEYS];
 
-const extraFields = computed<RowData>(() => {
-  const extra: RowData = {};
-  for (const [key, value] of Object.entries(localSystem.value)) {
-    if (!SYSTEM_STRUCTURED_FIELD_KEYS.has(key)) {
-      extra[key] = value;
-    }
-  }
-  return extra;
-});
+const extraFields = computed<RowData>(() =>
+  Object.fromEntries(Object.entries(localSystem.value).filter(([key]) => !SYSTEM_STRUCTURED_FIELD_KEYS.has(key))),
+);
 
 function onExtraUpdate(nextExtra: RowData) {
-  const nextSystem: RowData = {};
-  for (const [key, value] of Object.entries(localSystem.value)) {
-    if (SYSTEM_STRUCTURED_FIELD_KEYS.has(key)) {
-      nextSystem[key] = value;
-    }
-  }
-  Object.assign(nextSystem, nextExtra);
-  localSystem.value = nextSystem;
+  const structured = Object.fromEntries(Object.entries(localSystem.value).filter(([key]) => SYSTEM_STRUCTURED_FIELD_KEYS.has(key)));
+  localSystem.value = { ...structured, ...nextExtra };
   commitEdit();
 }
 

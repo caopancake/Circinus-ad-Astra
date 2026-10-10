@@ -19,6 +19,7 @@ import { retryPendingWritesForMod } from '@/orchestrators/project-session-refres
 import { runConfirmedJsonWrite } from '@/orchestrators/json-write-confirmation.orchestrator';
 import { captureConfigIdentityIntent } from '@/services/config-entity.service';
 import { reserveFileIdentityIntent } from '@/orchestrators/entity-identity.orchestrator';
+import { focusEntityIdentityConflict } from '@/orchestrators/window-target-focus.orchestrator';
 import { releaseNativeWindowTargets } from '@/services/window.service';
 import { captureIdentityVersions } from '@/domain/editors/entity-identity';
 
@@ -32,7 +33,10 @@ async function capturedVersions(
   create = false,
 ) {
   await retryPendingWritesForMod(modRoot);
-  const captured = await captureConfigIdentityIntent(sessionId, kind, sourceId, nextId);
+  const captured = await captureConfigIdentityIntent(sessionId, kind, sourceId, nextId).catch(async (error) => {
+    await focusEntityIdentityConflict(sessionId, modRoot, error);
+    throw error;
+  });
   await reserveFileIdentityIntent(sessionId, modRoot, captured.intent);
   const versions = create ? captured.info.baseVersions : baseVersions;
   return captureIdentityVersions(versions, captured.intent.destinationVersion);

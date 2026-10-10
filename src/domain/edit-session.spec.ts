@@ -67,6 +67,30 @@ describe('createEditSessionValue', () => {
     expect(session.draft).toBe(5);
   });
 
+  it('accepts a baseline and an independent mapped draft together', () => {
+    const session = createEditSessionValue({ id: 'old', nested: { name: 'Original' } });
+    const baseline = { id: 'next', nested: { name: 'Saved' } };
+    const draft = { id: 'next', nested: { name: 'Local' } };
+    session.commitSaved(baseline, draft);
+    expect(session.baseline).toEqual(baseline);
+    expect(session.draft).toEqual(draft);
+    expect(session.dirty).toBe(true);
+    draft.nested.name = 'Changed';
+    baseline.nested.name = 'Changed';
+    expect(session.baseline.nested.name).toBe('Saved');
+    expect(session.draft.nested.name).toBe('Local');
+  });
+
+  it('preserves an explicit null baseline or mapped draft', () => {
+    const session = createEditSessionValue<number | null>(1);
+    session.commitSaved(null);
+    expect(session.baseline).toBeNull();
+    expect(session.draft).toBeNull();
+    session.commitSaved(2, null);
+    expect(session.baseline).toBe(2);
+    expect(session.draft).toBeNull();
+  });
+
   it('commits the persisted baseline while preserving subsequent edits', () => {
     const session = createNumberSession(1);
     session.setDraft(3);

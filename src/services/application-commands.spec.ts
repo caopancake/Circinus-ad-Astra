@@ -9,6 +9,7 @@ import { detectDirectoryTarget, scanDirectoryGameOverview } from './directory.se
 import { openProject, closeProject, requestProjectSessionRefresh, synchronizeSessionCommit } from './project-session.service';
 import {
   openNativeManagedWindow,
+  focusNativeManagedWindow,
   updateNativeWindowStatus,
   reserveNativeWindowTargets,
   releaseNativeWindowTargets,
@@ -72,6 +73,7 @@ const cases: Array<[string, () => unknown, Record<string, unknown> | undefined]>
     { payload: { sessionId: 's1', modRoot: 'M:/mod', commitId: 7 } },
   ],
   ['open_managed_window', () => openNativeManagedWindow(request), { payload: request }],
+  ['focus_managed_window', () => focusNativeManagedWindow(identity), { identity }],
   ['update_managed_window_status', () => updateNativeWindowStatus(status), { payload: status }],
   ['reserve_window_targets', () => reserveNativeWindowTargets([identity]), { identities: [identity] }],
   ['release_window_targets', releaseNativeWindowTargets, undefined],

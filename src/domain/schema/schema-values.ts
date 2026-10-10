@@ -18,14 +18,14 @@ export function schemaStringValue(value: unknown): string {
 }
 
 export function schemaArrayStringValues(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(String) : [];
+  return Array.isArray(value) ? value.map(schemaStringValue) : [];
 }
 
 export function schemaTagValues(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String);
+  if (Array.isArray(value)) return value.map(schemaStringValue);
   if (isObjectWithSchemaTags(value)) {
     const tags = value.tags;
-    return Array.isArray(tags) ? tags.map(String) : [];
+    return Array.isArray(tags) ? tags.map(schemaStringValue) : [];
   }
   return [];
 }
@@ -68,12 +68,12 @@ export function applySchemaFieldUpdate(obj: RowData, key: string, update: Schema
   if (update.kind === 'set') return setNestedValue(obj, key, update.value);
   const parts = key.split('.');
   const leaf = parts.pop()!;
-  const result = { ...obj };
+  const result: RowData = Object.assign(Object.create(null), obj);
   let target: Record<string, unknown> = result;
   for (const part of parts) {
-    const source = target[part];
+    const source = Object.hasOwn(target, part) ? target[part] : undefined;
     if (source === undefined) return result;
-    target[part] = { ...(source as Record<string, unknown>) };
+    target[part] = Object.assign(Object.create(null), source);
     target = target[part] as Record<string, unknown>;
   }
   delete target[leaf];
@@ -135,7 +135,7 @@ export function schemaKeyValueOutput(
 ): Record<string, unknown> | Record<string, unknown>[] {
   if (format === 'array-of-entries') return entries.filter((entry) => entry.key).map((entry) => ({ [entry.key]: entry.val }));
 
-  const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = Object.create(null);
   for (const entry of entries) {
     if (entry.key) result[entry.key] = schemaKeyValueObjectValue(entry.val);
   }
@@ -181,7 +181,7 @@ export function getNestedValue(obj: RowData, key: string): unknown {
   let current: unknown = obj;
   for (const part of parts) {
     if (current === null || current === undefined || typeof current !== 'object') return undefined;
-    current = (current as Record<string, unknown>)[part];
+    current = Object.hasOwn(current, part) ? (current as Record<string, unknown>)[part] : undefined;
   }
   return current;
 }
@@ -192,11 +192,11 @@ export function setNestedValue(obj: RowData, key: string, value: unknown): RowDa
   if (parts.length === 0) {
     return { ...obj, [leaf]: value as RowData[string] };
   }
-  const result = { ...obj };
+  const result: RowData = Object.assign(Object.create(null), obj);
   let target: Record<string, unknown> = result;
   for (const part of parts) {
-    const next = target[part];
-    target[part] = typeof next === 'object' && next !== null ? { ...(next as Record<string, unknown>) } : {};
+    const next = Object.hasOwn(target, part) ? target[part] : undefined;
+    target[part] = Object.assign(Object.create(null), typeof next === 'object' && next !== null ? next : {});
     target = target[part] as Record<string, unknown>;
   }
   target[leaf] = value;

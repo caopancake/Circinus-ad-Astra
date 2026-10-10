@@ -13,6 +13,7 @@
 `scripts/architecture/rules/frontend-layer-boundary.mjs`：前端层级、组件消费、wire 边界、service 依赖和运行时循环的检查 owner。
 `scripts/architecture/rules/index.mjs`：正式规则及元规则注册表。
 `scripts/architecture/rules/parser-boundary.mjs`：工具资产、Mod JSON-like 与 CSV 解析职责 owner。
+`scripts/architecture/rules/read-ticket-boundary.mjs`：ReadTicket owner、通道接纳与旧读取入口收束检查 owner。
 `scripts/architecture/rules/rust-project-layer-boundary.mjs`：Rust 内部分层和 command payload 归属的检查 owner。
 `scripts/architecture/rules/rust-service-edge-boundary.mjs`：Rust 顶层能力依赖的检查 owner。
 `scripts/architecture/rules/write-boundary.mjs`：公开能力声明、操作权限和转导出来源的检查 owner。
@@ -43,7 +44,9 @@
 - 注册表必须装配全部正式规则和元规则；退役契约必须同步收束其检查入口与消费者。
 - CSS token 检查必须消费结构化 CSS AST，报告未定义变量、缺失主题 token、非共享阴影和非共享圆角，并保留组件专属尺寸 allowlist。
 - CSS token 检查必须按选择器作用域核对局部变量，第三方变量必须按文件、选择器和属性使用显式 allowlist，DOM 注入变量必须登记实际消费选择器。
+- 局部变量作用域必须按选择器 AST 的所属复合选择器与首个关联组合符核对；共享 token 必须共同校验定义文件和基础主题覆盖。
 - 测试源码必须按测试角色分类；生产能力权限必须通过合成生产节点和实际仓库入口验收。
+- 前端行为测试必须由 Vite 的 src/**/*.spec.ts 范围收集；静态规则测试必须由 Node 的 *.check.mjs 入口执行。
 - 源码事实只允许由共享解析入口建立；规则只允许读取事实和输出诊断，严禁修改仓库状态。
 - 窗口 wire 必须归 window service；创建必须归 managed window，状态与关闭取消必须归关闭守卫，身份交接必须归实体身份编排。
 - 路径角色与能力表必须表达正式所有权，严禁以原始源文件身份或内容字符串授权绕过边界。
@@ -85,6 +88,7 @@
 - orchestrator 循环必须使用统一运行时模块边；类型边只允许参与类型边界检查。
 - 动态导入必须使用可静态授权的字面量模块来源；类型引用必须参与类型边界并保持其类型属性。
 - 受控能力入口的公开运行时导出必须声明能力及正式消费者；读取、订阅、项目失效和会话清理必须分别授权。
+- 读取消费者必须经 ReadTicket owner 的 consume 接纳结果、错误和收尾回调发布状态，严禁恢复旧的 reads.read 或第二套读取接纳协议。
 - 新约束必须覆盖合法与违规行为测试；命名、导入、转导出、重复诊断与真实入口必须通过正式测试命令验收。
 - 混合导入必须逐绑定表达类型与运行时属性；模块边必须按调用文件、实际目标和属性去重。
 - 编码、格式、架构和标识符长度必须经各自正式入口检查，仓库遍历必须复用共享收集器。

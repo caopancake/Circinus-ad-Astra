@@ -84,7 +84,7 @@ describe('JSON field save boundary', () => {
     expect(save).toHaveBeenCalledWith('one', { first: { x: 2 }, second: { y: 3 } }, []);
     wrapper.unmount();
   });
-  it('keeps unfinished input dirty, blocks saving and commits the corrected object', async () => {
+  it.each(['{"x":', '{"x":1e309}'])('keeps rejected input %s dirty, blocks saving and commits the corrected object', async (raw) => {
     const save = vi.fn(async (_target: string, value: RowData) => ({ target: 'one', baseVersions: [], meta: null, value }));
     let session!: ReturnType<typeof useEditTargetDraftSession<RowData, string>>;
     const wrapper = mount(
@@ -107,7 +107,7 @@ describe('JSON field save boundary', () => {
       { global: { stubs: editorUiStubs }, attachTo: document.body },
     );
     await session.loadTarget('one');
-    await wrapper.get('textarea').setValue('{"x":');
+    await wrapper.get('textarea').setValue(raw);
     expect(session.dirty.value).toBe(true);
     await expect(session.saveDraft()).rejects.toMatchObject({ action: 'commit-field-inputs' });
     expect(save).not.toHaveBeenCalled();
@@ -119,7 +119,7 @@ describe('JSON field save boundary', () => {
       meta: null,
     });
     expect(session.hasPendingExternalValue.value).toBe(true);
-    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('{"x":');
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe(raw);
     await wrapper.get('textarea').setValue('{"x":2}');
     await session.saveDraft();
     expect(save).toHaveBeenCalledWith('one', { nested: { x: 2 } }, []);

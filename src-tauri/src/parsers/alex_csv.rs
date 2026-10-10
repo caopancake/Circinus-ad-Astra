@@ -1,6 +1,6 @@
 use crate::{
     errors::{AppError, AppResult},
-    models::CsvTable,
+    models::{CsvRow, CsvTable},
 };
 use serde_json::{Map, Value};
 
@@ -14,10 +14,13 @@ pub fn parse_csv_bytes(path_label: &str, bytes: &[u8]) -> AppResult<CsvTable> {
 
 /// Renders rows back to CSV text. Rows are passed as references so write
 /// paths never clone a full table just to render them.
-pub fn render_csv_text(header: &[String], rows: &[&Map<String, Value>]) -> AppResult<String> {
+pub fn render_csv_text(
+    header: &[String],
+    rows: &[(&Map<String, Value>, bool)],
+) -> AppResult<String> {
     let mut out = String::new();
     write_record_line(&mut out, header.iter().map(String::as_str));
-    for row in rows {
+    for (row, is_comment) in rows {
         if row.is_empty() {
             // An empty Map is a bare empty line, distinct from an all-empty
             // cells row (rendered as `,`-run).
@@ -28,7 +31,22 @@ pub fn render_csv_text(header: &[String], rows: &[&Map<String, Value>]) -> AppRe
             .iter()
             .map(|h| value_to_cell(row.get(h).unwrap_or(&Value::Null)))
             .collect::<AppResult<Vec<_>>>()?;
-        write_record_line(&mut out, cells.iter().map(String::as_str));
+        for (index, cell) in cells.iter().enumerate() {
+            if index > 0 {
+                out.push(',');
+            }
+            if index == 0 && !is_comment && cell.starts_with('#') {
+                out.push('"');
+                out.push_str(&cell.replace('"', "\"\""));
+                out.push('"');
+            } else if index == 0 && *is_comment {
+                out.push('#');
+                write_cell(&mut out, &cell[1..]);
+            } else {
+                write_cell(&mut out, cell);
+            }
+        }
+        out.push('\n');
     }
     Ok(out)
 }
@@ -151,12 +169,13 @@ fn parse_csv_chars(path_label: &str, text: &[char]) -> AppResult<CsvTable> {
         ColStart,
         InColumn,
     }
-    let mut rows: Vec<Map<String, Value>> = Vec::new();
+    let mut rows: Vec<CsvRow> = Vec::new();
     let mut state = State::RowStart;
     let mut row = Map::new();
     let mut cell = String::new();
     let mut col_index = 0usize;
     let mut in_quote = false;
+    let mut is_comment = false;
     let mut quote_buf = String::new();
     let mut line = 1 + normalized[..=header_end]
         .iter()
@@ -171,6 +190,7 @@ fn parse_csv_chars(path_label: &str, text: &[char]) -> AppResult<CsvTable> {
         let entered_at_row_start = state == State::RowStart;
 
         if entered_at_row_start {
+            is_comment = c == '#';
             row = Map::new();
             col_index = 0;
             state = State::ColStart;
@@ -204,9 +224,15 @@ fn parse_csv_chars(path_label: &str, text: &[char]) -> AppResult<CsvTable> {
                     state = State::ColStart;
                 } else {
                     if entered_at_row_start {
-                        rows.push(Map::new());
+                        rows.push(CsvRow {
+                            data: Map::new(),
+                            is_comment: false,
+                        });
                     } else {
-                        rows.push(std::mem::take(&mut row));
+                        rows.push(CsvRow {
+                            data: std::mem::take(&mut row),
+                            is_comment,
+                        });
                     }
                     state = State::RowStart;
                 }
@@ -229,7 +255,10 @@ fn parse_csv_chars(path_label: &str, text: &[char]) -> AppResult<CsvTable> {
                 Value::String(std::mem::take(&mut cell)),
             );
         }
-        rows.push(row);
+        rows.push(CsvRow {
+            data: row,
+            is_comment,
+        });
     }
 
     if in_quote {
@@ -260,6 +289,36 @@ mod tests {
     }
 
     #[test]
+    fn comment_flags_follow_the_original_record_start_before_quote_parsing() {
+        for (input, comment, first, second) in [
+            ("#disabled,one", true, "#disabled", "one"),
+            (" #space,two", false, " #space", "two"),
+            ("\t#tab,three", false, "\t#tab", "three"),
+            ("\"#quoted\",four", false, "#quoted", "four"),
+            ("active,#description", false, "active", "#description"),
+            (",#later", false, "", "#later"),
+            ("a,\"line\n#inside\"", false, "a", "line\n#inside"),
+            (
+                "#disabled,\"line\ninside\"",
+                true,
+                "#disabled",
+                "line\ninside",
+            ),
+            ("#\"note,quoted\",five", true, "#note,quoted", "five"),
+        ] {
+            let parsed = parse_csv_text("comments.csv", &format!("name,id\n{input}\n")).unwrap();
+            assert_eq!(parsed.rows.len(), 1, "{input}");
+            let row = &parsed.rows[0];
+            assert_eq!(row.is_comment, comment, "{input}");
+            assert_eq!(row.data["name"], first, "{input}");
+            assert_eq!(row.data["id"], second, "{input}");
+            let rendered = render_csv_text(&parsed.header, &[(&row.data, row.is_comment)]).unwrap();
+            let reloaded = parse_csv_text("comments.csv", &rendered).unwrap();
+            assert_eq!(reloaded.rows, parsed.rows, "{input}: {rendered}");
+        }
+    }
+
+    #[test]
     fn save_preserves_visible_empty_rows_from_rows() {
         let header = vec!["id".to_string(), "name".to_string()];
         let mut empty = Map::new();
@@ -268,7 +327,7 @@ mod tests {
         let mut row = Map::new();
         row.insert("id".to_string(), Value::String("b".to_string()));
         row.insert("name".to_string(), Value::String("B".to_string()));
-        let out = render_csv_text(&header, &[&empty, &row]).unwrap();
+        let out = render_csv_text(&header, &[(&empty, false), (&row, false)]).unwrap();
         assert!(out.lines().any(|line| line == ","));
         assert!(out.contains("b,B"));
     }
@@ -279,7 +338,7 @@ mod tests {
         let mut row = Map::new();
         row.insert("id".to_string(), Value::String("b".to_string()));
         row.insert("name".to_string(), Value::String("B".to_string()));
-        let out = render_csv_text(&header, &[&Map::new(), &row]).unwrap();
+        let out = render_csv_text(&header, &[(&Map::new(), false), (&row, false)]).unwrap();
         assert_eq!(out, "id,name\n\nb,B\n");
     }
 
@@ -293,11 +352,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(table.rows.len(), 2);
-        assert_eq!(table.rows[0]["id"], "solo");
-        assert_eq!(table.rows[0].get("name"), None);
-        assert_eq!(table.rows[1]["id"], "a");
-        assert_eq!(table.rows[1]["notes"], "alpha");
-        assert_eq!(table.rows[1].len(), 3);
+        assert_eq!(table.rows[0].data["id"], "solo");
+        assert_eq!(table.rows[0].data.get("name"), None);
+        assert_eq!(table.rows[1].data["id"], "a");
+        assert_eq!(table.rows[1].data["notes"], "alpha");
+        assert_eq!(table.rows[1].data.len(), 3);
     }
 
     #[test]
@@ -309,14 +368,14 @@ mod tests {
         .unwrap();
 
         assert_eq!(table.rows.len(), 5);
-        assert_eq!(table.rows[0]["id"], "a");
-        assert_eq!(table.rows[1]["id"], "#section");
+        assert_eq!(table.rows[0].data["id"], "a");
+        assert_eq!(table.rows[1].data["id"], "#section");
         // A bare empty line is an empty Map; `,,` is an all-keys empty row.
-        assert_eq!(table.rows[2], Map::new());
-        assert_eq!(table.rows[3]["id"], "");
-        assert_eq!(table.rows[3]["name"], "");
-        assert_eq!(table.rows[3]["notes"], "");
-        assert_eq!(table.rows[4]["id"], "b");
+        assert_eq!(table.rows[2].data, Map::new());
+        assert_eq!(table.rows[3].data["id"], "");
+        assert_eq!(table.rows[3].data["name"], "");
+        assert_eq!(table.rows[3].data["notes"], "");
+        assert_eq!(table.rows[4].data["id"], "b");
     }
 
     #[test]
@@ -328,11 +387,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(table.rows.len(), 3);
-        assert_eq!(table.rows[0]["id"], "a");
+        assert_eq!(table.rows[0].data["id"], "a");
         // The game normalizes \r\n to \n up front, quoted newlines included.
-        assert_eq!(table.rows[0]["desc"], "first line\n\nthird line");
-        assert_eq!(table.rows[1]["id"], "#section");
-        assert_eq!(table.rows[2]["id"], "b");
+        assert_eq!(table.rows[0].data["desc"], "first line\n\nthird line");
+        assert_eq!(table.rows[1].data["id"], "#section");
+        assert_eq!(table.rows[2].data["id"], "b");
     }
 
     #[test]
@@ -346,13 +405,13 @@ mod tests {
         .unwrap();
 
         assert_eq!(table.rows.len(), 2);
-        assert_eq!(table.rows[0]["id"], "monitor");
+        assert_eq!(table.rows[0].data["id"], "monitor");
         assert_eq!(
-            table.rows[0]["text1"],
+            table.rows[0].data["text1"],
             "An oddity that sometimes works.\n\nA unique flux shunt modification."
         );
         assert_eq!(
-            table.rows[1]["text1"],
+            table.rows[1].data["text1"],
             "A so-called Cruiser School, the forward-thinking design won."
         );
     }
@@ -366,13 +425,13 @@ mod tests {
         .unwrap();
 
         assert_eq!(table.rows.len(), 4);
-        assert_eq!(table.rows[1]["name"], "#Disabled Name");
-        assert_eq!(table.rows[1]["id"], "disabled");
-        assert_eq!(table.rows[1]["desc"], "first line\n\nthird line");
+        assert_eq!(table.rows[1].data["name"], "#Disabled Name");
+        assert_eq!(table.rows[1].data["id"], "disabled");
+        assert_eq!(table.rows[1].data["desc"], "first line\n\nthird line");
         // Short `#section` row: only the first key exists (tolerance).
-        assert_eq!(table.rows[2]["name"], "#section");
-        assert_eq!(table.rows[2].get("id"), None);
-        assert_eq!(table.rows[3]["id"], "b");
+        assert_eq!(table.rows[2].data["name"], "#section");
+        assert_eq!(table.rows[2].data.get("id"), None);
+        assert_eq!(table.rows[3].data["id"], "b");
     }
 
     #[test]
@@ -384,15 +443,15 @@ mod tests {
         .unwrap();
 
         assert_eq!(table.rows.len(), 4);
-        assert_eq!(table.rows[1]["id"], "#id2");
-        assert_eq!(table.rows[1]["text"], "");
-        assert_eq!(table.rows[1].get("text2"), None);
-        assert_eq!(table.rows[1].get("text3"), None);
-        assert_eq!(table.rows[2]["id"], "#id3");
+        assert_eq!(table.rows[1].data["id"], "#id2");
+        assert_eq!(table.rows[1].data["text"], "");
+        assert_eq!(table.rows[1].data.get("text2"), None);
+        assert_eq!(table.rows[1].data.get("text3"), None);
+        assert_eq!(table.rows[2].data["id"], "#id3");
         // `""` is a doubled-quote pair producing one literal quote, not an
         // empty field.
-        assert_eq!(table.rows[2]["text"], "\"");
-        assert_eq!(table.rows[3]["id"], "id4");
+        assert_eq!(table.rows[2].data["text"], "\"");
+        assert_eq!(table.rows[3].data["id"], "id4");
     }
 
     #[test]
@@ -431,7 +490,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(table.header, vec!["id", "name", "a\"b"]);
-        assert_eq!(table.rows[0]["a\"b"], "3");
+        assert_eq!(table.rows[0].data["a\"b"], "3");
     }
 
     #[test]
@@ -461,21 +520,21 @@ mod tests {
     fn read_flushes_last_row_without_trailing_newline() {
         let table = parse_csv_text("csv_no_trailing_newline.csv", "id,name\r\na,A").unwrap();
         assert_eq!(table.rows.len(), 1);
-        assert_eq!(table.rows[0]["id"], "a");
-        assert_eq!(table.rows[0]["name"], "A");
+        assert_eq!(table.rows[0].data["id"], "a");
+        assert_eq!(table.rows[0].data["name"], "A");
 
         let table =
             parse_csv_text("csv_no_trailing_newline_comment.csv", "id,name\r\n#c,X").unwrap();
         assert_eq!(table.rows.len(), 1);
-        assert_eq!(table.rows[0]["id"], "#c");
+        assert_eq!(table.rows[0].data["id"], "#c");
     }
 
     #[test]
     fn read_preserves_lone_carriage_return_inside_cells() {
         // Only \r\n is normalized; a lone \r is an ordinary character.
         let table = parse_csv_text("csv_lone_cr.csv", "id,name\r\na\rb,B\r\n").unwrap();
-        assert_eq!(table.rows[0]["id"], "a\rb");
-        assert_eq!(table.rows[0]["name"], "B");
+        assert_eq!(table.rows[0].data["id"], "a\rb");
+        assert_eq!(table.rows[0].data["name"], "B");
     }
 
     #[test]
@@ -484,8 +543,8 @@ mod tests {
         // count pulls the following comma into the cell.
         let table = parse_csv_text("csv_toggle_quotes.csv", "id,name\r\na\"x,y\"b,B\r\n").unwrap();
         assert_eq!(table.rows.len(), 1);
-        assert_eq!(table.rows[0]["id"], "ax,yb");
-        assert_eq!(table.rows[0]["name"], "B");
+        assert_eq!(table.rows[0].data["id"], "ax,yb");
+        assert_eq!(table.rows[0].data["name"], "B");
     }
 
     #[test]
@@ -494,7 +553,7 @@ mod tests {
         let mut row = Map::new();
         row.insert("id".to_string(), Value::String("x".to_string()));
         row.insert("name".to_string(), Value::String("X".to_string()));
-        let out = render_csv_text(&header, &[&row]).unwrap();
+        let out = render_csv_text(&header, &[(&row, false)]).unwrap();
         assert!(out.lines().next().is_some_and(|line| line == "id,name"));
         assert!(out.contains("x,X"));
     }
@@ -505,11 +564,19 @@ mod tests {
         let mut row = Map::new();
         row.insert("id".to_string(), Value::String("a".to_string()));
         row.insert("text".to_string(), Value::String("\"".to_string()));
-        let rendered = render_csv_text(&header, &[&row]).unwrap();
+        let rendered = render_csv_text(&header, &[(&row, false)]).unwrap();
         let parsed = parse_csv_bytes("csv_quote_only.csv", rendered.as_bytes()).unwrap();
-        assert_eq!(parsed.rows[0]["text"], "\"");
+        assert_eq!(parsed.rows[0].data["text"], "\"");
         assert_eq!(
-            render_csv_text(&parsed.header, &parsed.rows.iter().collect::<Vec<_>>()).unwrap(),
+            render_csv_text(
+                &parsed.header,
+                &parsed
+                    .rows
+                    .iter()
+                    .map(|row| (&row.data, row.is_comment))
+                    .collect::<Vec<_>>()
+            )
+            .unwrap(),
             rendered
         );
     }
@@ -518,14 +585,18 @@ mod tests {
     fn utf8_characters_are_decoded_before_cp1252_fallback() {
         let text = "id,name\na,铜\n";
         let table = parse_csv_bytes("csv_utf8_multibyte.csv", text.as_bytes()).unwrap();
-        assert_eq!(table.rows[0]["name"], "铜");
+        assert_eq!(table.rows[0].data["name"], "铜");
     }
 
-    fn row_of(pairs: [(&str, &str); 4]) -> Map<String, Value> {
-        pairs
+    fn row_of(pairs: [(&str, &str); 4]) -> CsvRow {
+        let data = pairs
             .into_iter()
             .map(|(key, value)| (key.to_string(), Value::String(value.to_string())))
-            .collect()
+            .collect();
+        CsvRow {
+            data,
+            is_comment: false,
+        }
     }
 
     #[test]
@@ -556,7 +627,10 @@ mod tests {
                 ("notes", ""),
             ]),
             row_of([("id", ""), ("name", ""), ("desc", ""), ("notes", "")]),
-            Map::new(),
+            CsvRow {
+                data: Map::new(),
+                is_comment: false,
+            },
             row_of([
                 ("id", "b"),
                 ("name", "舰船, 引号\"与换行\n混合"),
@@ -565,10 +639,24 @@ mod tests {
             ]),
         ];
 
-        let first = render_csv_text(&header, &rows.iter().collect::<Vec<_>>()).unwrap();
+        let first = render_csv_text(
+            &header,
+            &rows
+                .iter()
+                .map(|row| (&row.data, row.is_comment))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
         let reparsed = parse_csv_bytes("csv_round_trip.csv", first.as_bytes()).unwrap();
-        let second =
-            render_csv_text(&reparsed.header, &reparsed.rows.iter().collect::<Vec<_>>()).unwrap();
+        let second = render_csv_text(
+            &reparsed.header,
+            &reparsed
+                .rows
+                .iter()
+                .map(|row| (&row.data, row.is_comment))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
 
         assert_eq!(reparsed.header, header);
         assert_eq!(reparsed.rows, rows);
@@ -604,8 +692,15 @@ mod fixture_replay_tests {
                 .unwrap_or_else(|error| panic!("{} must be utf-8: {error}", path.display()));
             let first = parse_csv_bytes(&path.display().to_string(), original.as_bytes())
                 .unwrap_or_else(|error| panic!("{} must parse: {error}", path.display()));
-            let rendered = render_csv_text(&first.header, &first.rows.iter().collect::<Vec<_>>())
-                .expect("render must succeed");
+            let rendered = render_csv_text(
+                &first.header,
+                &first
+                    .rows
+                    .iter()
+                    .map(|row| (&row.data, row.is_comment))
+                    .collect::<Vec<_>>(),
+            )
+            .expect("render must succeed");
             let second = parse_csv_bytes(&path.display().to_string(), rendered.as_bytes())
                 .unwrap_or_else(|error| {
                     panic!("rendered {} must re-parse: {error}", path.display())
@@ -623,11 +718,11 @@ mod fixture_replay_tests {
                 "header drift in {}",
                 path.display()
             );
-            let project_row = |row: &Map<String, Value>| -> Vec<String> {
+            let project_row = |row: &CsvRow| -> Vec<String> {
                 first
                     .header
                     .iter()
-                    .map(|h| match row.get(h) {
+                    .map(|h| match row.data.get(h) {
                         Some(Value::String(s)) => s.clone(),
                         _ => String::new(),
                     })
@@ -656,9 +751,15 @@ mod fixture_replay_tests {
                 }
             }
             // The rendered form must itself be a fixed point of the renderer.
-            let re_rendered =
-                render_csv_text(&second.header, &second.rows.iter().collect::<Vec<_>>())
-                    .expect("re-render must succeed");
+            let re_rendered = render_csv_text(
+                &second.header,
+                &second
+                    .rows
+                    .iter()
+                    .map(|row| (&row.data, row.is_comment))
+                    .collect::<Vec<_>>(),
+            )
+            .expect("re-render must succeed");
             assert_eq!(
                 rendered,
                 re_rendered,

@@ -12,6 +12,7 @@
 `src/app/composables/editors/use-editor-window-view-model.ts`：共享编辑窗口生命周期主归属，拥有读取票据、外部保存与身份事件接纳。
 `src/app/composables/use-dirty-window-close-guard.ts`：dirty 关闭守卫 owner，在关闭请求上确认放弃并销毁。
 `src/orchestrators/entity-identity.orchestrator.ts`：跨窗口目标准备、占用、身份交接和释放主归属。
+`src/orchestrators/window-target-focus.orchestrator.ts`：冲突目标、已加载路径与规格或文本窗口聚焦的动作 owner。
 `src/services/editor.service.ts`：共享编辑窗口 bundle、领域依赖与资源装配主归属。
 `src/services/window.service.ts`：窗口 command 的类型化签名与参数装配主归属。
 `src/windows/current.window.ts`：当前窗口生命周期 owner，提供关闭、销毁、关闭请求监听、最小化、最大化、拖拽、重载与显示。
@@ -60,7 +61,7 @@
 
 1. 主窗口工作区动作启动时注册保存事件监听。
 2. 同步编排接纳当前窗口 receipt 并发送完整提交事件。
-3. 共享监听入口启动身份交接、接纳历史和投影、按身份与代次失效缓存，再投影所属规格和文本。
+3. 共享监听入口接纳历史和投影、按身份与代次失效缓存，完成身份交接后投影所属规格和文本。
 4. 窗口卸载时释放全部监听。
 
 ## 规范
@@ -71,10 +72,15 @@
 - 关闭、创建失败与动作取消必须释放所属登记及占用；生命周期等待必须按请求身份接纳完成或取消。
 - 关闭守卫遇到 dirty 必须先拦截再确认，取消或失败时必须保持窗口。
 - 写入前必须登记下一规格身份与文本路径占用；待保存目标窗口必须拒绝交接并取得焦点，干净实例必须经所属关闭守卫释放。
+- 打开或身份交接遇到已登记的 dirty、saving 或 creating 目标时，窗口能力必须先显示并聚焦占用实例，再返回稳定冲突错误。
 - 原生 label 必须由应用内登记序号产生，并且必须在业务身份交接时保持稳定。
 - 子窗口只能消费 URL snapshot 初始化设置，严禁在子窗口内读取设置文件。
 - 广播重试必须复用实际 receipt 及完成进度；事件处理失败必须归所属错误 owner，发送成功必须以 Tauri 事件发送结果判定。
 - 当前窗口回声必须按来源 label 过滤，重复提交必须按根和提交序号去重；身份消费者必须先取得接纳意图，依赖投影消费者必须等待该动作。
+- 同一 session、Mod 与提交身份的进行中通知必须复用同一派发 Promise；等待身份接纳后必须核对所属 session 和订阅生命周期。
+- 提交接收必须先接纳权威投影并失效资源与查询缓存，再启动身份读取；投影消费者必须等待身份交接完成。
+- 聚焦能力必须按完整 WindowIdentity 查询现有登记、显示窗口、恢复最小化并聚焦；找不到所属实例必须返回 false，调用方必须保留草稿与冲突诊断。
+- 规格、文本、CSV 关联和配置身份准备遇到目标已存在时，必须消费错误中的正式 target 聚焦所属实例，再报告原始冲突；配置列表的同 ID 拒绝必须消费所属已加载目标。
 - 窗口创建必须以隐藏方式启动，由内容就绪后显式显示。
 - 规格身份必须分别表达 sessionId、kind、modRoot 与 id；文本身份必须分别表达 sessionId、modRoot 与 path；恢复身份必须分别表达 nullable modRoot 与 path。
 - 跨窗口事件必须使用事件名注册表的常量，严禁裸字符串事件名。

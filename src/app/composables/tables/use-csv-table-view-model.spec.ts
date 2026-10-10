@@ -118,6 +118,7 @@ function windowFixture(totalRows: number): CsvTableWindow {
     filteredRows: totalRows,
     rows: Array.from({ length: Math.min(2, totalRows) }, (_, index) => ({
       rowKey: `key-${index}`,
+      isComment: false,
       sourceRowIndex: index,
       factionId: null,
       data: { id: `s${index}`, name: `Ship ${index}` },

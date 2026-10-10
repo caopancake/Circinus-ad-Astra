@@ -168,7 +168,10 @@ fn save_entity_content(
         row.data.insert("id".into(), Value::String(next_id.clone()));
         let text = render_csv_text(
             &state.header,
-            &rows.iter().map(|row| &row.data).collect::<Vec<_>>(),
+            &rows
+                .iter()
+                .map(|row| (&row.data, row.is_comment))
+                .collect::<Vec<_>>(),
         )?;
         builder.text_file(&state.path, Some(text.clone()))?;
         saved_csv = Some((*table, rows, text));
@@ -184,7 +187,7 @@ fn save_entity_content(
                 .find(|entry| entry.row_index == *row_index)
                 .expect("loaded faction index entry");
             crate::parsers::update_faction_index_row(
-                &mut index.rows[*row_index],
+                &mut index.rows[*row_index].data,
                 entry,
                 &next_id,
                 &next_rel,
@@ -217,9 +220,19 @@ fn save_entity_content(
             } else {
                 row.insert(field.clone(), Value::String(next_rel.clone()));
             }
-            index.rows.push(row);
+            index.rows.push(crate::models::CsvRow {
+                data: row,
+                is_comment: false,
+            });
         }
-        let text = render_csv_text(&index.header, &index.rows.iter().collect::<Vec<_>>())?;
+        let text = render_csv_text(
+            &index.header,
+            &index
+                .rows
+                .iter()
+                .map(|row| (&row.data, row.is_comment))
+                .collect::<Vec<_>>(),
+        )?;
         builder.text_file(index_rel, Some(text))?;
     }
     let changes = builder.apply()?;
@@ -253,6 +266,86 @@ mod tests {
         testutil::temp_dir,
     };
     use serde_json::json;
+
+    #[test]
+    fn spec_rename_updates_the_registered_row_and_preserves_a_comment_with_the_same_id() {
+        for kind in [
+            EntityKind::Ship,
+            EntityKind::Weapon,
+            EntityKind::System,
+            EntityKind::Skill,
+        ] {
+            let definition =
+                crate::domain::editor_config_definitions::entity_spec_definition(kind).unwrap();
+            let table = definition.csv_table.unwrap();
+            let root = temp_dir(&format!("identity_comment_{kind:?}"));
+            std::fs::create_dir_all(root.join(definition.dir)).unwrap();
+            let mut content = json!({"specClass":"beam"});
+            content[definition.id_field] = "old".into();
+            let source = root.join(definition.default_rel_path("old"));
+            crate::io::write_utf8_no_bom(&source, &content.to_string()).unwrap();
+            let csv = root.join(
+                crate::services::project::definitions::table_definitions::csv_table_definition(
+                    table,
+                )
+                .spec
+                .rel_path,
+            );
+            let original = "a,id,name\n# retained note,old,Comment\nactive,old,Original\n";
+            crate::io::write_utf8_no_bom(&csv, original).unwrap();
+            let mut trace = project::PerformanceTrace::new("project.openSession");
+            let manifest = project::open_project_session_traced(&root, None, &mut trace).unwrap();
+            let info =
+                project::query_entity_edit_target(&manifest.session_id, kind, "old").unwrap();
+            content[definition.id_field] = "next".into();
+            let receipt = crate::commands::save_editor_spec(
+                crate::models::command_payloads::SaveEditorSpecPayload {
+                    session_id: manifest.session_id.clone(),
+                    mod_root: manifest.mod_root.clone(),
+                    target: info.target,
+                    base_versions: info.base_versions,
+                    data: content,
+                    json_write: Default::default(),
+                    ordered_json: None,
+                },
+            )
+            .unwrap();
+            let saved = crate::io::read_csv_data(&csv).unwrap();
+            assert_eq!(saved.header, ["a", "id", "name"]);
+            assert_eq!(saved.rows[0].data["id"], "old");
+            assert_eq!(saved.rows[0].data["a"], "# retained note");
+            assert_eq!(saved.rows[1].data["id"], "next");
+            assert_eq!(saved.rows[1].data["name"], "Original");
+            assert!(matches!(&receipt.identity_changes[0].after.linked_record,
+                Some(crate::models::EntityLinkedRecord::Csv { row_key, .. }) if row_key == &format!("{}:row:1", table.as_str())));
+            let undo = crate::services::write_transactions::replay(
+                &manifest.session_id,
+                &manifest.mod_root,
+                FileChangeReplayDirection::Undo,
+                receipt.history.undo_stack[0].id,
+                receipt.history.revision,
+            )
+            .unwrap();
+            assert_eq!(
+                crate::io::read_csv_data(&csv).unwrap().rows[1].data["id"],
+                "old"
+            );
+            crate::services::write_transactions::replay(
+                &manifest.session_id,
+                &manifest.mod_root,
+                FileChangeReplayDirection::Redo,
+                undo.history.redo_stack[0].id,
+                undo.history.revision,
+            )
+            .unwrap();
+            assert_eq!(
+                crate::io::read_csv_data(&csv).unwrap().rows[1].data["id"],
+                "next"
+            );
+            project::close_project_session(manifest.session_id).unwrap();
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
 
     #[test]
     fn loaded_nested_target_renames_with_its_csv_row_and_replays_identity() {
@@ -414,7 +507,8 @@ mod tests {
         assert_eq!(
             crate::io::read_csv_data(&root.join("data/hulls/ship_data.csv"))
                 .unwrap()
-                .rows[0]["id"],
+                .rows[0]
+                .data["id"],
             "new"
         );
         project::close_project_session(manifest.session_id).unwrap();

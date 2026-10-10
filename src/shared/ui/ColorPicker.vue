@@ -88,6 +88,7 @@ import NumberValueInput from '@/shared/ui/NumberValueInput.vue';
 import { formatError } from '@/shared/lib/errors';
 import { focusFieldInput } from '@/shared/runtime/focus-field-input';
 import { stableDeepEqual } from '@/shared/lib/stable-compare';
+import { cell } from '@/shared/lib/starsector';
 
 type ChannelMode = 'rgb' | 'rgba';
 type ChannelKey = 'r' | 'g' | 'b' | 'a';
@@ -302,10 +303,10 @@ registerFieldInput({
 function arrayToRgba(value: unknown, fallback: number[]): RgbaColor {
   const source = Array.isArray(value) ? value : fallback;
   return {
-    r: clampChannel(Number(source[0] ?? fallback[0] ?? 128)),
-    g: clampChannel(Number(source[1] ?? fallback[1] ?? 128)),
-    b: clampChannel(Number(source[2] ?? fallback[2] ?? 128)),
-    a: props.channels === 'rgb' ? 255 : clampChannel(Number(source[3] ?? fallback[3] ?? 255)),
+    r: clampChannel(Number(cell(source[0] ?? fallback[0] ?? 128))),
+    g: clampChannel(Number(cell(source[1] ?? fallback[1] ?? 128))),
+    b: clampChannel(Number(cell(source[2] ?? fallback[2] ?? 128))),
+    a: props.channels === 'rgb' ? 255 : clampChannel(Number(cell(source[3] ?? fallback[3] ?? 255))),
   };
 }
 

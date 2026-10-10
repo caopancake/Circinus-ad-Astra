@@ -6,7 +6,7 @@ use super::super::{
     },
     model::{
         EntityProjection, MISSION_LIST_REL_PATH, MISSION_LIST_TABLE_KEY, ProjectSession,
-        SessionCsvRow, is_comment_row, string_from_row,
+        SessionCsvRow, string_from_row,
     },
     resources::resource_ref,
     root,
@@ -561,7 +561,7 @@ fn registered_skill_rows(session: &ProjectSession) -> AppResult<Vec<RegisteredCs
 
 fn registered_entity_rows(rows: &[SessionCsvRow], id_column: &str) -> Vec<RegisteredCsvEntityRow> {
     rows.iter()
-        .filter(|row| !is_comment_row(&row.data))
+        .filter(|row| !row.is_comment)
         .filter_map(|row| {
             let id = string_from_row(&row.data, id_column)?;
             Some(RegisteredCsvEntityRow {

@@ -38,7 +38,10 @@ mod tests {
         assert_eq!(table.header, vec!["id".to_string(), "name".to_string()]);
         assert_eq!(table.rows.len(), 1);
         assert_eq!(
-            table.rows[0].get("name").and_then(|value| value.as_str()),
+            table.rows[0]
+                .data
+                .get("name")
+                .and_then(|value| value.as_str()),
             Some("Ruler")
         );
     }

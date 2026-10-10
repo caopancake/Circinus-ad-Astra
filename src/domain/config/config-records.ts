@@ -84,7 +84,10 @@ export function indexedConfigEntityData(result: WriteResult): IndexedConfigEntit
     entityId: stringField(row, 'entityId', '配置保存返回 entityId 无效'),
     indexPath: stringField(row, 'indexPath', '配置保存返回 indexPath 无效'),
     indexHeader: stringArrayField(row, 'indexHeader', '配置保存返回 indexHeader 无效'),
-    indexRows: rowDataArrayField(row, 'indexRows', '配置保存返回 indexRows 无效'),
+    indexRows: rowDataArrayField(row, 'indexRows', '配置保存返回 indexRows 无效').map((record) => {
+      if (typeof record.isComment !== 'boolean') throw new AppError('配置保存返回注释标记无效', { action: 'read-config-entity' });
+      return { data: requireRowData(record.data, '配置保存返回行内容无效'), isComment: record.isComment };
+    }),
     entityData: row.entityData === null ? null : requireRowData(row.entityData, '配置保存返回 entityData 无效'),
   };
 }

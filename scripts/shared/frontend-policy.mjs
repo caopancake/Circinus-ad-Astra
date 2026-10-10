@@ -159,6 +159,13 @@ export const frontendCapabilities = [
   {
     role: 'service',
     domain: 'window',
+    names: ['focusNativeManagedWindow'],
+    capability: 'window-target-focus',
+    owners: [{ layer: 'orchestrators', domain: 'window-target-focus' }],
+  },
+  {
+    role: 'service',
+    domain: 'window',
     names: ['openNativeManagedWindow'],
     capability: 'window-open',
     owners: [{ layer: 'windows', domain: 'managed' }],
@@ -220,15 +227,21 @@ export const frontendCapabilities = [
   {
     role: 'service',
     domain: 'entity-query',
-    names: [
-      'querySessionEntity',
-      'querySessionEntityEditTarget',
-      'querySessionEntityIdentityIntent',
-      'querySessionEntityList',
-      'querySessionEditorDraftResources',
-    ],
+    names: ['querySessionEntity', 'querySessionEntityIdentityIntent', 'querySessionEntityList', 'querySessionEditorDraftResources'],
     capability: 'session-query-load',
     owners: [{ layer: 'services' }],
+  },
+  {
+    role: 'service',
+    domain: 'entity-query',
+    names: ['querySessionEntityEditTarget'],
+    capability: 'entity-target-read',
+    owners: [
+      { layer: 'services' },
+      { layer: 'orchestrators', domain: 'entity-identity' },
+      { layer: 'app', role: 'composable', domain: 'workspace-shell-actions' },
+      { layer: 'orchestrators', domain: 'window-target-focus' },
+    ],
   },
   {
     role: 'service',
@@ -247,7 +260,7 @@ export const frontendCapabilities = [
   {
     role: 'service',
     domain: 'hull-reference',
-    names: ['querySessionHullReferences', 'queryHullReferenceOptions', 'queryHullPreviewMetadata', 'queryBuiltInWeaponSlotOptions'],
+    names: ['querySessionHullReferences', 'queryHullReferenceOptions', 'queryBuiltInWeaponSlotOptions'],
     capability: 'hull-query',
     owners: readOwners,
   },
@@ -324,7 +337,6 @@ export const frontendCapabilities = [
       'queryDraftEditorImages',
       'refreshBundleProjectiles',
       'queryEditorIdentityIntent',
-      'queryEditorEditInfo',
     ],
     capability: 'editor-query',
     owners: readOwners,
@@ -548,11 +560,9 @@ const serviceEdges = new Set([
   'config-resource -> resource-cache',
   'csv-table -> entity-query',
   'csv-table -> resource-cache',
-  'files -> write',
   'editor -> files',
   'editor -> entity-query',
   'editor -> resource-cache',
-  'editor -> write',
 ]);
 
 /** @param {PathRole} from @param {PathRole} to @returns {boolean} */

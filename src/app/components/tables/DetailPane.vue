@@ -107,7 +107,7 @@ const displayName = computed(() => {
 });
 
 const selectedDisplayId = computed(() => (tables.selectedRow ? rowDisplayId(tables.selectedRow) : ''));
-const isCommentRow = computed(() => isCsvCommentRow(tables.selectedRow, tables.currentTab));
+const isCommentRow = computed(() => isCsvCommentRow(tables.selectedRowRecord));
 const hasActions = computed(() => detailActions.value.length > 0);
 const schemaColumns = computed(() => csvColumnSchemasForTable(tables.currentTab));
 const previewSrc = useCsvRowPreview({
@@ -126,7 +126,7 @@ const summaryItems = computed<SchemaPreviewItem[]>(() => {
   });
 });
 const detailActions = computed<TableDetailAction[]>(() => {
-  const row = tables.selectedRow;
+  const row = tables.selectedRowRecord;
   const data = project.activeManifest;
   return data
     ? detailActionsForRow(

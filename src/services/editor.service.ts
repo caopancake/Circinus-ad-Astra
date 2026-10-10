@@ -296,9 +296,6 @@ export function queryEditorIdentityIntent(sessionId: string, source: EntityEditT
     cloneQuerySnapshot<import('@/shared/types').EntityIdentityIntent>(intent),
   );
 }
-export function queryEditorEditInfo(sessionId: string, kind: EntityEditTarget['kind'], id: string, signal?: AbortSignal) {
-  return querySessionEntityEditTarget(sessionId, kind, id, signal);
-}
 export async function loadImportedSpecFile(kind: EditorSpecKind, path: string): Promise<RowData> {
   return invokeCommand('load_imported_editor_spec_file', { payload: { kind, path } });
 }

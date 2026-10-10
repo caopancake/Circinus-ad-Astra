@@ -1,4 +1,4 @@
-import { createQueryReadOwner, isReadInvalidated } from '@/shared/runtime/read-request';
+import { createReadTicketOwner, isReadInvalidated } from '@/shared/runtime/read-request';
 import { computed, ref, watch } from 'vue';
 import type { UnlistenFn } from '@/windows/tauri.events';
 import {
@@ -62,7 +62,7 @@ export function useEditorWindowViewModel(params: {
   const currentId = ref(params.id);
   const editorData = ref<EditorEntityBundle | null>(null);
   const feedback = useAppFeedback();
-  const reads = createQueryReadOwner();
+  const reads = createReadTicketOwner();
   let missingSpecIntent: object | null = null;
   let identityPreparation: Awaited<ReturnType<typeof createEntitySavePreparation>> | null = null;
   const draftSession: EditTargetDraftSession<RowData, EditorWindowTarget, { bundle: EditorEntityBundle; receipt: WriteResult | null }> =
@@ -212,7 +212,7 @@ export function useEditorWindowViewModel(params: {
     const target = editorWindowTarget();
     if (disposed || !target || !editorData.value || (params.kind !== 'ship' && params.kind !== 'weapon')) return;
     const kind = params.kind;
-    const draft = deepClone(draftSession.draftValue.value);
+    const draft = draftSession.draftValue.value;
     editorData.value = clearBundleImages(editorData.value);
     await reads.consume(
       'images',
@@ -476,7 +476,6 @@ export function useEditorWindowViewModel(params: {
     if (!change) return;
     if (draftSession.saving.value && !(await draftSession.waitForSave())) return;
     if (disposed || !sameEditorWindowTarget(target, editorWindowTarget())) return;
-    identityCommitId = event.result.commitId;
     if (target.kind === 'weapon-preview') {
       const snapshot = previewDraftSnapshot ? { ...previewDraftSnapshot, id: change.after.id } : undefined;
       const data = await queryEditorEntityBundle(target.sessionId, target.kind, change.after.id, snapshot);
@@ -485,6 +484,7 @@ export function useEditorWindowViewModel(params: {
       currentId.value = change.after.id;
       previewDraftSnapshot = snapshot ?? null;
       applyLoadedEditorData(data);
+      identityCommitId = event.result.commitId;
       return;
     }
     if (draftSession.dirty.value) {
@@ -500,7 +500,7 @@ export function useEditorWindowViewModel(params: {
     const nextTarget = { ...target, id: change.after.id };
     const next = primarySpecForBundle(data, target.kind);
     await retargetEntityWindow(target.sessionId, target.modRoot, target.kind, nextTarget.id);
-    draftSession.adoptIdentity(
+    const accepted = draftSession.adoptIdentity(
       target,
       {
         target: nextTarget,
@@ -511,6 +511,7 @@ export function useEditorWindowViewModel(params: {
       },
       (draft) => (draftSession.dirty.value ? { ...draft, [target.kind === 'ship' ? 'hullId' : 'id']: nextTarget.id } : next),
     );
+    if (accepted) identityCommitId = event.result.commitId;
   }
 
   function handleEditorSpecSaved(event: EditorSpecSavedEvent) {
@@ -608,7 +609,7 @@ export function useEditorWindowViewModel(params: {
     if (!target || !bundle) return;
     const reference = bundleReferenceKey(bundle);
     const error = (error: unknown) => feedback.error(error, '刷新编辑器派生数据失败');
-    const tasks: Promise<void>[] = [];
+    const tasks: Promise<boolean>[] = [];
     if (options.projectileSpecs)
       tasks.push(
         reads.consume(

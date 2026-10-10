@@ -59,7 +59,7 @@ export function createReadTicket<T, TIdentity extends object>(
   };
 }
 
-export function createQueryReadOwner() {
+export function createReadTicketOwner() {
   const requests = new Map<string, ReadTicket<unknown>>();
   const scheduled = new Map<string, () => void>();
   function revoke(reason: ReadEndReason = 'consumer', lane?: string) {
@@ -68,25 +68,8 @@ export function createQueryReadOwner() {
       ticket?.invalidate(reason);
       requests.delete(key);
     }
-    scheduled.clear();
-  }
-  function read<T>(
-    lane: string,
-    identity: object,
-    load: (signal: AbortSignal) => T | Promise<T>,
-    onReady?: (value: T) => void,
-  ): Promise<T> {
-    requests.get(lane)?.invalidate('consumer');
-    const ticket = createReadTicket(identity, load, onReady);
-    requests.set(lane, ticket as ReadTicket<unknown>);
-    return ticket.promise
-      .then((value) => {
-        ticket.accept();
-        return value;
-      })
-      .finally(() => {
-        if (requests.get(lane) === ticket) requests.delete(lane);
-      });
+    if (lane) scheduled.delete(lane);
+    else scheduled.clear();
   }
   function schedule(lane: string, callback: () => void) {
     const queued = scheduled.has(lane);
@@ -98,15 +81,12 @@ export function createQueryReadOwner() {
         current?.();
       });
   }
-  function isCurrent(lane: string, identity: object): boolean {
-    return requests.get(lane)?.identity === identity;
-  }
   async function consume<T>(
     lane: string,
     identity: object,
     load: (signal: AbortSignal) => T | Promise<T>,
     handlers: { ready: (value: T) => void; error?: (error: unknown) => void; settled?: () => void },
-  ): Promise<void> {
+  ): Promise<boolean> {
     requests.get(lane)?.invalidate('consumer');
     let synchronous = false;
     const ticket = createReadTicket(identity, load, (value) => {
@@ -118,11 +98,13 @@ export function createQueryReadOwner() {
       const value = await ticket.promise;
       ticket.accept();
       if (!synchronous) handlers.ready(value);
+      return true;
     } catch (error) {
       if (!ticket.signal.aborted && !isReadInvalidated(error)) {
         if (handlers.error) handlers.error(error);
         else throw error;
       }
+      return false;
     } finally {
       if (requests.get(lane) === ticket) {
         if (!ticket.signal.aborted) handlers.settled?.();
@@ -130,7 +112,7 @@ export function createQueryReadOwner() {
       }
     }
   }
-  return { read, consume, revoke, schedule, isCurrent };
+  return { consume, revoke, schedule };
 }
 
 export function waitForRead<T>(promise: Promise<T>, identity: object, signal?: AbortSignal): Promise<T> {

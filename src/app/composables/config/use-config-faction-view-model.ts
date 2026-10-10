@@ -1,5 +1,4 @@
 import { useQueryReadOwner } from '@/app/composables/use-query-read-owner';
-import { isReadInvalidated } from '@/shared/runtime/read-request';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { listConfigFactionRecords, queryFactionPreviewImages, getConfigFactionRecord } from '@/services/config-entity.service';
 import { useConfigIdentityReception } from '@/app/composables/config/use-config-identity-reception';
@@ -21,6 +20,7 @@ import { useAppFeedback } from '@/app/composables/use-app-feedback';
 import { useSchemaRuntimeContext } from '@/app/composables/use-schema-runtime-context';
 import { hasEntityInvalidation, subscribeQueryInvalidations } from '@/services/query-cache.service';
 import { hasResourceInvalidation, subscribeResourceInvalidations } from '@/services/resource-cache.service';
+import { focusExistingEntityWindow } from '@/orchestrators/window-target-focus.orchestrator';
 
 export function useConfigFactionViewModel() {
   const factionDataRevision = ref(0);
@@ -88,28 +88,24 @@ export function useConfigFactionViewModel() {
     }
     if (!sessionId || disposed) return false;
     listLoadStartedAt.value = performance.now();
-    try {
-      const records = await reads.read('list', { sessionId, kind: 'faction' }, (signal) => listConfigFactionRecords(sessionId, signal));
-      if (disposed || key !== sessionKey()) return false;
-      const selected = selectedFaction.value;
-      const held = selected ? factions.value[selected] : null;
-      const heldVersions = selected ? factionVersions.value[selected] : [];
-      factions.value = Object.fromEntries(records.map((record) => [record.id, record.data]));
-      factionVersions.value = Object.fromEntries(records.map((record) => [record.id, record.baseVersions]));
-      factionCrestRefs.value = Object.fromEntries(records.map((record) => [record.id, record.crestRef]));
-      factionCrestResourceRefs.value = records.flatMap((record) => (record.crestRef ? [record.crestRef] : []));
-      selection.reconcile(Object.keys(factions.value).sort(), identity.receiving.value);
-      if (selected && selectedFaction.value === selected && !factions.value[selected]) {
-        if (held) heldFaction.value = { id: selected, data: held, baseVersions: heldVersions! };
-      } else heldFaction.value = null;
-      factionPreviewRevision.value += 1;
-      if (options.reloadEditorData) factionDataRevision.value += 1;
-      return true;
-    } catch (error) {
-      if (disposed || key !== sessionKey() || isReadInvalidated(error)) return false;
-      feedback.error(error, '加载势力失败');
-      return false;
-    }
+    return await reads.consume('list', { sessionId, kind: 'faction' }, (signal) => listConfigFactionRecords(sessionId, signal), {
+      ready: (records) => {
+        const selected = selectedFaction.value;
+        const held = selected ? factions.value[selected] : null;
+        const heldVersions = selected ? factionVersions.value[selected] : [];
+        factions.value = Object.fromEntries(records.map((record) => [record.id, record.data]));
+        factionVersions.value = Object.fromEntries(records.map((record) => [record.id, record.baseVersions]));
+        factionCrestRefs.value = Object.fromEntries(records.map((record) => [record.id, record.crestRef]));
+        factionCrestResourceRefs.value = records.flatMap((record) => (record.crestRef ? [record.crestRef] : []));
+        selection.reconcile(Object.keys(factions.value).sort(), identity.receiving.value);
+        if (selected && selectedFaction.value === selected && !factions.value[selected]) {
+          if (held) heldFaction.value = { id: selected, data: held, baseVersions: heldVersions! };
+        } else heldFaction.value = null;
+        factionPreviewRevision.value += 1;
+        if (options.reloadEditorData) factionDataRevision.value += 1;
+      },
+      error: (error) => feedback.error(error, '加载势力失败'),
+    });
   }
 
   async function onSaved(id: string | null, saved?: import('@/shared/types').ConfigSaveIdentity) {
@@ -130,6 +126,7 @@ export function useConfigFactionViewModel() {
       return false;
     }
     if (factions.value[id]) {
+      await focusExistingEntityWindow(createSessionId, createModRoot, 'faction', id);
       feedback.warning(warningNotice(`势力 "${id}" 已存在`, 'config.entity_exists', `Faction ID exists: ${id}`));
       return false;
     }

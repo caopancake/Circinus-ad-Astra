@@ -8,7 +8,7 @@ use std::path::Path;
 
 use super::super::model::{
     MISSION_LIST_TABLE_KEY, ProjectSession, SessionCsvRow, SessionCsvTable, csv_table_spec,
-    is_comment_row, mission_list_default_header,
+    mission_list_default_header,
 };
 use super::core::load_core_csv_table;
 
@@ -110,10 +110,11 @@ pub(crate) fn ensure_session_table_rows(
         .enumerate()
         .map(|(index, row)| SessionCsvRow {
             row_key: format!("{table}:row:{}", row_sequence + index as u64),
+            is_comment: row.is_comment,
             faction_id: supports_faction
-                .then(|| csv_row_faction_id(&row, &session.tag_map))
+                .then(|| csv_row_faction_id(&row.data, row.is_comment, &session.tag_map))
                 .flatten(),
-            data: row,
+            data: row.data,
         })
         .collect();
     let next_row_seq = row_sequence + rows.len() as u64;
@@ -143,7 +144,7 @@ pub(crate) fn refresh_faction_annotations(session: &mut ProjectSession) {
             && let Some(rows) = &mut table.rows
         {
             for row in rows {
-                row.faction_id = csv_row_faction_id(&row.data, &session.tag_map);
+                row.faction_id = csv_row_faction_id(&row.data, row.is_comment, &session.tag_map);
             }
         }
     }
@@ -151,9 +152,10 @@ pub(crate) fn refresh_faction_annotations(session: &mut ProjectSession) {
 
 fn csv_row_faction_id(
     row: &serde_json::Map<String, Value>,
+    is_comment: bool,
     tag_map: &std::collections::HashMap<String, String>,
 ) -> Option<String> {
-    if is_faction_padding_row(row) {
+    if is_comment || is_faction_padding_row(row) {
         return None;
     }
     let id = row
@@ -175,10 +177,8 @@ fn csv_row_faction_id(
 }
 
 fn is_faction_padding_row(row: &serde_json::Map<String, Value>) -> bool {
-    is_comment_row(row)
-        || row
-            .values()
-            .all(|value| value.as_str().is_none_or(|text| text.trim().is_empty()))
+    row.values()
+        .all(|value| value.as_str().is_none_or(|text| text.trim().is_empty()))
 }
 
 #[cfg(test)]

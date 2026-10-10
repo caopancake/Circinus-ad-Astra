@@ -91,13 +91,13 @@ export async function queryCached<K extends QueryCacheKind>(
 
 export async function queryLive<K extends QueryKind>(
   input: QueryIdentity<K>,
-  loader: () => Promise<QueryValue<NoInfer<K>>>,
+  loader: (identity: QueryIdentity<NoInfer<K>>) => Promise<QueryValue<NoInfer<K>>>,
   signal?: AbortSignal,
 ): Promise<QueryValue<K>> {
   const identity = deepClone(input);
   if (signal?.aborted) throw invalidatedRead(identity, 'consumer');
   requireProjectionReady(identity.sessionId);
-  const request = createReadTicket(identity, () => loader());
+  const request = createReadTicket(identity, () => loader(identity));
   const entry: PendingQueryEntry = { identity, request, promise: request.promise };
   liveQueries.add(entry);
   const completed = request.promise

@@ -747,11 +747,23 @@ mod tests {
             "table": "ships",
             "patches": [{
                 "rowKey": "ships:row:0",
+                "isComment": false,
                 "action": "delete"
             }],
             "associatedSpecs": []
         }));
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn csv_patch_wire_requires_and_preserves_the_parser_comment_flag() {
+        let mut patch = json!({"rowKey":"ships:row:0", "action":"upsert", "row":{"name":"#quoted","id":"active"}, "insertAt":null});
+        assert!(serde_json::from_value::<CsvRowPatch>(patch.clone()).is_err());
+        patch["isComment"] = json!(false);
+        let parsed = serde_json::from_value::<CsvRowPatch>(patch).unwrap();
+        assert!(!parsed.is_comment);
+        assert_eq!(parsed.row["name"], "#quoted");
+        assert_eq!(serde_json::to_value(parsed).unwrap()["isComment"], false);
     }
 }

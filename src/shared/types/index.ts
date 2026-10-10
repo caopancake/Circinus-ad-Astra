@@ -70,6 +70,7 @@ export type {
 export type {
   CsvDirtyRow,
   CsvDraftRow,
+  CsvRow,
   CsvRowRecord,
   CsvCellTarget,
   CsvTableTarget,

@@ -64,7 +64,7 @@ export interface IndexedConfigEntityData {
   entityId: string;
   indexPath: string;
   indexHeader: string[];
-  indexRows: RowData[];
+  indexRows: import('@/shared/types/tables.types').CsvRow[];
   entityData: RowData | null;
 }
 

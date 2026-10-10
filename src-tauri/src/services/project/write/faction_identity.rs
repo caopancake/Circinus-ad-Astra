@@ -83,7 +83,11 @@ pub fn delete_faction_entity(
         path,
         Some(render_csv_text(
             &index.header,
-            &index.rows.iter().collect::<Vec<_>>(),
+            &index
+                .rows
+                .iter()
+                .map(|row| (&row.data, row.is_comment))
+                .collect::<Vec<_>>(),
         )?),
     )?;
     if delete_target {
@@ -167,10 +171,13 @@ mod tests {
         );
         let contents = crate::io::read_csv_data(&index).unwrap();
         assert_eq!(contents.header, ["id", "file", "note"]);
-        assert_eq!(contents.rows[0]["id"], "#comment");
-        assert_eq!(contents.rows[1]["id"], "next");
-        assert_eq!(contents.rows[1]["file"], "data/custom/nested/next.faction");
-        assert_eq!(contents.rows[1]["note"], "keep");
+        assert_eq!(contents.rows[0].data["id"], "#comment");
+        assert_eq!(contents.rows[1].data["id"], "next");
+        assert_eq!(
+            contents.rows[1].data["file"],
+            "data/custom/nested/next.faction"
+        );
+        assert_eq!(contents.rows[1].data["note"], "keep");
         let result =
             crate::commands::delete_indexed_config_entity(DeleteIndexedConfigEntityPayload {
                 session_id: manifest.session_id.clone(),

@@ -32,6 +32,12 @@ struct WindowInstance {
 }
 
 impl WindowRegistry {
+    fn focus_target(&self, caller: &str, identity: &WindowIdentity) -> Option<String> {
+        self.identities
+            .get(&identity.comparison_key())
+            .filter(|label| label.as_str() != caller)
+            .cloned()
+    }
     fn register(&mut self, identity: WindowIdentity) -> String {
         self.sequence += 1;
         let label = format!("managed-{}", self.sequence);
@@ -152,7 +158,9 @@ pub fn open_managed_window(
                     "所属会话正在关闭",
                 ));
             }
-            if let Some(owner) = state.reservations.get(&key) {
+            if let Some(owner) = state.reservations.get(&key).cloned() {
+                drop(state);
+                focus_window(app, &owner)?;
                 return Err(AppError::message(
                     "window.identity_reserved",
                     format!("目标正在保存: {owner}"),
@@ -166,10 +174,7 @@ pub fn open_managed_window(
                     continue;
                 }
                 drop(state);
-                if let Some(window) = app.get_webview_window(&label) {
-                    window.show()?;
-                    window.set_focus()?;
-                }
+                focus_window(app, &label)?;
                 return Ok(ManagedWindowOpened {
                     label,
                     reused: true,
@@ -245,10 +250,7 @@ pub fn reserve_targets(
         let mut state = registry()?;
         if let Err(conflict) = state.reserve(label, &identities) {
             drop(state);
-            if let Some(window) = app.get_webview_window(&conflict) {
-                window.show()?;
-                window.set_focus()?;
-            }
+            focus_window(app, &conflict)?;
             return Err(AppError::message(
                 "window.target_unsaved",
                 "目标窗口有待保存内容，请先完成该窗口的编辑",
@@ -274,11 +276,8 @@ pub fn reserve_targets(
             .map_err(|error| AppError::message("window.lifecycle_wait", error.to_string()))?
         {
             release_targets(label)?;
-            if let Some(conflict) = displaced.iter().next()
-                && let Some(window) = app.get_webview_window(conflict)
-            {
-                window.show()?;
-                window.set_focus()?;
+            if let Some(conflict) = displaced.iter().next() {
+                focus_window(app, conflict)?;
             }
             return Err(AppError::message(
                 "window.target_unsaved",
@@ -408,6 +407,8 @@ pub fn retarget_window(
     let displaced = {
         let mut state = registry()?;
         if let Some(conflict) = state.conflict(label, std::slice::from_ref(&identity)) {
+            drop(state);
+            focus_window(app, &conflict)?;
             return Err(AppError::message(
                 "window.target_unsaved",
                 format!("目标窗口正在编辑: {conflict}"),
@@ -435,6 +436,41 @@ pub fn retarget_window(
     Ok(())
 }
 
+fn focus_window(app: &tauri::AppHandle, label: &str) -> AppResult<()> {
+    if let Some(window) = app.get_webview_window(label) {
+        window.show()?;
+        window.unminimize()?;
+        window.set_focus()?;
+    }
+    Ok(())
+}
+
+pub fn focus_managed_window(
+    app: &tauri::AppHandle,
+    caller: &str,
+    identity: &WindowIdentity,
+) -> AppResult<bool> {
+    if let WindowIdentity::Spec {
+        session_id,
+        mod_root,
+        ..
+    }
+    | WindowIdentity::File {
+        session_id,
+        mod_root,
+        ..
+    } = identity
+    {
+        super::project::ensure_project_session_mod_root(session_id, mod_root)?;
+    }
+    let label = registry()?.focus_target(caller, identity);
+    if let Some(label) = label {
+        focus_window(app, &label)?;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,6 +481,29 @@ mod tests {
             mod_root: root.into(),
             id: id.into(),
         }
+    }
+    #[test]
+    fn focus_uses_complete_identity_and_retains_dirty_target_occupancy() {
+        let mut state = WindowRegistry::default();
+        let target = identity("Alpha", "D:/Mod", "s");
+        let label = state.register(target.clone());
+        state.instances.get_mut(&label).unwrap().status.dirty = true;
+        assert_eq!(
+            state.focus_target("other", &identity("Alpha", r"\\?\d:\mod\", "s")),
+            Some(label.clone())
+        );
+        assert_eq!(state.focus_target(&label, &target), None);
+        assert_eq!(
+            state.focus_target("other", &identity("Alpha", "D:/Mod", "new-session")),
+            None
+        );
+        assert_eq!(
+            state.focus_target("other", &identity("alpha", "D:/Mod", "s")),
+            None
+        );
+        assert!(state.instances[&label].status.dirty);
+        state.release(&label);
+        assert_eq!(state.focus_target("other", &target), None);
     }
     #[test]
     fn lifecycle_cancel_releases_creation_gate_and_destroy_completes_waiting_intent() {

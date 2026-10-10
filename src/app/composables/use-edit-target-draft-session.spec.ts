@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useEditTargetDraftSession, type EditTargetDraftSessionOptions, type EditTargetSnapshot } from './use-edit-target-draft-session';
 
 interface SampleValue {
@@ -99,6 +99,21 @@ describe('target snapshots', () => {
     expect(raw.value).toBe(true);
     expect(cancel).not.toHaveBeenCalled();
     expect(session.context.value?.handoff).toBe('external');
+  });
+  it('publishes the mapped draft in the same notification as the renamed baseline', () => {
+    const session = createSession();
+    session.setDraft({ a: 7 });
+    const observed: Array<{ id: string; draft: number }> = [];
+    const stop = watch(
+      session.baselineSnapshot,
+      (value) => {
+        observed.push({ id: value!.target.id, draft: session.draftValue.value.a });
+      },
+      { flush: 'sync' },
+    );
+    session.adoptIdentity(target, snapshot(2, 'v2', 'next', 'next'), () => ({ a: 9 }));
+    expect(observed).toEqual([{ id: 'next', draft: 9 }]);
+    stop();
   });
   it('owns isolated draft, baseline, versions and metadata', () => {
     const session = createSession();
